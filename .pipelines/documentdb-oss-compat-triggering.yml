@@ -1,7 +1,7 @@
-trigger:
-  branches:
-    include:
-      - "*"
+pr:  
+  branches:  
+    include:  
+      - main  
 
 pool:
   vmImage: 'ubuntu-latest'
