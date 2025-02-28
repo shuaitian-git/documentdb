@@ -1,7 +1,7 @@
-pr:
+trigger:
   branches:
     include:
-    - main
+      - main
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -10,18 +10,11 @@ stages:
 - stage: TriggerCompatTestPipeline  
   displayName: "Extract Source Branch Name"  
   jobs:  
-  - job: ExtractBranchNameJob  
+  - job: TriggerCompatTest  
     steps:  
     - script: |  
-        echo "Full source branch reference: $(System.PullRequest.SourceBranch)"  
-        # Extract the branch name by removing the 'refs/heads/' prefix  
-        SOURCE_BRANCH_NAME=$(System.PullRequest.SourceBranch)  
-        SOURCE_BRANCH_NAME=${SOURCE_BRANCH_NAME#refs/heads/}  
-        echo "Source branch name is: $SOURCE_BRANCH_NAME"  
-          
-        # Set the branch name as a pipeline variable  
-        echo "##vso[task.setvariable variable=SourceBranchName;isOutput=true]$SOURCE_BRANCH_NAME"  
-      displayName: "Extract and Output Source Branch Name"  
+        echo "TriggerCompatTest"
+      displayName: "TriggerCompatTest"  
   
 - stage: MonitorCompatPipeline  
   displayName: "Monitor Compat Pipeline"  
