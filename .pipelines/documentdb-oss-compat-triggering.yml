@@ -12,8 +12,24 @@ stages:
   jobs:  
   - job: TriggerCompatTest  
     steps:  
-    - script: |  
-        echo "TriggerCompatTest"
+    - powershell: |  
+        $body = '
+        { 
+                "definition": {
+                    "id": 45276
+                },
+                "templateParameters": {
+                  "sourceBranch": "$(Build.SourceBranch)"
+                  "sourceCommit": "$(Build.SourceVersion)"
+              }
+        }
+        '
+        $token =   $(System.AccessToken)
+        $header = @{authorization = "Basic $token"}
+        $Uri = "$(System.CollectionUri)$(System.TeamProject)/_apis/build/builds?api-version=7.1"
+        Write-Host $Uri
+        $buildresponse = Invoke-RestMethod -Method Post -ContentType "application/json" -Uri $Uri -Body $body -Headers $header
+        Write-Host $buildresponse
       displayName: "TriggerCompatTest"  
   
 - stage: MonitorCompatPipeline  
