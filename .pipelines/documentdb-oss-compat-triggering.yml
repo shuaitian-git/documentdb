@@ -45,8 +45,7 @@ stages:
     steps:  
     - powershell: | 
         # Wait for the triggered build to start
-        Start-Sleep -Seconds 30   
-        $buildId = "$(dependencies.TriggerCompatTestPipeline.outputs['TriggerCompatTest.TriggeredBuildId'])"  
+        $buildId = "$(TriggeredBuildId)"  
         $personalToken = "$(System.AccessToken)"  
         $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))  
         $header = @{authorization = "Basic $token"}  
