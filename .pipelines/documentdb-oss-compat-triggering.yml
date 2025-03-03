@@ -56,21 +56,31 @@ stages:
         $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))  
         $header = @{authorization = "Basic $token"}  
         Write-Host "BuildId: $(buildId)"
-        $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/pipelines/45276/runs/$(buildId)?api-version=6.0-preview.1"  
+        $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/build/builds/$(buildId)?api-version=7.1"  
         Write-Host $Uri  
 
         $status = ""  
         do {  
           Start-Sleep -Seconds 15  
           $response = Invoke-RestMethod -Method Get -Uri $Uri -Headers $header  
-          $status = $response.state  
+          $status = $response.status  
           Write-Host "Current Status: $status"  
-        } while ($status -eq "inProgress")  
+        } while ($status -eq "inProgress" -or $status -eq "notStarted")  
           
         if ($status -ne "completed") {  
           Write-Error "Build did not complete successfully. Final status: $status"  
           exit 1  
         }  
+
+        $RunUri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/pipelines/45276/runs/$(buildId)?api-version=6.0-preview.1"   
+        Write-Host $RunUri 
+        $run_response = Invoke-RestMethod -Method Get -Uri $RunUri -Headers $header 
+        $state = $run_response.state
+        Write-Host "Run State: $state"
+        if ($run_response.state -ne "completed") {  
+          Write-Error "Run did not complete successfully. Final status: $state"  
+          exit 1  
+        } 
 
         Write-Host "Build completed successfully. Status: $status"  
       displayName: "MonitorCompatJob"  
