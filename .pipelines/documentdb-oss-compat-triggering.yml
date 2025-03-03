@@ -13,6 +13,8 @@ stages:
   - job: TriggerCompatTest  
     steps:  
     - powershell: |  
+        Write-Host $(System.CollectionUri)
+        Write-Host $(System.TeamFoundationCollectionUri)
         $body = '
         { 
                 "definition": {
@@ -25,7 +27,7 @@ stages:
         }
         '
         $header = @{authorization = "Basic $(System.AccessToken)"}
-        $Uri = "$(System.TeamFoundationCollectionUri)/$(System.TeamProject)/_apis/build/builds?api-version=7.1"
+        $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/build/builds?api-version=7.1"
         Write-Host $Uri
         $buildresponse = Invoke-RestMethod -Method Post -ContentType "application/json" -Uri $Uri -Body $body -Headers $header
         Write-Host $buildresponse
