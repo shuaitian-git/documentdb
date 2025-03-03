@@ -25,7 +25,7 @@ stages:
         }
         '
         $header = @{authorization = "Basic $(System.AccessToken)"}
-        $Uri = "https://dev.azure.com/${System.CollectionId}/$(System.TeamProject)/_apis/build/builds?api-version=7.1"
+        $Uri = "$(System.TeamFoundationCollectionUri)/$(System.TeamProject)/_apis/build/builds?api-version=7.1"
         Write-Host $Uri
         $buildresponse = Invoke-RestMethod -Method Post -ContentType "application/json" -Uri $Uri -Body $body -Headers $header
         Write-Host $buildresponse
