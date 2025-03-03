@@ -34,9 +34,9 @@ stages:
         Write-Host $buildresponse
         Write-Host "BuildId: $($buildresponse.id)"
         Write-Host "BuildNumber: $($buildresponse.buildNumber)"
-        echo "##vso[task.setvariable variable=TriggeredBuildId;isOutput=true]$($buildresponse.id)"  
+        Write-Host "##vso[task.setvariable variable=TriggeredBuildId;isOutput=true]$($buildresponse.id)"  
       displayName: "Trigger Compat Test"  
-      name: "TriggerCompatTest"
+      name: TriggerCompatTest
   
 - stage: MonitorCompatPipeline  
   displayName: "Monitor Compat Pipeline"  
