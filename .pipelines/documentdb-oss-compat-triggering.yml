@@ -23,5 +23,5 @@ stages:
   - job: MonitorCompatJob  
     steps:  
     - script: |  
-        echo "MonitorCompatJob"  
+         echo "BuildId: $(Build.BuildId)"
       displayName: "MonitorCompatJob"  
