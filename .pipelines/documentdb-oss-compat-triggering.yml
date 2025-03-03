@@ -59,7 +59,8 @@ stages:
         $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/build/builds/$(buildId)?api-version=7.1"  
         Write-Host $Uri  
 
-        $status = ""  
+        $status = "" 
+        $result = "" 
         do {  
           Start-Sleep -Seconds 15  
           $response = Invoke-RestMethod -Method Get -Uri $Uri -Headers $header  
@@ -73,20 +74,11 @@ stages:
           Write-Error "Build did not complete successfully. Final status: $status"  
           exit 1  
         }  
+        # If the build is completed, check the result
         if ($result -ne "succeeded") {  
           Write-Error "Build completed unsuccessfully. Final result: $result"  
           exit 1  
         } 
-
-        # $RunUri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/pipelines/45276/runs/$(buildId)?api-version=6.0-preview.1"   
-        # Write-Host $RunUri 
-        # $run_response = Invoke-RestMethod -Method Get -Uri $RunUri -Headers $header 
-        # $result = $run_response.result
-        # Write-Host "Run result: $result"
-        # if ($result -ne "succeeded") {  
-        #   Write-Error "Run did not complete successfully. Final status: $state"  
-        #   exit 1  
-        # } 
 
         Write-Host "Build completed successfully. Status: $status"  
       displayName: "MonitorCompatJob"  
