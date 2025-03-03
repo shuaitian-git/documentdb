@@ -47,7 +47,6 @@ stages:
   jobs:  
   - job: MonitorCompatJob  
     variables:
-      # map the output variable from A into this job
       buildId: $[ stageDependencies.TriggerCompatTestPipeline.TriggerCompatTest.outputs['TriggerCompatTest.TriggeredBuildId'] ]
     steps:  
     - powershell: | 
@@ -55,7 +54,7 @@ stages:
         $personalToken = "$(System.AccessToken)"  
         $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))  
         $header = @{authorization = "Basic $token"}  
-        Write-Host "BuildId: $($buildId)"
+        Write-Host "BuildId: $(buildId)"
         $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/build/builds/$buildId?api-version=7.1"  
         Write-Host $Uri  
 
