@@ -24,8 +24,7 @@ stages:
               }
         }
         '
-        $token =   $(System.AccessToken)
-        $header = @{authorization = "Basic $token"}
+        $header = @{authorization = "Basic $(System.AccessToken)"}
         $Uri = "$(System.CollectionUri)$(System.TeamProject)/_apis/build/builds?api-version=7.1"
         Write-Host $Uri
         $buildresponse = Invoke-RestMethod -Method Post -ContentType "application/json" -Uri $Uri -Body $body -Headers $header
