@@ -43,30 +43,29 @@ stages:
   jobs:  
   - job: MonitorCompatJob  
     steps:  
-    - script:
-        - powershell: | 
-            # Wait for the triggered build to start
-            Start-Sleep -Seconds 30   
-            $buildId = "$(dependencies.TriggerCompatTestPipeline.outputs['TriggerCompatTest.TriggeredBuildId'])"  
-            $personalToken = "$(System.AccessToken)"  
-            $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))  
-            $header = @{authorization = "Basic $token"}  
-              
-            $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/build/builds/$buildId?api-version=7.1"  
-            Write-Host $Uri  
-  
-            $status = ""  
-            do {  
-              Start-Sleep -Seconds 10  
-              $response = Invoke-RestMethod -Method Get -Uri $Uri -Headers $header  
-              $status = $response.status  
-              Write-Host "Current Status: $status"  
-            } while ($status -eq "inProgress" -or $status -eq "notStarted")  
-              
-            if ($status -ne "completed") {  
-              Write-Error "Build did not complete successfully. Final status: $status"  
-              exit 1  
-            }  
-  
-            Write-Host "Build completed successfully. Status: $status"  
+    - powershell: | 
+        # Wait for the triggered build to start
+        Start-Sleep -Seconds 30   
+        $buildId = "$(dependencies.TriggerCompatTestPipeline.outputs['TriggerCompatTest.TriggeredBuildId'])"  
+        $personalToken = "$(System.AccessToken)"  
+        $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))  
+        $header = @{authorization = "Basic $token"}  
+          
+        $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/build/builds/$buildId?api-version=7.1"  
+        Write-Host $Uri  
+
+        $status = ""  
+        do {  
+          Start-Sleep -Seconds 10  
+          $response = Invoke-RestMethod -Method Get -Uri $Uri -Headers $header  
+          $status = $response.status  
+          Write-Host "Current Status: $status"  
+        } while ($status -eq "inProgress" -or $status -eq "notStarted")  
+          
+        if ($status -ne "completed") {  
+          Write-Error "Build did not complete successfully. Final status: $status"  
+          exit 1  
+        }  
+
+        Write-Host "Build completed successfully. Status: $status"  
       displayName: "MonitorCompatJob"  
