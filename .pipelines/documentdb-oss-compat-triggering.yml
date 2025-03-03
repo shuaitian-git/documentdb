@@ -51,20 +51,21 @@ stages:
     steps:  
     - powershell: | 
         # Wait for the triggered build to start
+        Start-Sleep -Seconds 30
         $personalToken = "$(System.AccessToken)"  
         $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))  
         $header = @{authorization = "Basic $token"}  
         Write-Host "BuildId: $(buildId)"
-        $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/build/builds/$(buildId)?api-version=7.1"  
+        $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/pipelines/45276/runs/$(buildId)?api-version=6.0-preview.1"  
         Write-Host $Uri  
 
         $status = ""  
         do {  
           Start-Sleep -Seconds 15  
           $response = Invoke-RestMethod -Method Get -Uri $Uri -Headers $header  
-          $status = $response.status  
+          $status = $response.state  
           Write-Host "Current Status: $status"  
-        } while ($status -eq "inProgress" -or $status -eq "notStarted")  
+        } while ($status -eq "inProgress")  
           
         if ($status -ne "completed") {  
           Write-Error "Build did not complete successfully. Final status: $status"  
