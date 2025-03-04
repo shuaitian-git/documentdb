@@ -46,6 +46,7 @@ stages:
     dependsOn: TriggerCompatTestPipeline
     jobs:
       - job: MonitorCompatJob
+        timeoutInMinutes: 360
         variables:
           buildId: $[ stageDependencies.TriggerCompatTestPipeline.TriggerCompatTest.outputs['TriggerCompatTest.TriggeredBuildId'] ]
         steps:
