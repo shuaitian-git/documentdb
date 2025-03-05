@@ -19,7 +19,6 @@ stages:
                           "id": 45276
                       },
                       "templateParameters": {
-                        "sourceBranch": "$(Build.SourceBranch)",
                         "sourceCommit": "$(Build.SourceVersion)"
                     }
               }
