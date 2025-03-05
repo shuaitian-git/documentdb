@@ -16,19 +16,17 @@ stages:
               $body = '
               { 
                       "definition": {
-                          "id": 45276
+                          "id": $(INTERNAL_PIPELINE_DEFINITION)
                       },
                       "templateParameters": {
                         "sourceCommit": "$(Build.SourceVersion)"
                     }
               }
               '
-              Write-Host $body
               $personalToken = "$(System.AccessToken)"
               $token =   [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
               $header = @{authorization = "Basic $token"}
               $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/build/builds?api-version=7.1"
-              Write-Host $Uri
               $buildresponse = Invoke-RestMethod -Method Post -ContentType "application/json" -Uri $Uri -Body $body -Headers $header
               Write-Host $buildresponse
               Write-Host "BuildId: $($buildresponse.id)"
@@ -57,7 +55,6 @@ stages:
               $header = @{authorization = "Basic $token"}  
               Write-Host "BuildId: $(buildId)"
               $Uri = "https://dev.azure.com/$(INTERNAL_ORGANIZATION)/$(System.TeamProject)/_apis/build/builds/$(buildId)?api-version=7.1"  
-              Write-Host $Uri  
 
               $status = "" 
               $result = "" 
