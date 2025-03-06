@@ -1,7 +1,10 @@
 trigger:
   branches:
     include:
-      - "users/yangqiao/AddTriggeringPipeline"
+      - main
+  paths:
+    exclude:
+      - .github/*
 
 pool:
   vmImage: "ubuntu-latest"
