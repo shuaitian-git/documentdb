@@ -6,6 +6,15 @@ trigger:
     exclude:
       - .github/*
 
+pr:
+  branches:
+    include:
+      - "*"
+  paths:
+    exclude:
+      - .github/*
+      - .devcontainer/*
+
 pool:
   vmImage: "ubuntu-latest"
 
