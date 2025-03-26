@@ -1,9 +1,9 @@
 trigger: none
 
-# pr:
-#   branches:
-#     include:
-#     - '*'  # must quote since "*" is a YAML reserved character; we want a string
+pr:
+  branches:
+    include:
+      - "*" # This does not trigger the pipeline 
 
 pool:
   vmImage: "ubuntu-latest"
