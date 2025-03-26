@@ -1,9 +1,12 @@
-pr:
+trigger:
   branches:
     include:
-      - "*" # This does not trigger the pipeline 
-
-trigger: none
+      - main
+      - helio-oss/*
+  paths:
+    exclude:
+      - docs/*
+      - releaseValidation/*
 
 pool:
   vmImage: "ubuntu-latest"
