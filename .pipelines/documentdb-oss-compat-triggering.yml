@@ -2,11 +2,11 @@ trigger:
   branches:
     include:
       - main
-      - helio-oss/*
-  paths:
-    exclude:
-      - docs/*
-      - releaseValidation/*
+
+pr:
+  branches:
+    include:
+    - '*'  # must quote since "*" is a YAML reserved character; we want a string
 
 pool:
   vmImage: "ubuntu-latest"
