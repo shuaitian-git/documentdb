@@ -23,7 +23,7 @@ on:
 jobs:
   test-run-in-Ubuntu:
     runs-on: ${{ matrix.runner }}
-    name: sql tests - ${{ matrix.runner }} with PG ${{ matrix.pg_version }}
+    name: Run sql tests on ${{ matrix.runner }} with pg ${{ matrix.pg_version }}
     strategy:
       fail-fast: false
       matrix:
