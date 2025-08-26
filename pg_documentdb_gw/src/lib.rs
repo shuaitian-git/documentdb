@@ -9,11 +9,10 @@
 use configuration::CertificateOptions;
 use either::Either::{Left, Right};
 use error::ErrorCode;
-use log::{error, log_enabled, warn};
 use openssl::ssl::{Ssl, SslContextBuilder, SslMethod, SslOptions};
 use protocol::header::Header;
 use requests::request_tracker::RequestTracker;
-use requests::{Request, RequestInfo, RequestIntervalKind, RequestMessage};
+use requests::{Request, RequestInfo, RequestIntervalKind};
 use responses::{CommandError, Response};
 use socket2::TcpKeepalive;
 use std::sync::Arc;
@@ -27,7 +26,6 @@ use tokio_util::sync::CancellationToken;
 use crate::context::{ConnectionContext, ServiceContext};
 use crate::error::{DocumentDBError, Result};
 use crate::postgres::PgDataClient;
-use crate::requests::RequestType;
 
 pub use crate::postgres::QueryCatalog;
 
@@ -81,7 +79,7 @@ where
         )
         .await
         {
-            Err(e) => error!("[], Failed to accept a connection: {:?}", e),
+            Err(e) => log::error!("[], Failed to accept a connection: {:?}", e),
             Ok(true) => continue,
             Ok(false) => break Ok(()),
         }
@@ -119,7 +117,7 @@ where
         res = listener.accept() => {
             // Receive the connection and spawn a thread which handles it until cancelled
             let (stream, ip) = res?;
-            log::trace!("New TCP connection established.");
+            log::info!("New TCP connection established.");
 
             stream.set_nodelay(true)?;
             socket2::SockRef::from(&stream).set_tcp_keepalive(&TcpKeepalive::new().with_interval(Duration::from_secs(60)).with_time(Duration::from_secs(180)))?;
@@ -194,14 +192,14 @@ where
                     )
                     .await
                     {
-                        error!("[{}] Couldn't reply with error {:?}", header.request_id, e);
+                        log::error!("[{}] Couldn't reply with error {:?}", header.request_id, e);
                         break;
                     }
                 }
             }
 
             Ok(None) => {
-                log::debug!("[{}] Connection closed", connection_context.connection_id);
+                log::info!("[{}] Connection closed", connection_context.connection_id);
                 break;
             }
 
@@ -214,9 +212,10 @@ where
                 )
                 .await
                 {
-                    warn!(
+                    log::warn!(
                         "[C:{}] Couldn't reply with error {:?}",
-                        connection_context.connection_id, e
+                        connection_context.connection_id,
+                        e
                     );
                     break;
                 }
@@ -227,29 +226,12 @@ where
 
 async fn get_response<T>(
     connection_context: &mut ConnectionContext,
-    message: &RequestMessage,
     request: &Request<'_>,
     request_info: &mut RequestInfo<'_>,
-    header: &Header,
 ) -> Result<Response>
 where
     T: PgDataClient,
 {
-    // Parse the request bytes into a type and the contained document(s)
-    if request.request_type() != &RequestType::IsMaster {
-        log::debug!(
-            activity_id = header.activity_id.as_str();
-            "Request: {:?} - {:?}",
-            message.op_code,
-            request.request_type(),
-        );
-
-        // request.to_json() can be expensive on the order of the size of the request
-        if log::log_enabled!(log::Level::Trace) {
-            log::trace!(activity_id = header.activity_id.as_str(); "Request: {:?} - {}", message.op_code, request.to_json()?);
-        }
-    }
-
     if !connection_context.auth_state.authorized || request.request_type().handle_with_auth() {
         let response = auth::process::<T>(connection_context, request).await?;
         return Ok(response);
@@ -283,8 +265,6 @@ where
     let buffer_read_start = request_tracker.start_timer();
     let message = protocol::reader::read_request(header, stream).await?;
 
-    log::trace!(activity_id = header.activity_id.as_str(); "[{}] Request parsed.", header.request_id);
-
     if connection_context
         .dynamic_configuration()
         .send_shutdown_responses()
@@ -307,16 +287,11 @@ where
     let mut request_info = request.extract_common()?;
     request_info.request_tracker = request_tracker;
 
-    if log_enabled!(log::Level::Trace) {
-        log::trace!(activity_id = header.activity_id.as_str(); "Request: {}", request.to_json()?)
-    }
-
     let mut collection = String::new();
     let result = handle_request::<R, T>(
         connection_context,
         header,
         &request,
-        &message,
         stream,
         &mut collection,
         &mut request_info,
@@ -360,7 +335,7 @@ where
         )
         .await
         {
-            error!("[{}] Couldn't reply with error {:?}", header.request_id, e);
+            log::error!(activity_id = header.activity_id.as_str(); "[{}] Couldn't reply with error {:?}", header.request_id, e);
         }
     }
 
@@ -371,7 +346,6 @@ async fn handle_request<R, T>(
     connection_context: &mut ConnectionContext,
     header: &Header,
     request: &Request<'_>,
-    message: &RequestMessage,
     stream: &mut R,
     collection: &mut String,
     request_info: &mut RequestInfo<'_>,
@@ -383,8 +357,7 @@ where
     *collection = request_info.collection().unwrap_or("").to_string();
 
     // Process the response for the message
-    let response =
-        get_response::<T>(connection_context, message, request, request_info, header).await?;
+    let response = get_response::<T>(connection_context, request, request_info).await?;
 
     let format_response_start = request_info.request_tracker.start_timer();
 

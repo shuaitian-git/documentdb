@@ -330,7 +330,6 @@ pub trait PgDataClient: Send + Sync {
         Fut: Future<Output = Result<Vec<Row>>> + Send,
     {
         if !connection.in_transaction && is_read_only_for_disk_full {
-            log::trace!("Executing delete operation in readonly state.");
             let mut transaction =
                 Transaction::start(connection, tokio_postgres::IsolationLevel::RepeatableRead)
                     .await?;
