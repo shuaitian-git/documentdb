@@ -6,7 +6,6 @@
  *-------------------------------------------------------------------------
  */
 
-use log::info;
 use simple_logger::SimpleLogger;
 use std::{env, path::PathBuf, sync::Arc};
 
@@ -37,7 +36,7 @@ async fn main() {
 
     tokio::spawn(async move {
         signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
-        info!("Ctrl+C received. Shutting down Rust gateway.");
+        log::info!("Ctrl+C received. Shutting down Rust gateway.");
         SHUTDOWN_CONTROLLER.shutdown();
     });
 
@@ -45,7 +44,7 @@ async fn main() {
         .await
         .expect("Failed to load configuration.");
 
-    info!(
+    log::info!(
         "Starting server with configuration: {:?}",
         setup_configuration
     );
@@ -67,7 +66,7 @@ async fn main() {
         )
         .await,
     );
-    log::trace!("System requests pool initialized");
+    log::info!("System requests pool initialized");
 
     let dynamic_configuration = create_postgres_object(
         || async {
@@ -96,7 +95,7 @@ async fn main() {
         AUTHENTICATION_MAX_CONNECTIONS,
     )
     .await;
-    log::trace!("Authentication pool initialized");
+    log::info!("Authentication pool initialized");
 
     let service_context = get_service_context(
         Box::new(setup_configuration),

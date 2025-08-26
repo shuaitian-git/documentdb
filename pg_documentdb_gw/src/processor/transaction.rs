@@ -77,11 +77,6 @@ pub async fn handle(
                 pg_data_client,
             )
             .await;
-        log::trace!(
-            "Transaction acquired: {:?}, {:?}",
-            request_transaction_info.transaction_number,
-            transaction_result
-        );
 
         if let Err(e) = transaction_result {
             return match (request.request_type(), &e) {

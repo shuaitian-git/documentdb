@@ -50,7 +50,7 @@ impl ServiceContext {
         system_requests_pool: Arc<ConnectionPool>,
         system_auth_pool: ConnectionPool,
     ) -> Self {
-        log::trace!("Initial dynamic configuration: {:?}", dynamic_configuration);
+        log::info!("Initial dynamic configuration: {:?}", dynamic_configuration);
 
         let timeout_secs = setup_configuration.transaction_timeout_secs();
         let inner = ServiceContextInner {

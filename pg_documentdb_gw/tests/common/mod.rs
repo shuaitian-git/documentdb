@@ -29,7 +29,7 @@ async fn initialize_full(config: DocumentDBSetupConfiguration) {
 
     INIT.call_once(|| {
         SimpleLogger::new()
-            .with_level(log::LevelFilter::Trace)
+            .with_level(log::LevelFilter::Info)
             .with_module_level("rustls", log::LevelFilter::Info)
             .with_module_level("ntex_rt", log::LevelFilter::Info)
             .with_module_level("ntex_server", log::LevelFilter::Info)

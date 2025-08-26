@@ -11,7 +11,6 @@ use std::{cmp::Ordering, collections::HashMap, str::FromStr};
 
 use async_recursion::async_recursion;
 use bson::{rawdoc, Document, RawArrayBuf, RawBson, RawDocument, RawDocumentBuf};
-use log::{log_enabled, warn};
 use model::*;
 use once_cell::sync::Lazy;
 use serde_json::Value;
@@ -244,10 +243,6 @@ async fn run_explain(
 
     match explain_response {
         Some(content) => {
-            if log_enabled!(log::Level::Debug) {
-                log::debug!("Backend Explain result: {}", content)
-            }
-
             let explain_content = if dynamic_config.enable_developer_explain().await {
                 Some(convert_to_bson(content.clone()))
             } else {
@@ -287,13 +282,6 @@ async fn run_explain(
                         request.document(),
                         request_info,
                     ),
-                )
-            }
-
-            if log_enabled!(log::Level::Debug) {
-                log::debug!(
-                    "Explain result: {}",
-                    explain.to_document().unwrap_or_default()
                 )
             }
 
@@ -932,7 +920,7 @@ fn get_stage_from_plan(
                     }
                 }
             }
-            warn!("Unknown stage aggregate found");
+            log::warn!("Unknown stage aggregate found");
             ("GENERIC_AGGREGATE".to_owned(), None)
         }
         "Gather" => ("Parallel Merge".to_owned(), None),
@@ -955,12 +943,12 @@ fn get_stage_from_plan(
                         ("FETCH".to_owned(), None)
                     }
                     _ => {
-                        warn!("Unknown scan: {}", cpp);
+                        log::warn!("Unknown scan: {}", cpp);
                         ("".to_owned(), None)
                     }
                 }
             } else {
-                warn!("Custom scan without provider.");
+                log::warn!("Custom scan without provider.");
                 ("".to_owned(), None)
             }
         }
@@ -984,7 +972,7 @@ fn get_stage_from_plan(
                     _ => {}
                 }
             };
-            warn!(
+            log::warn!(
                 "Unknown function found: {}",
                 plan.function_name.as_deref().unwrap_or("None")
             );
@@ -1010,7 +998,7 @@ fn get_stage_from_plan(
             }
         }
         _ => {
-            warn!("Unkown stage found: {}", plan.node_type);
+            log::warn!("Unknown stage found: {}", plan.node_type);
             ("COLLSCAN".to_owned(), None)
         }
     }
@@ -1214,7 +1202,7 @@ fn classify_stages(
     }
 
     if prior_stage.is_none() {
-        warn!(
+        log::warn!(
             "Found residual unparented aggregation stage {0}",
             stage_name
         );
@@ -1222,7 +1210,7 @@ fn classify_stages(
         return None;
     }
 
-    warn!("Unknown aggregation stage {}", stage_name);
+    log::warn!("Unknown aggregation stage {}", stage_name);
     Some(plan)
 }
 

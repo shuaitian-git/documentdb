@@ -423,11 +423,11 @@ pub async fn process_request(
 
         match retry {
             Retry::Short => {
-                log::trace!("Retrying short: {retries}");
+                log::warn!("Retrying short: {retries}");
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
             Retry::Long => {
-                log::trace!("Retrying long: {retries}");
+                log::warn!("Retrying long: {retries}");
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
 
