@@ -15,19 +15,19 @@ use bson::rawdoc;
 
 use crate::{
     configuration::DynamicConfiguration,
-    context::ConnectionContext,
+    context::{ConnectionContext, RequestContext},
     error::{DocumentDBError, ErrorCode, Result},
     protocol::{MAX_BSON_OBJECT_SIZE, MAX_MESSAGE_SIZE_BYTES, OK_SUCCEEDED},
-    requests::Request,
     responses::{RawResponse, Response},
 };
 
 pub async fn process(
+    request_context: &mut RequestContext<'_>,
     writeable_primary_field: &str,
-    request: &Request<'_>,
     connection_context: &mut ConnectionContext,
     dynamic_configuration: &Arc<dyn DynamicConfiguration>,
 ) -> Result<Response> {
+    let request = request_context.payload;
     let local_time = i64::try_from(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)

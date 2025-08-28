@@ -11,11 +11,11 @@ use std::sync::Arc;
 use bson::{rawdoc, RawArrayBuf};
 
 use crate::{
-    context::{ConnectionContext, Cursor, CursorStoreEntry},
+    context::{ConnectionContext, Cursor, CursorStoreEntry, RequestContext},
     error::{DocumentDBError, ErrorCode, Result},
     postgres::{Connection, PgDataClient, PgDocument},
     protocol::OK_SUCCEEDED,
-    requests::{Request, RequestInfo},
+    requests::RequestInfo,
     responses::{PgResponse, RawResponse, Response},
 };
 
@@ -42,9 +42,11 @@ pub async fn save_cursor(
 }
 
 pub async fn process_kill_cursors(
-    request: &Request<'_>,
+    request_context: &mut RequestContext<'_>,
     connection_context: &ConnectionContext,
 ) -> Result<Response> {
+    let request = request_context.payload;
+
     let _ = request
         .document()
         .get_str("killCursors")
@@ -92,11 +94,12 @@ pub async fn process_kill_cursors(
 }
 
 pub async fn process_get_more(
-    request: &Request<'_>,
-    request_info: &mut RequestInfo<'_>,
+    request_context: &mut RequestContext<'_>,
     connection_context: &ConnectionContext,
     pg_data_client: &impl PgDataClient,
 ) -> Result<Response> {
+    let request = request_context.payload;
+
     let mut id = None;
     request.extract_fields(|k, v| {
         if k == "getMore" {
@@ -126,8 +129,7 @@ pub async fn process_get_more(
 
     let results = pg_data_client
         .execute_cursor_get_more(
-            request,
-            request_info,
+            request_context,
             &db,
             &cursor,
             &cursor_connection,

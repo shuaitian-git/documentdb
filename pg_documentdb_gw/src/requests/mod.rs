@@ -14,7 +14,6 @@ use std::{
 };
 
 use bson::{spec::ElementType, Document, RawBsonRef, RawDocument, RawDocumentBuf};
-use request_tracker::RequestTracker;
 use tokio_postgres::IsolationLevel;
 
 use crate::{
@@ -48,7 +47,6 @@ pub struct RequestInfo<'a> {
     db: Option<&'a str>,
     collection: Option<&'a str>,
     pub session_id: Option<&'a [u8]>,
-    pub request_tracker: RequestTracker,
 }
 
 impl RequestInfo<'_> {
@@ -59,7 +57,6 @@ impl RequestInfo<'_> {
             db: None,
             collection: None,
             session_id: None,
-            request_tracker: RequestTracker::new(),
         }
     }
 
@@ -329,7 +326,6 @@ impl<'a> Request<'a> {
         let mut start_transaction = false;
         let mut isolation_level = None;
         let mut collection = None;
-        let request_tracker = RequestTracker::new();
 
         let collection_field = self.collection_field();
         for entry in self.document() {
@@ -421,7 +417,6 @@ impl<'a> Request<'a> {
             session_id,
             transaction_info,
             db,
-            request_tracker,
         })
     }
 

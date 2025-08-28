@@ -16,7 +16,7 @@ use once_cell::sync::Lazy;
 use serde_json::Value;
 
 use crate::{
-    context::ConnectionContext,
+    context::{ConnectionContext, RequestContext},
     error::{DocumentDBError, Result},
     postgres::PgDataClient,
     protocol::OK_SUCCEEDED,
@@ -108,17 +108,23 @@ fn write_output_stage(
 /// A command with explain:true, or an explain command wrapping a sub command
 #[async_recursion]
 pub async fn process_explain(
-    request: &Request<'_>,
-    request_info: &mut RequestInfo<'_>,
+    request_context: &mut RequestContext<'_>,
     verbosity: Option<Verbosity>,
     connection_context: &ConnectionContext,
     pg_data_client: &impl PgDataClient,
 ) -> Result<Response> {
-    if let Some(result) = request.document().into_iter().next() {
+    // Extract the first command from the request document
+    let first_command = {
+        let request = request_context.payload;
+        request.document().into_iter().next()
+    };
+
+    if let Some(result) = first_command {
         let result = result?;
 
         // Default to QueryPlanner here, as Default tends to be too brief
         let verbosity = verbosity.unwrap_or_else(|| {
+            let request = request_context.payload;
             request
                 .document()
                 .get_str("verbosity")
@@ -128,14 +134,26 @@ pub async fn process_explain(
         match result.0 {
             "explain" => {
                 if let Some(explain_doc) = result.1.as_document() {
-                    // Recurse with the sub command
-                    process_explain(
-                        &Request::Raw(RequestType::Explain, explain_doc, request.extra()),
-                        request_info,
+                    let new_request = Request::Raw(
+                        RequestType::Explain,
+                        explain_doc,
+                        request_context.payload.extra(),
+                    );
+
+                    let mut new_request_context = RequestContext {
+                        activity_id: request_context.activity_id,
+                        payload: &new_request,
+                        info: request_context.info,
+                        tracker: request_context.tracker,
+                    };
+
+                    // Recursive call with the unwrapped command
+                    Box::pin(process_explain(
+                        &mut new_request_context,
                         Some(verbosity),
                         connection_context,
                         pg_data_client,
-                    )
+                    ))
                     .await
                 } else {
                     Err(DocumentDBError::bad_value(
@@ -145,8 +163,7 @@ pub async fn process_explain(
             }
             "aggregate" => {
                 run_explain(
-                    request,
-                    request_info,
+                    request_context,
                     "pipeline",
                     verbosity,
                     connection_context,
@@ -156,8 +173,7 @@ pub async fn process_explain(
             }
             "find" => {
                 run_explain(
-                    request,
-                    request_info,
+                    request_context,
                     "find",
                     verbosity,
                     connection_context,
@@ -167,8 +183,7 @@ pub async fn process_explain(
             }
             "count" => {
                 run_explain(
-                    request,
-                    request_info,
+                    request_context,
                     "count",
                     verbosity,
                     connection_context,
@@ -178,8 +193,7 @@ pub async fn process_explain(
             }
             "distinct" => {
                 run_explain(
-                    request,
-                    request_info,
+                    request_context,
                     "distinct",
                     verbosity,
                     connection_context,
@@ -222,21 +236,17 @@ impl Verbosity {
 }
 
 async fn run_explain(
-    request: &Request<'_>,
-    request_info: &mut RequestInfo<'_>,
+    request_context: &mut RequestContext<'_>,
     query_base: &str,
     verbosity: Verbosity,
     connection_context: &ConnectionContext,
     pg_data_client: &impl PgDataClient,
 ) -> Result<Response> {
+    let request = request_context.payload;
+    let request_info = request_context.info;
+
     let (explain_response, query) = pg_data_client
-        .execute_explain(
-            request,
-            request_info,
-            query_base,
-            verbosity,
-            connection_context,
-        )
+        .execute_explain(request_context, query_base, verbosity, connection_context)
         .await?;
 
     let dynamic_config = connection_context.dynamic_configuration();
