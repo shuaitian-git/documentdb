@@ -64,11 +64,11 @@ typedef struct
 /* GUC that controls the blocked role prefix list */
 extern char *BlockedRolePrefixList;
 
+/* Method to check if the given name contains any blocked role prefixes */
+bool ContainsSystemPgRoleNamePrefix(const char *name);
+
 /* Method to validate and obtain user role */
 char * ValidateAndObtainUserRole(const bson_value_t *rolesDocument);
-
-/* Method to verify if username is valid */
-bool IsUserNameInvalid(const char *userName);
 
 /* Method to call Connection Status command */
 Datum connection_status(pgbson *showPrivilegesSpec);
