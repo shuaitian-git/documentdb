@@ -1,4 +1,5 @@
 ### documentdb v1.108-0 (Unreleased) ###
+* Fix collation support on find and aggregation when variableSpec is not available.
 * Support `dropRole` command *[Feature]*
 
 ### documentdb v1.107-0 (Unreleased) ###

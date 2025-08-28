@@ -848,7 +848,7 @@ ReplaceBsonQueryOperatorsMutator(Node *node, ReplaceBsonQueryOperatorsContext *c
 					}
 				}
 
-				Const *variableSpecConst = variableSpecConst = (Const *) variableSpecNode;
+				Const *variableSpecConst = (Const *) variableSpecNode;
 
 				char *collationString = NULL;
 				Const *collationConst = (Const *) collationStringNode;
