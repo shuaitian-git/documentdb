@@ -27,11 +27,11 @@ rumReadTuple(RumState *rumstate, OffsetNumber attnum,
 	RumItem item;
 	int nipd = RumGetNPosting(itup),
 		i;
+	RumItemSetMin(&item);
+	InitBlockNumberIncr(blockNumberIncr, (&item.iptr));
 
 	if (RumUseNewItemPtrDecoding)
 	{
-		RumItemSetMin(&item);
-		InitBlockNumberIncr(blockNumberIncr, (&item.iptr));
 		for (i = 0; i < nipd; i++)
 		{
 			ptr = rumDataPageLeafReadWithBlockNumberIncr(ptr, attnum, &item, copyAddInfo,

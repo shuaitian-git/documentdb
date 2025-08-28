@@ -1333,6 +1333,10 @@ rumDataPageLeafRead(Pointer ptr, OffsetNumber attnum, RumItem *item,
 			item->addInfoIsNull = false;
 		}
 	}
+	else if (RumUseNewItemPtrDecoding)
+	{
+		ptr = rumDataPageLeafReadItemPointerNew(ptr, item);
+	}
 	else
 	{
 		ptr = rumDataPageLeafReadItemPointer(ptr, &item->iptr,
