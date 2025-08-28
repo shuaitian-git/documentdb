@@ -3265,16 +3265,19 @@ BuildInputExpressionForQuery(Expr *origExpr, const StringView *connectToField, c
 	List *inputExprArgs;
 	Oid functionOid;
 
-	bool applyCollationAndVariableSpec = IsCollationApplicable(
-		context->collationString) && IsClusterVersionAtleast(DocDB_V0, 103, 0);
+	Const *collationConst = IsCollationApplicable(context->collationString) ?
+							MakeTextConst(context->collationString,
+										  strlen(context->collationString)) : NULL;
 
-	if (applyCollationAndVariableSpec)
+
+	if (collationConst)
 	{
-		Const *collationConst = MakeTextConst(context->collationString,
-											  strlen(context->collationString));
 		functionOid = BsonExpressionGetWithLetAndCollationFunctionOid();
-		inputExprArgs = list_make5(origExpr, MakeBsonConst(inputExpr),
-								   falseConst, context->variableSpec,
+		inputExprArgs = list_make5(origExpr,
+								   MakeBsonConst(inputExpr),
+								   falseConst,
+								   context->variableSpec ? context->variableSpec :
+								   (Expr *) makeNullConst(BsonTypeId(), -1, InvalidOid),
 								   collationConst);
 	}
 	else if (context->variableSpec != NULL)

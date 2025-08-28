@@ -1330,10 +1330,7 @@ GenerateAggregationQuery(text *database, pgbson *aggregationSpec, QueryData *que
 															  timeSystemVariables,
 															  isWriteCommand);
 
-	if (parsedVariables != NULL && !IsPgbsonEmptyDocument(parsedVariables))
-	{
-		context.variableSpec = (Expr *) MakeBsonConst(parsedVariables);
-	}
+	context.variableSpec = (Expr *) MakeBsonConst(parsedVariables);
 
 	List *aggregationStages = ExtractAggregationStages(&pipelineValue,
 													   &context);
@@ -1798,10 +1795,7 @@ default_find_case:
 															  timeSystemVariables,
 															  isWriteCommand);
 
-	if (parsedVariables != NULL && !IsPgbsonEmptyDocument(parsedVariables))
-	{
-		context.variableSpec = (Expr *) MakeBsonConst(parsedVariables);
-	}
+	context.variableSpec = (Expr *) MakeBsonConst(parsedVariables);
 
 	if (sort.value_type != BSON_TYPE_EOD)
 	{
@@ -2439,26 +2433,25 @@ HandleSimpleProjectionStage(const bson_value_t *existingValue, Query *query,
 
 	List *args;
 
-	/* if valid collation is specified, we use the function with both let and collation support, if applicable */
+	/* if valid collation is specified, we use the function with both variables and collation support, if applicable */
 	/* else if only variableSpec is given, we use the function with let support, if applicable */
 	/* else the base function */
-	bool addLetAndCollationArg = IsCollationApplicable(context->collationString) &&
-								 functionOidWithLetAndCollation != NULL;
-	bool addOnlyVariableSpecArg = context->variableSpec != NULL && functionOidWithLet !=
-								  NULL;
+	Const *collationConst = IsCollationApplicable(context->collationString) ?
+							MakeTextConst(context->collationString,
+										  strlen(context->collationString)) : NULL;
 
-	if (addLetAndCollationArg)
+	if (collationConst && functionOidWithLetAndCollation)
 	{
-		Const *collationConst = MakeTextConst(context->collationString, strlen(
-												  context->collationString));
-		args = list_make4(currentProjection, addFieldsProcessed, context->variableSpec,
+		args = list_make4(currentProjection,
+						  addFieldsProcessed,
+						  context->variableSpec ? context->variableSpec :
+						  (Expr *) makeNullConst(BsonTypeId(), -1, InvalidOid),
 						  collationConst);
 		functionOid = functionOidWithLetAndCollation();
 	}
-	else if (addOnlyVariableSpecArg)
+	else if (context->variableSpec && functionOidWithLet)
 	{
-		args = list_make3(currentProjection, addFieldsProcessed,
-						  context->variableSpec);
+		args = list_make3(currentProjection, addFieldsProcessed, context->variableSpec);
 		functionOid = functionOidWithLet();
 	}
 	else
@@ -3363,7 +3356,7 @@ HandleRedact(const bson_value_t *existingValue, Query *query,
 	Oid funcOid = BsonDollarRedactWithLetFunctionOid();
 
 	Expr *variableSpecConst = context->variableSpec == NULL ?
-							  (Expr *) MakeBsonConst(PgbsonInitEmpty()) :
+							  (Expr *) makeNullConst(BsonTypeId(), -1, InvalidOid) :
 							  context->variableSpec;
 
 	if (IsCollationApplicable(context->collationString))
@@ -3430,18 +3423,25 @@ HandleProjectFind(const bson_value_t *existingValue, const bson_value_t *queryVa
 
 	List *args;
 	Oid funcOid = BsonDollarProjectFindFunctionOid();
-	if (IsCollationApplicable(context->collationString))
+
+	Const *collationConst = IsCollationApplicable(context->collationString) ?
+							MakeTextConst(context->collationString,
+										  strlen(context->collationString)) : NULL;
+
+	if (collationConst)
 	{
 		pgbson *queryDoc = queryValue->value_type == BSON_TYPE_EOD ? PgbsonInitEmpty() :
 						   PgbsonInitFromDocumentBsonValue(queryValue);
-		Const *collationStringConst = MakeTextConst(context->collationString,
-													strlen(context->collationString));
 
-		args = list_make5(currentProjection, projectProcessed, MakeBsonConst(queryDoc),
-						  context->variableSpec, collationStringConst);
+		args = list_make5(currentProjection,
+						  projectProcessed,
+						  MakeBsonConst(queryDoc),
+						  context->variableSpec ? context->variableSpec :
+						  (Expr *) makeNullConst(BsonTypeId(), -1, InvalidOid),
+						  collationConst);
 		funcOid = BsonDollarProjectFindWithLetAndCollationFunctionOid();
 	}
-	else if (context->variableSpec != NULL)
+	else if (context->variableSpec)
 	{
 		pgbson *queryDoc = queryValue->value_type == BSON_TYPE_EOD ? PgbsonInitEmpty() :
 						   PgbsonInitFromDocumentBsonValue(queryValue);
