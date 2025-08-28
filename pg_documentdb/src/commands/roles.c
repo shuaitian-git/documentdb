@@ -35,6 +35,7 @@ static void ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRo
 static void ParseRolesInfoSpec(pgbson *rolesInfoBson, RolesInfoSpec *rolesInfoSpec);
 static void ParseRoleDocument(bson_iter_t *rolesArrayIter, RolesInfoSpec *rolesInfoSpec);
 static void ParseRoleDefinition(bson_iter_t *iter, RolesInfoSpec *rolesInfoSpec);
+static void ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec);
 
 /*
  * Parses a createRole spec, executes the createRole command, and returns the result.
@@ -56,9 +57,11 @@ command_create_role(PG_FUNCTION_ARGS)
 Datum
 command_drop_role(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTED),
-					errmsg("DropRole command is not supported in preview."),
-					errdetail_log("DropRole command is not supported in preview.")));
+	pgbson *dropRoleSpec = PG_GETARG_PGBSON(0);
+
+	Datum response = drop_role(dropRoleSpec);
+
+	PG_RETURN_DATUM(response);
 }
 
 
@@ -187,9 +190,57 @@ create_role(pgbson *createRoleBson)
 Datum
 drop_role(pgbson *dropRoleBson)
 {
-	ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTED),
-					errmsg("The DropRole command is currently unsupported."),
-					errdetail_log("The DropRole command is currently unsupported.")));
+	if (!EnableRoleCrud)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTED),
+						errmsg("DropRole command is not supported."),
+						errdetail_log("DropRole command is not supported.")));
+	}
+
+	if (!IsMetadataCoordinator())
+	{
+		StringInfo dropRoleQuery = makeStringInfo();
+		appendStringInfo(dropRoleQuery,
+						 "SELECT %s.drop_role(%s::%s.bson)",
+						 ApiSchemaNameV2,
+						 quote_literal_cstr(PgbsonToHexadecimalString(dropRoleBson)),
+						 CoreSchemaNameV2);
+		DistributedRunCommandResult result = RunCommandOnMetadataCoordinator(
+			dropRoleQuery->data);
+
+		if (!result.success)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
+							errmsg(
+								"Drop role operation failed: %s",
+								text_to_cstring(result.response)),
+							errdetail_log(
+								"Drop role operation failed: %s",
+								text_to_cstring(result.response))));
+		}
+
+		pgbson_writer finalWriter;
+		PgbsonWriterInit(&finalWriter);
+		PgbsonWriterAppendInt32(&finalWriter, "ok", 2, 1);
+		return PointerGetDatum(PgbsonWriterGetPgbson(&finalWriter));
+	}
+
+	DropRoleSpec dropRoleSpec = { NULL };
+	ParseDropRoleSpec(dropRoleBson, &dropRoleSpec);
+
+	StringInfo dropUserInfo = makeStringInfo();
+	appendStringInfo(dropUserInfo, "DROP ROLE %s;", quote_identifier(
+						 dropRoleSpec.roleName));
+
+	bool readOnly = false;
+	bool isNull = false;
+	ExtensionExecuteQueryViaSPI(dropUserInfo->data, readOnly, SPI_OK_UTILITY,
+								&isNull);
+
+	pgbson_writer finalWriter;
+	PgbsonWriterInit(&finalWriter);
+	PgbsonWriterAppendInt32(&finalWriter, "ok", 2, 1);
+	return PointerGetDatum(PgbsonWriterGetPgbson(&finalWriter));
 }
 
 
@@ -276,10 +327,12 @@ ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec)
 									"The 'createRole' field must not be left empty.")));
 			}
 
-			if (IsUserNameInvalid(createRoleSpec->roleName))
+			if (ContainsSystemPgRoleNamePrefix(createRoleSpec->roleName))
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-								errmsg("Invalid role name, use a different role name.")));
+								errmsg(
+									"Cannot create system built-in role '%s'.",
+									createRoleSpec->roleName)));
 			}
 		}
 		else if (strcmp(key, "roles") == 0)
@@ -530,5 +583,59 @@ ParseRoleDocument(bson_iter_t *rolesArrayIter, RolesInfoSpec *rolesInfoSpec)
 	if (roleNameLength > 0 && dbNameLength > 0)
 	{
 		rolesInfoSpec->roleNames = lappend(rolesInfoSpec->roleNames, pstrdup(roleName));
+	}
+}
+
+
+/*
+ * ParseDropRoleSpec parses the dropRole command parameters
+ */
+static void
+ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec)
+{
+	bson_iter_t dropRoleIter;
+	PgbsonInitIterator(dropRoleBson, &dropRoleIter);
+
+	while (bson_iter_next(&dropRoleIter))
+	{
+		const char *key = bson_iter_key(&dropRoleIter);
+
+		if (strcmp(key, "dropRole") == 0)
+		{
+			EnsureTopLevelFieldType(key, &dropRoleIter, BSON_TYPE_UTF8);
+			uint32_t strLength = 0;
+			const char *roleNameValue = bson_iter_utf8(&dropRoleIter, &strLength);
+
+			if (strLength == 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg("'dropRole' cannot be empty.")));
+			}
+
+			if (IS_SUPPORTED_BUILTIN_ROLE(roleNameValue) || IS_SYSTEM_ROLE(roleNameValue))
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"Cannot drop built-in role '%s'.",
+									roleNameValue)));
+			}
+
+			dropRoleSpec->roleName = pstrdup(roleNameValue);
+		}
+		else if (IsCommonSpecIgnoredField(key))
+		{
+			continue;
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+							errmsg("Unsupported field specified: '%s'.", key)));
+		}
+	}
+
+	if (dropRoleSpec->roleName == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("'dropRole' is a required field.")));
 	}
 }

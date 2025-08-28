@@ -56,6 +56,9 @@ SELECT documentdb_api.create_role('{"createRole":"invalidRoleNames", "roles":[12
 -- Test createRole with missing createRole field, should fail
 SELECT documentdb_api.create_role('{"roles":["documentdb_readonly_role"]}');
 
+-- Test createRole with a built-in role, should fail
+SELECT documentdb_api.create_role('{"createRole": "documentdb_admin_role"}');
+
 -- Test createRole with unsupported field, should fail
 SELECT documentdb_api.create_role('{"createRole":"unsupportedFieldRole", "roles":["documentdb_readonly_role"], "unsupportedField":"value"}');
 

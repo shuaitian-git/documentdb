@@ -544,7 +544,8 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 									"'createUser' is a required field.")));
 			}
 
-			if (IsUserNameInvalid(spec->createUser))
+			if (ContainsSystemPgRoleNamePrefix(spec->createUser) ||
+				(EnableUsernamePasswordConstraints && !IsUsernameValid(spec->createUser)))
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 								errmsg("Invalid username, use a different username.")));
@@ -908,7 +909,9 @@ ParseDropUserSpec(pgbson *dropSpec)
 									"The field 'dropUser' is mandatory.")));
 			}
 
-			if (IsUserNameInvalid(dropUser))
+			if (ContainsSystemPgRoleNamePrefix(dropUser) ||
+				(EnableUsernamePasswordConstraints &&
+				 !IsUsernameValid(dropUser)))
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 								errmsg("Invalid username.")));
@@ -1559,11 +1562,10 @@ PrehashPassword(const char *password)
 
 
 /*
- * Method calls the IsUsernameValid hook to validate the username.
- * This validation logic must be in sync with control plane username validation.
+ * Check if the given name contains any blocked role prefixes.
  */
 bool
-IsUserNameInvalid(const char *userName)
+ContainsSystemPgRoleNamePrefix(const char *name)
 {
 	/* Split the blocked role prefix list */
 	char *blockedRolePrefixList = pstrdup(BlockedRolePrefixList);
@@ -1571,22 +1573,16 @@ IsUserNameInvalid(const char *userName)
 	char *token = strtok(blockedRolePrefixList, ",");
 	while (token != NULL)
 	{
-		if (strncmp(userName, token, strlen(token)) == 0)
+		if (strncmp(name, token, strlen(token)) == 0)
 		{
 			containsBlockedPrefix = true;
 			break;
 		}
 		token = strtok(NULL, ",");
 	}
+
 	pfree(blockedRolePrefixList);
-
-
-	bool is_valid = !containsBlockedPrefix;
-	if (EnableUsernamePasswordConstraints)
-	{
-		is_valid = IsUsernameValid(userName) && is_valid;
-	}
-	return !is_valid;
+	return containsBlockedPrefix;
 }
 
 

@@ -22,6 +22,9 @@
 	 strcmp((roleName), ApiRootRole) == 0 || \
 	 strcmp((roleName), ApiUserAdminRole) == 0)
 
+#define IS_SYSTEM_ROLE(roleName) \
+	(strcmp((roleName), ApiBgWorkerRole) == 0)
+
 typedef struct
 {
 	const char *roleName;
@@ -35,6 +38,11 @@ typedef struct
 	bool showBuiltInRoles;
 	bool showPrivileges;
 } RolesInfoSpec;
+
+typedef struct
+{
+	const char *roleName;
+} DropRoleSpec;
 
 /* Method to create a role */
 Datum create_role(pgbson *createRoleBson);
