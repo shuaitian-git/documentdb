@@ -641,6 +641,16 @@ ROLLBACK;
 SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "filter": { "$expr": {"$eq": ["$a", "cat"]} }, "sort": { "_id": 1 }, "skip": 0, "collation": { "locale": "en_US_POSIX", "strength" : 1 } }');
 SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "filter": { "$expr": {"$eq": ["$a", "CAT"]} }, "sort": { "_id": 1 }, "skip": 0, "collation": { "locale": "en_US_POSIX", "strength" : 1 } }');
 
+-- simple collation
+SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj",  "filter": { "$expr": {"$eq": ["$a", "CAT"]} }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "simple"} }');
+SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj",  "filter": { "$expr": {"$eq": ["$a", "cat"]} }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "simple"} }');
+
+-- simple locale ignores other options
+SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj",  "filter": { "$expr": {"$eq": ["$a", "cat"]} }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "simple", "strength": 1} }');
+SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj",  "filter": { "$expr": {"$eq": ["$a", "cat"]} }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "simple", "strength": 3} }');
+SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj",  "filter": { "$expr": {"$eq": ["$a", "cat"]} }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "simple", "caseFirst": "upper"} }');
+SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj",  "filter": { "$expr": {"$eq": ["$a", "cat"]} }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "simple", "caseFirst": "lower"} }');
+
 -- support for $filter
 SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "filter": { "$expr": { "$eq": [["$a"], { "$filter": { "input": ["$a"], "as": "item", "cond": { "$eq": [ "$$item", "CAT" ] } } } ] } }, "sort": { "_id": 1 }, "collation": { "locale": "en", "strength": 1 } }');
 SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "filter": { "$expr": { "$eq": [["$a"], { "$filter": { "input": ["$a"], "as": "item", "cond": { "$eq": [ "$$item", "CAT" ] } } } ] } }, "sort": { "_id": 1 }, "collation": { "locale": "en", "strength": 3 } }');
