@@ -419,6 +419,13 @@ ParseAndGetCollationString(const bson_value_t *collationValue, const char *colat
 	GenerateICULocaleAndExtractCollationOption(inputLocale, &locale,
 											   &collationOptionString);
 
+	/* for simple collation, ignore all other options */
+	if (locale != NULL && IsSimpleCollation(locale))
+	{
+		appendStringInfo(&icuCollation, "%s", locale);
+		return;
+	}
+
 	appendStringInfo(&icuCollation, "%s-u-", (locale == NULL) ? "und" : locale);
 
 	if (collationOptionString != NULL)

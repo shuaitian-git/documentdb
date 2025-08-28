@@ -1469,7 +1469,9 @@ CompareStrings(const char *left, uint32_t leftLength, const char *right, uint32_
 
 	int32_t cmp;
 
-	if (collationString == NULL)
+	/* simple collation also uses binary comparison */
+	if (!IsCollationApplicable(collationString) ||
+		IsSimpleCollation(collationString))
 	{
 		cmp = memcmp(left, right, minLength);
 	}
