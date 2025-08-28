@@ -28,10 +28,10 @@ rumReadTuple(RumState *rumstate, OffsetNumber attnum,
 	int nipd = RumGetNPosting(itup),
 		i;
 	RumItemSetMin(&item);
-	InitBlockNumberIncr(blockNumberIncr, (&item.iptr));
 
 	if (RumUseNewItemPtrDecoding)
 	{
+		InitBlockNumberIncr(blockNumberIncr, (&item.iptr));
 		for (i = 0; i < nipd; i++)
 		{
 			ptr = rumDataPageLeafReadWithBlockNumberIncr(ptr, attnum, &item, copyAddInfo,
@@ -41,7 +41,6 @@ rumReadTuple(RumState *rumstate, OffsetNumber attnum,
 	}
 	else
 	{
-		ItemPointerSetMin(&item.iptr);
 		for (i = 0; i < nipd; i++)
 		{
 			ptr = rumDataPageLeafRead(ptr, attnum, &item, copyAddInfo, rumstate);
