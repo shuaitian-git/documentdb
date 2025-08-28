@@ -15,10 +15,9 @@ use bson::{rawdoc, RawDocumentBuf};
 
 use crate::{
     configuration::DynamicConfiguration,
-    context::ConnectionContext,
+    context::{ConnectionContext, RequestContext},
     error::{DocumentDBError, ErrorCode, Result},
     protocol::{self, OK_SUCCEEDED},
-    requests::{Request, RequestInfo},
     responses::{RawResponse, Response},
 };
 
@@ -56,10 +55,10 @@ pub fn process_is_db_grid(context: &ConnectionContext) -> Result<Response> {
     })))
 }
 
-pub fn process_get_rw_concern(
-    request: &Request<'_>,
-    request_info: &RequestInfo<'_>,
-) -> Result<Response> {
+pub fn process_get_rw_concern(request_context: &mut RequestContext<'_>) -> Result<Response> {
+    let request = request_context.payload;
+    let request_info = request_context.info;
+
     request.extract_fields(|k, _| match k {
         "getDefaultRWConcern" | "inMemory" | "comment" | "lsid" | "$db" => Ok(()),
         other => Err(DocumentDBError::documentdb_error(

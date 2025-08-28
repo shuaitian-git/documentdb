@@ -11,8 +11,9 @@ use either::Either::{Left, Right};
 use error::ErrorCode;
 use openssl::ssl::{Ssl, SslContextBuilder, SslMethod, SslOptions};
 use protocol::header::Header;
+use rand::Rng;
 use requests::request_tracker::RequestTracker;
-use requests::{Request, RequestInfo, RequestIntervalKind};
+use requests::{Request, RequestIntervalKind};
 use responses::{CommandError, Response};
 use socket2::TcpKeepalive;
 use std::sync::Arc;
@@ -22,8 +23,9 @@ use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_openssl::SslStream;
 use tokio_util::sync::CancellationToken;
+use uuid::Builder;
 
-use crate::context::{ConnectionContext, ServiceContext};
+use crate::context::{ConnectionContext, RequestContext, ServiceContext};
 use crate::error::{DocumentDBError, Result};
 use crate::postgres::PgDataClient;
 
@@ -141,6 +143,15 @@ async fn get_stream(ssl: Ssl, stream: TcpStream) -> Result<SslStream<TcpStream>>
     Ok(ssl_stream)
 }
 
+pub fn get_activity_id(request_id: i32) -> String {
+    let mut activity_id_bytes = [0u8; 16];
+    let mut rng = rand::thread_rng();
+    rng.fill(&mut activity_id_bytes[..12]);
+    activity_id_bytes[12..].copy_from_slice(&request_id.to_be_bytes());
+    let activity_id = Builder::from_random_bytes(activity_id_bytes).into_uuid();
+    activity_id.to_string()
+}
+
 async fn handle_connection<T>(
     ssl: Ssl,
     sc: ServiceContext,
@@ -178,8 +189,14 @@ where
     loop {
         match protocol::reader::read_header(&mut stream).await {
             Ok(Some(header)) => {
-                if let Err(e) =
-                    handle_message::<R, T>(&mut connection_context, &header, &mut stream).await
+                let activity_id = get_activity_id(header.request_id);
+                if let Err(e) = handle_message::<R, T>(
+                    &mut connection_context,
+                    &header,
+                    &mut stream,
+                    &activity_id,
+                )
+                .await
                 {
                     if let Err(e) = log_and_write_error(
                         &connection_context,
@@ -188,11 +205,12 @@ where
                         None,
                         &mut stream,
                         None,
-                        &mut RequestInfo::new(),
+                        &mut RequestTracker::new(),
+                        &activity_id,
                     )
                     .await
                     {
-                        log::error!("[{}] Couldn't reply with error {:?}", header.request_id, e);
+                        log::error!(activity_id = activity_id.as_str(); "[{}] Couldn't reply with error {:?}", header.request_id, e);
                         break;
                     }
                 }
@@ -225,15 +243,16 @@ where
 }
 
 async fn get_response<T>(
+    request_context: &mut RequestContext<'_>,
     connection_context: &mut ConnectionContext,
-    request: &Request<'_>,
-    request_info: &mut RequestInfo<'_>,
 ) -> Result<Response>
 where
     T: PgDataClient,
 {
-    if !connection_context.auth_state.authorized || request.request_type().handle_with_auth() {
-        let response = auth::process::<T>(connection_context, request).await?;
+    if !connection_context.auth_state.authorized
+        || request_context.payload.request_type().handle_with_auth()
+    {
+        let response = auth::process::<T>(connection_context, request_context).await?;
         return Ok(response);
     }
 
@@ -245,7 +264,7 @@ where
 
     // Process the actual request
     let response =
-        processor::process_request(request, request_info, connection_context, data_client).await?;
+        processor::process_request(request_context, connection_context, data_client).await?;
 
     Ok(response)
 }
@@ -254,6 +273,7 @@ async fn handle_message<R, T>(
     connection_context: &mut ConnectionContext,
     header: &Header,
     stream: &mut R,
+    activity_id: &str,
 ) -> Result<()>
 where
     R: AsyncRead + AsyncWrite + Unpin + Send,
@@ -284,21 +304,26 @@ where
     let request = protocol::reader::parse_request(&message, connection_context).await?;
     request_tracker.record_duration(RequestIntervalKind::FormatRequest, format_request_start);
 
-    let mut request_info = request.extract_common()?;
-    request_info.request_tracker = request_tracker;
+    let request_info = request.extract_common()?;
+    let mut request_context = RequestContext {
+        activity_id,
+        payload: &request,
+        info: &request_info,
+        tracker: &mut request_tracker,
+    };
 
     let mut collection = String::new();
     let result = handle_request::<R, T>(
         connection_context,
         header,
-        &request,
+        &mut request_context,
         stream,
         &mut collection,
-        &mut request_info,
     )
     .await;
-    request_info
-        .request_tracker
+
+    request_context
+        .tracker
         .record_duration(RequestIntervalKind::HandleRequest, handle_request_start);
 
     if connection_context
@@ -307,17 +332,17 @@ where
         .await
     {
         log::info!(
-            activity_id = header.activity_id.as_str();
+            activity_id = activity_id;
             "Latency for Mongo Request with ActivityId: {}, BufferRead={}ms, HandleRequest={}ms, FormatRequest={}ms, ProcessRequest={}ms, PostgresBeginTransaction={}ms, PostgresSetStatementTimeout={}ms, PostgresTransactionCommit={}ms, FormatResponse={}ms",
-            header.activity_id,
-            request_info.request_tracker.get_interval_elapsed_time(RequestIntervalKind::BufferRead),
-            request_info.request_tracker.get_interval_elapsed_time(RequestIntervalKind::HandleRequest),
-            request_info.request_tracker.get_interval_elapsed_time(RequestIntervalKind::FormatRequest),
-            request_info.request_tracker.get_interval_elapsed_time(RequestIntervalKind::ProcessRequest),
-            request_info.request_tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresBeginTransaction),
-            request_info.request_tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresSetStatementTimeout),
-            request_info.request_tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresTransactionCommit),
-            request_info.request_tracker.get_interval_elapsed_time(RequestIntervalKind::FormatResponse)
+            activity_id,
+            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::BufferRead),
+            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::HandleRequest),
+            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::FormatRequest),
+            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::ProcessRequest),
+            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresBeginTransaction),
+            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresSetStatementTimeout),
+            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresTransactionCommit),
+            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::FormatResponse)
         );
     }
 
@@ -328,14 +353,15 @@ where
             connection_context,
             header,
             &e,
-            Some(&request),
+            Some(request_context.payload),
             stream,
             Some(collection),
-            &mut RequestInfo::new(),
+            request_context.tracker,
+            activity_id,
         )
         .await
         {
-            log::error!(activity_id = header.activity_id.as_str(); "[{}] Couldn't reply with error {:?}", header.request_id, e);
+            log::error!(activity_id = activity_id; "[{}] Couldn't reply with error {:?}", header.request_id, e);
         }
     }
 
@@ -345,21 +371,20 @@ where
 async fn handle_request<R, T>(
     connection_context: &mut ConnectionContext,
     header: &Header,
-    request: &Request<'_>,
+    request_context: &mut RequestContext<'_>,
     stream: &mut R,
     collection: &mut String,
-    request_info: &mut RequestInfo<'_>,
 ) -> Result<()>
 where
     R: AsyncRead + AsyncWrite + Unpin + Send,
     T: PgDataClient,
 {
-    *collection = request_info.collection().unwrap_or("").to_string();
+    *collection = request_context.info.collection().unwrap_or("").to_string();
 
     // Process the response for the message
-    let response = get_response::<T>(connection_context, request, request_info).await?;
+    let response = get_response::<T>(request_context, connection_context).await?;
 
-    let format_response_start = request_info.request_tracker.start_timer();
+    let format_response_start = request_context.tracker.start_timer();
 
     // Write the response back to the stream
     if connection_context.requires_response {
@@ -372,21 +397,23 @@ where
             .emit_request_event(
                 connection_context,
                 header,
-                Some(request),
+                Some(request_context.payload),
                 Left(&response),
                 collection.to_string(),
-                request_info,
+                request_context.tracker,
+                request_context.activity_id,
             )
             .await;
     }
 
-    request_info
-        .request_tracker
+    request_context
+        .tracker
         .record_duration(RequestIntervalKind::FormatResponse, format_response_start);
 
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn log_and_write_error<R>(
     connection_context: &ConnectionContext,
     header: &Header,
@@ -394,7 +421,8 @@ async fn log_and_write_error<R>(
     request: Option<&Request<'_>>,
     stream: &mut R,
     collection: Option<String>,
-    request_info: &mut RequestInfo<'_>,
+    request_tracker: &mut RequestTracker,
+    activity_id: &str,
 ) -> Result<()>
 where
     R: AsyncRead + AsyncWrite + Unpin + Send,
@@ -404,7 +432,7 @@ where
 
     responses::writer::write_response(header, &response, stream).await?;
 
-    log::error!(activity_id = header.activity_id.as_str(); "Request failure: {e}");
+    log::error!(activity_id = activity_id; "Request failure: {e}");
 
     if let Some(telemetry) = connection_context.telemetry_provider.as_ref() {
         telemetry
@@ -414,7 +442,8 @@ where
                 request,
                 Right((&error_response, response.as_bytes().len())),
                 collection.unwrap_or_default(),
-                request_info,
+                request_tracker,
+                activity_id,
             )
             .await;
     }

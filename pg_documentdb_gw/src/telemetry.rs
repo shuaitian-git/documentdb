@@ -8,7 +8,8 @@
 
 use crate::context::ConnectionContext;
 use crate::protocol::header::Header;
-use crate::requests::{Request, RequestInfo};
+use crate::requests::request_tracker::RequestTracker;
+use crate::requests::Request;
 use crate::responses::{CommandError, Response};
 use async_trait::async_trait;
 use dyn_clone::{clone_trait_object, DynClone};
@@ -16,6 +17,7 @@ use either::Either;
 
 // TelemetryProvider takes care of emitting events and metrics
 // for tracking the gateway.
+#[allow(clippy::too_many_arguments)]
 #[async_trait]
 pub trait TelemetryProvider: Send + Sync + DynClone {
     // Emits an event for every CRUD request dispatched to backend
@@ -26,7 +28,8 @@ pub trait TelemetryProvider: Send + Sync + DynClone {
         _: Option<&Request<'_>>,
         _: Either<&Response, (&CommandError, usize)>,
         _: String,
-        _: &mut RequestInfo<'_>,
+        _: &RequestTracker,
+        _: &str,
     );
 }
 
