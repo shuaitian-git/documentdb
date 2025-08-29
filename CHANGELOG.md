@@ -1,4 +1,5 @@
 ### documentdb v1.108-0 (Unreleased) ###
+* Top-level `let` variables and `$$NOW` supported by default.
 * Fix collation support on find and aggregation when variableSpec is not available.
 * Support `dropRole` command *[Feature]*
 
