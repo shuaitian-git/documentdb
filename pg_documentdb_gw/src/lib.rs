@@ -328,7 +328,7 @@ where
 
     if connection_context
         .dynamic_configuration()
-        .enable_verbose_logging_gateway()
+        .enable_verbose_logging_in_gateway()
         .await
     {
         log::info!(
