@@ -1,4 +1,4 @@
-name: Build RPM packages
+name: Build rpm packages
 concurrency:
   group: build-rpm-packages-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
