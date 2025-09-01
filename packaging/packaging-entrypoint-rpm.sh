@@ -48,7 +48,26 @@ rpmbuild -ba ~/rpmbuild/SPECS/documentdb.spec
 
 # Rename and copy RPMs to the output directory
 mkdir -p /output
-for rpm_file in ~/rpmbuild/RPMS/x86_64/*.rpm; do
+if [ -n "${ARCH}" ]; then
+    RPM_ARCH=${ARCH}
+else
+    UNAME_ARCH=$(uname -m)
+    case "${UNAME_ARCH}" in
+        aarch64|arm64)
+            RPM_ARCH=aarch64
+            ;;
+        x86_64|amd64)
+            RPM_ARCH=x86_64
+            ;;
+        *)
+            echo "Unknown runtime arch: ${UNAME_ARCH}, defaulting to x86_64" >&2
+            RPM_ARCH=x86_64
+            ;;
+    esac
+fi
+
+for rpm_file in ~/rpmbuild/RPMS/${RPM_ARCH}/*.rpm; do
+    [ -e "$rpm_file" ] || continue
     base_rpm=$(basename "$rpm_file")
     mv "$rpm_file" "/output/${OS}-${base_rpm}"
 done
