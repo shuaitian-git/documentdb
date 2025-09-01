@@ -1149,3 +1149,69 @@ EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT ctid FROM documen
 (10 rows)
 
 END;
+SELECT count(*) from ( SELECT shard_key_value, object_id, document  from documentdb_api.collection('db', 'ttlCompositeOrderedScan') order by object_id) as a;
+ count 
+---------------------------------------------------------------------
+  9001
+(1 row)
+
+-- Test with descending TTL ordering
+BEGIN;
+SET client_min_messages TO LOG;
+SET LOCAL documentdb.useIndexHintsForTTLTask to off;
+SET LOCAL documentdb.logTTLProgressActivity to on;
+SET LOCAL documentdb.enableTTLDescSort to on;
+CALL documentdb_api_internal.delete_expired_rows(100);
+LOG:  Number of rows deleted: 100, table = documents_20006_2000120, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1
+LOG:  TTL job elapsed time:<redacted> limit: 20000ms
+LOG:  Number of rows deleted: 100, table = documents_20006_2000121, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1
+LOG:  TTL job elapsed time:<redacted> limit: 20000ms
+LOG:  Number of rows deleted: 100, table = documents_20006_2000122, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1
+LOG:  TTL job elapsed time:<redacted> limit: 20000ms
+LOG:  Number of rows deleted: 100, table = documents_20006_2000123, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1
+LOG:  TTL job elapsed time:<redacted> limit: 20000ms
+LOG:  Number of rows deleted: 100, table = documents_20006_2000124, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1
+LOG:  TTL job elapsed time:<redacted> limit: 20000ms
+LOG:  Number of rows deleted: 100, table = documents_20006_2000125, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1
+LOG:  TTL job elapsed time:<redacted> limit: 20000ms
+LOG:  Number of rows deleted: 100, table = documents_20006_2000126, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1
+LOG:  TTL job elapsed time:<redacted> limit: 20000ms
+LOG:  Number of rows deleted: 100, table = documents_20006_2000127, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1
+LOG:  TTL job elapsed time:<redacted> limit: 20000ms
+RESET client_min_messages;
+END;
+SELECT count(*) from ( SELECT shard_key_value, object_id, document  from documentdb_api.collection('db', 'ttlCompositeOrderedScan') order by object_id) as a;
+ count 
+---------------------------------------------------------------------
+  8201
+(1 row)
+
+BEGIN;
+SET LOCAL documentdb.enableIndexOrderbyPushdown to on;
+SET LOCAL documentdb.enableNewCompositeIndexOpClass to on;
+SET client_min_messages TO INFO;
+-- Check ORDER BY uses index 
+EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) 
+    SELECT ctid FROM documentdb_data.documents_20006_2000122
+        WHERE 
+        bson_dollar_lt(document, '{ "ttl" : { "$date" : { "$numberLong" : "1657900030775" } } }'::documentdb_core.bson) AND
+        documentdb_api_internal.bson_dollar_index_hint(document, 'ttl_index'::text, '{"key": {"ttl": 1}}'::documentdb_core.bson, true)
+        ORDER BY document OPERATOR(documentdb_api_internal.<>-|) '{ "ttl" : -1}'::documentdb_core.bson
+        LIMIT 100;
+                                                             QUERY PLAN                                                             
+---------------------------------------------------------------------
+ Limit (actual rows=100 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=100 loops=1)
+         indexName: ttl_index
+         isMultiKey: false
+         indexBounds: ["ttl": [{ "$date" : { "$numberLong" : "-9223372036854775808" } }, { "$date" : "2022-07-15T15:47:10.775Z" })]
+         isBackwardScan: true
+         innerScanLoops: 1 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 1216)]
+         ->  Index Scan using ttl_index on documents_20006_2000122 (actual rows=100 loops=1)
+               Index Cond: (document @< '{ "ttl" : { "$date" : { "$numberLong" : "1657900030775" } } }'::bson)
+               Order By: (document OPERATOR(documentdb_api_internal.<>-|) '{ "ttl" : { "$numberInt" : "-1" } }'::bson)
+(12 rows)
+
+END;
