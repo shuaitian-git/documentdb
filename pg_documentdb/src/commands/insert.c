@@ -1236,20 +1236,23 @@ InsertDocument(uint64 collectionId, const char *shardTableName,
 
 /*
  * Inserts a document with the given shardKeyValue and object_id, and on conflict
- * with the _id index, replaces the document (Similar to upsert behavior)
+ * with the _id index, reapplies the update on the conflicting document (Similar to upsert behavior)
  */
 bool
 InsertOrReplaceDocument(uint64 collectionId, const char *shardTableName, int64
 						shardKeyValue,
-						pgbson *objectId, pgbson *document)
+						pgbson *objectId, pgbson *document,
+						const bson_value_t *updateSpecValue)
 {
 	StringInfoData query;
-	const int argCount = 3;
-	Oid argTypes[3];
-	Datum argValues[3];
+	const int argCount = 4;
+	Oid argTypes[4];
+	Datum argValues[4];
 	int spiStatus PG_USED_FOR_ASSERTS_ONLY = 0;
 
 	SPI_connect();
+
+	pgbson *updateSpecDoc = BsonValueToDocumentPgbson(updateSpecValue);
 
 	initStringInfo(&query);
 	appendStringInfo(&query, "INSERT INTO %s.", ApiDataSchemaName);
@@ -1275,14 +1278,19 @@ InsertOrReplaceDocument(uint64 collectionId, const char *shardTableName, int64
 		const int prefixLength = 10;
 		const char *shardSuffix = shardTableName + prefixLength;
 		appendStringInfo(&query, " ON CONFLICT ON CONSTRAINT collection_pk_%s"
-								 " DO UPDATE set document = %s.bson_from_bytea($3)",
-						 shardSuffix, CoreSchemaName);
+								 " DO UPDATE set document = ( %s.bson_update_document(%s.documents_%s.document, %s.bson_from_bytea($4), '{}'::%s.bson)).newDocument",
+						 shardSuffix, ApiInternalSchemaName, ApiDataSchemaName,
+						 shardSuffix, CoreSchemaName, CoreSchemaName);
 	}
 	else
 	{
 		appendStringInfo(&query, " ON CONFLICT ON CONSTRAINT collection_pk_" UINT64_FORMAT
-						 " DO UPDATE set document = %s.bson_from_bytea($3)", collectionId,
-						 CoreSchemaName);
+						 " DO UPDATE set document = (%s.bson_update_document(%s.documents_"
+						 UINT64_FORMAT
+						 ".document, %s.bson_from_bytea($4), '{}'::%s.bson)).newDocument",
+						 collectionId, ApiInternalSchemaName, ApiDataSchemaName,
+						 collectionId,
+						 CoreSchemaName, CoreSchemaName);
 	}
 
 	argTypes[0] = INT8OID;
@@ -1291,6 +1299,8 @@ InsertOrReplaceDocument(uint64 collectionId, const char *shardTableName, int64
 	argValues[1] = PointerGetDatum(CastPgbsonToBytea(objectId));
 	argTypes[2] = BYTEAOID;
 	argValues[2] = PointerGetDatum(CastPgbsonToBytea(document));
+	argTypes[3] = BYTEAOID;
+	argValues[3] = PointerGetDatum(CastPgbsonToBytea(updateSpecDoc));
 
 	SPIPlanPtr plan = GetSPIQueryPlanWithLocalShard(collectionId, shardTableName,
 													QUERY_ID_INSERT_OR_REPLACE,

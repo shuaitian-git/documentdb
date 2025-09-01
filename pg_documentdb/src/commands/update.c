@@ -650,12 +650,13 @@ PerformUpdateCore(Datum databaseNameDatum, pgbson *updateSpec,
  */
 static inline void
 DoInsertForUpdate(MongoCollection *collection, uint64_t shardKeyHash, pgbson *objectId,
-				  pgbson *newDocument, bool hasOnlyObjectIdFilter)
+				  pgbson *newDocument, bool hasOnlyObjectIdFilter,
+				  const bson_value_t *updateSpecValue)
 {
 	if (hasOnlyObjectIdFilter)
 	{
 		InsertOrReplaceDocument(collection->collectionId, collection->shardTableName,
-								shardKeyHash, objectId, newDocument);
+								shardKeyHash, objectId, newDocument, updateSpecValue);
 	}
 	else
 	{
@@ -2084,7 +2085,7 @@ UpdateOne(MongoCollection *collection, UpdateOneParams *updateOneParams,
 		bool hasOnlyObjectIdFilter = objectIdFilter != NULL && !queryHasNonIdFilters;
 
 		DoInsertForUpdate(collection, newShardKeyHash, objectId, result->reinsertDocument,
-						  hasOnlyObjectIdFilter);
+						  hasOnlyObjectIdFilter, updateOneParams->update);
 	}
 }
 
@@ -3106,7 +3107,7 @@ UpdateOneInternal(MongoCollection *collection, UpdateOneParams *updateOneParams,
 			{
 				/* shard key unchanged, upsert now */
 				DoInsertForUpdate(collection, newShardKeyHash, objectId, newDoc,
-								  hasOnlyObjectIdFilter);
+								  hasOnlyObjectIdFilter, updateOneParams->update);
 				result->reinsertDocument = NULL;
 			}
 			else
@@ -3721,7 +3722,7 @@ UpsertDocument(MongoCollection *collection, const bson_value_t *update,
 	}
 
 	DoInsertForUpdate(collection, newShardKeyHash, objectId, newDoc,
-					  hasOnlyObjectIdFilter);
+					  hasOnlyObjectIdFilter, update);
 	return objectId;
 }
 
