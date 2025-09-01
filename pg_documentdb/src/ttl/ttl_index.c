@@ -40,6 +40,7 @@ extern bool EnableTtlJobsOnReadOnly;
 extern bool EnableNewCompositeIndexOpclass;
 extern bool ForceIndexScanForTTLTask;
 extern bool UseIndexHintsForTTLTask;
+extern bool EnableTTLDescSort;
 
 bool UseV2TTLIndexPurger = true;
 
@@ -700,6 +701,14 @@ DeleteExpiredRowsForIndexCore(char *tableName, TtlIndexEntry *indexEntry, int64
 							 ApiCatalogSchemaName, FullBsonTypeName);
 		}
 		argCount++;
+	}
+
+	/* Fetch the entries to be deleted in descending order if the index is orderd */
+	if (EnableTTLDescSort && indexEntry->indexIsOrdered)
+	{
+		appendStringInfo(cmdStrDeleteRows,
+						 " ORDER BY document OPERATOR(%s.<>-|) '{ \"%s\": -1 }'::%s",
+						 ApiInternalSchemaNameV2, indexKey, FullBsonTypeName);
 	}
 
 	appendStringInfo(cmdStrDeleteRows, " LIMIT %d FOR UPDATE SKIP LOCKED) ",

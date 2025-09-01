@@ -454,3 +454,31 @@ EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT ctid FROM documen
                 AND documentdb_api_internal.bson_dollar_index_hint(document, 'ttl_index'::text, '{"key": {"ttl": 1}}'::documentdb_core.bson, true)
         LIMIT 100;
 END;
+
+SELECT count(*) from ( SELECT shard_key_value, object_id, document  from documentdb_api.collection('db', 'ttlCompositeOrderedScan') order by object_id) as a;
+
+-- Test with descending TTL ordering
+BEGIN;
+SET client_min_messages TO LOG;
+SET LOCAL documentdb.useIndexHintsForTTLTask to off;
+SET LOCAL documentdb.logTTLProgressActivity to on;
+SET LOCAL documentdb.enableTTLDescSort to on;
+CALL documentdb_api_internal.delete_expired_rows(100);
+RESET client_min_messages;
+END;
+
+SELECT count(*) from ( SELECT shard_key_value, object_id, document  from documentdb_api.collection('db', 'ttlCompositeOrderedScan') order by object_id) as a;
+
+BEGIN;
+SET LOCAL documentdb.enableIndexOrderbyPushdown to on;
+SET LOCAL documentdb.enableNewCompositeIndexOpClass to on;
+SET client_min_messages TO INFO;
+-- Check ORDER BY uses index 
+EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) 
+    SELECT ctid FROM documentdb_data.documents_20006_2000122
+        WHERE 
+        bson_dollar_lt(document, '{ "ttl" : { "$date" : { "$numberLong" : "1657900030775" } } }'::documentdb_core.bson) AND
+        documentdb_api_internal.bson_dollar_index_hint(document, 'ttl_index'::text, '{"key": {"ttl": 1}}'::documentdb_core.bson, true)
+        ORDER BY document OPERATOR(documentdb_api_internal.<>-|) '{ "ttl" : -1}'::documentdb_core.bson
+        LIMIT 100;
+END;
