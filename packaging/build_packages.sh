@@ -35,7 +35,7 @@ while [[ $# -gt 0 ]]; do
         --os)
             shift
             case $1 in
-                deb11|deb12|ubuntu22.04|ubuntu24.04)
+                deb11|deb12|deb13|ubuntu22.04|ubuntu24.04)
                     OS=$1
                     PACKAGE_TYPE="deb"
                     ;;
@@ -121,6 +121,9 @@ if [[ "$PACKAGE_TYPE" == "deb" ]]; then
             ;;
         deb12)
             DOCKER_IMAGE="debian:bookworm"
+            ;;
+        deb13)
+            DOCKER_IMAGE="debian:trixie"
             ;;
         ubuntu22.04)
             DOCKER_IMAGE="ubuntu:22.04"
