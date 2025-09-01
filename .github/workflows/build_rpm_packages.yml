@@ -8,16 +8,15 @@ on:
   push:
     branches:
       - 'main'
+      - 'release/**'
     paths-ignore:
       - 'docs/**'
       - '.devcontainer/**'
       - '*.md'
   pull_request:
     types: [opened, reopened, synchronize]
-    paths-ignore:
-      - 'docs/**'
-      - '.devcontainer/**'
-      - '*.md'
+    paths:
+      - 'packaging/**'
 
 
 jobs:
