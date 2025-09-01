@@ -217,12 +217,6 @@ bson_update_document(PG_FUNCTION_ARGS)
 		&updateSpecElement.bsonValue, &querySpec, arrayFilters,
 		&variableSpec, buildSourceDocOnUpsert);
 
-	if (metadata == NULL)
-	{
-		ereport(ERROR, (errmsg(
-							"bson update should only be called with consts or params")));
-	}
-
 	/* Returns (newDocument bson, updateDesc bson) */
 	Datum values[2];
 	bool nulls[2];
@@ -240,8 +234,20 @@ bson_update_document(PG_FUNCTION_ARGS)
 		elog(ERROR, "The number of output arguments provided is not correct.");
 	}
 
-	pgbson *document = BsonUpdateDocumentCore(sourceDocument,
-											  &updateSpecElement.bsonValue, metadata);
+	pgbson *document;
+	if (metadata == NULL)
+	{
+		BsonUpdateMetadata localMetadata = { 0 };
+		BuildBsonUpdateMetadata(&localMetadata, &updateSpecElement.bsonValue, &querySpec,
+								arrayFilters, &variableSpec, buildSourceDocOnUpsert);
+		document = BsonUpdateDocumentCore(sourceDocument, &updateSpecElement.bsonValue,
+										  &localMetadata);
+	}
+	else
+	{
+		document = BsonUpdateDocumentCore(sourceDocument,
+										  &updateSpecElement.bsonValue, metadata);
+	}
 
 	if (document != NULL)
 	{
