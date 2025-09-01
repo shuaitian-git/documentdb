@@ -53,6 +53,9 @@ RUN dnf -y swap curl-minimal curl && \
         tar && \
     dnf clean all
 
+# print arch detected
+RUN echo "Detected architecture: ${TARGETARCH}"
+
 # PostgreSQL yum repo setup
 RUN if [ "${OS_VERSION}" = "9" ]; then \
         if [ -n "${TARGETARCH}" ] && ( [ "${TARGETARCH}" = "arm64" ] || [ "${TARGETARCH}" = "arm64v8" ] ); then ARCH=aarch64; else ARCH=x86_64; fi; \
