@@ -8,16 +8,16 @@ on:
   push:
     branches:
       - 'main'
+      - 'release/**'
     paths-ignore:
       - 'docs/**'
       - '.devcontainer/**'
       - '*.md'
   pull_request:
     types: [opened, reopened, synchronize]
-    paths-ignore:
-      - 'docs/**'
-      - '.devcontainer/**'
-      - '*.md'
+    paths:
+      - 'packaging/**'
+      - '.github/workflows/**'
 
 permissions:
   packages: write
@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu22.04]
+        os: [deb11, deb12, deb13, ubuntu22.04, ubuntu24.04]
         arch: [amd64, arm64]
         include:
           - arch: amd64
