@@ -128,6 +128,7 @@ PGDLLEXPORT char *ApiAdminRoleV2 = "documentdb_admin_role";
 PGDLLEXPORT char *ApiBgWorkerRole = "documentdb_bg_worker_role";
 PGDLLEXPORT char *ApiReadOnlyRole = "documentdb_readonly_role";
 PGDLLEXPORT char *ApiReadWriteRole = "documentdb_readwrite_role";
+PGDLLEXPORT char *ApiRootReplaceRole = "documentdb_root_role";
 PGDLLEXPORT char *ApiRootRole = "documentdb_root_role";
 PGDLLEXPORT char *ApiUserAdminRole = "documentdb_user_admin_role";
 

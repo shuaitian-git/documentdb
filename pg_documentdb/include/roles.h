@@ -14,17 +14,6 @@
 #include "postgres.h"
 #include "utils/string_view.h"
 
-/* Macro to check if a role is a supported built-in role */
-#define IS_SUPPORTED_BUILTIN_ROLE(roleName) \
-	(strcmp((roleName), ApiAdminRoleV2) == 0 || \
-	 strcmp((roleName), ApiReadOnlyRole) == 0 || \
-	 strcmp((roleName), ApiReadWriteRole) == 0 || \
-	 strcmp((roleName), ApiRootRole) == 0 || \
-	 strcmp((roleName), ApiUserAdminRole) == 0)
-
-#define IS_SYSTEM_ROLE(roleName) \
-	(strcmp((roleName), ApiBgWorkerRole) == 0)
-
 typedef struct
 {
 	const char *roleName;
