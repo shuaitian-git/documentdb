@@ -39,6 +39,7 @@ extern PGDLLIMPORT char *ApiAdminRoleV2;
 extern PGDLLIMPORT char *ApiBgWorkerRole;
 extern PGDLLIMPORT char *ApiReadOnlyRole;
 extern PGDLLEXPORT char *ApiReadWriteRole;
+extern PGDLLEXPORT char *ApiRootReplaceRole;
 extern PGDLLIMPORT char *ApiRootRole;
 extern PGDLLEXPORT char *ApiUserAdminRole;
 

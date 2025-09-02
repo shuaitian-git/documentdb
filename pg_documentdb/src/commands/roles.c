@@ -15,13 +15,13 @@
 #include "utils/feature_counter.h"
 #include "metadata/metadata_cache.h"
 #include "api_hooks_def.h"
-#include "users.h"
 #include "api_hooks.h"
 #include "utils/list_utils.h"
 #include "roles.h"
 #include "utils/elog.h"
 #include "utils/array.h"
 #include "utils/hashset_utils.h"
+#include "utils/role_utils.h"
 
 /* GUC to enable user crud operations */
 extern bool EnableRoleCrud;
@@ -33,6 +33,8 @@ PG_FUNCTION_INFO_V1(command_update_role);
 
 static void ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec);
 static void ParseRolesInfoSpec(pgbson *rolesInfoBson, RolesInfoSpec *rolesInfoSpec);
+
+static void ParseRoleDefinition(bson_iter_t *iter, RolesInfoSpec *rolesInfoSpec);
 static void ParseRoleDocument(bson_iter_t *rolesArrayIter, RolesInfoSpec *rolesInfoSpec);
 static void ParseRoleDefinition(bson_iter_t *iter, RolesInfoSpec *rolesInfoSpec);
 static void ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec);
@@ -161,7 +163,7 @@ create_role(pgbson *createRoleBson)
 	{
 		const char *inheritedRole = (const char *) lfirst(currentRole);
 
-		if (!IS_SUPPORTED_BUILTIN_ROLE(inheritedRole))
+		if (!IS_BUILTIN_ROLE(inheritedRole))
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_ROLENOTFOUND),
 							errmsg("Role '%s' not supported.",
@@ -181,6 +183,98 @@ create_role(pgbson *createRoleBson)
 	PgbsonWriterInit(&finalWriter);
 	PgbsonWriterAppendInt32(&finalWriter, "ok", 2, 1);
 	return PointerGetDatum(PgbsonWriterGetPgbson(&finalWriter));
+}
+
+
+/*
+ * ParseCreateRoleSpec parses the createRole command parameters
+ */
+static void
+ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec)
+{
+	bson_iter_t createRoleIter;
+	PgbsonInitIterator(createRoleBson, &createRoleIter);
+
+	while (bson_iter_next(&createRoleIter))
+	{
+		const char *key = bson_iter_key(&createRoleIter);
+
+		if (strcmp(key, "createRole") == 0)
+		{
+			EnsureTopLevelFieldType(key, &createRoleIter, BSON_TYPE_UTF8);
+			uint32_t strLength = 0;
+			createRoleSpec->roleName = bson_iter_utf8(&createRoleIter, &strLength);
+
+			if (strLength == 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"The 'createRole' field must not be left empty.")));
+			}
+
+			if (ContainsReservedPgRoleNamePrefix(createRoleSpec->roleName))
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"Cannot create system built-in role '%s'.",
+									createRoleSpec->roleName)));
+			}
+		}
+		else if (strcmp(key, "roles") == 0)
+		{
+			if (bson_iter_type(&createRoleIter) == BSON_TYPE_ARRAY)
+			{
+				bson_iter_t rolesArrayIter;
+				bson_iter_recurse(&createRoleIter, &rolesArrayIter);
+
+				while (bson_iter_next(&rolesArrayIter))
+				{
+					if (bson_iter_type(&rolesArrayIter) == BSON_TYPE_UTF8)
+					{
+						uint32_t roleNameLength = 0;
+						const char *inheritedBuiltInRole = bson_iter_utf8(&rolesArrayIter,
+																		  &roleNameLength);
+
+						if (roleNameLength > 0)
+						{
+							createRoleSpec->inheritedBuiltInRoles = lappend(
+								createRoleSpec->inheritedBuiltInRoles,
+								pstrdup(
+									inheritedBuiltInRole));
+						}
+					}
+					else
+					{
+						ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+										errmsg(
+											"Invalid inherited from role name provided.")));
+					}
+				}
+			}
+			else
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"Expected 'array' type for 'roles' parameter but found '%s' type",
+									BsonTypeName(bson_iter_type(&createRoleIter)))));
+			}
+		}
+		else if (IsCommonSpecIgnoredField(key))
+		{
+			continue;
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+							errmsg("The specified field '%s' is not supported.", key)));
+		}
+	}
+
+	if (createRoleSpec->roleName == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("'createRole' is a required field.")));
+	}
 }
 
 
@@ -245,6 +339,60 @@ drop_role(pgbson *dropRoleBson)
 
 
 /*
+ * ParseDropRoleSpec parses the dropRole command parameters
+ */
+static void
+ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec)
+{
+	bson_iter_t dropRoleIter;
+	PgbsonInitIterator(dropRoleBson, &dropRoleIter);
+
+	while (bson_iter_next(&dropRoleIter))
+	{
+		const char *key = bson_iter_key(&dropRoleIter);
+
+		if (strcmp(key, "dropRole") == 0)
+		{
+			EnsureTopLevelFieldType(key, &dropRoleIter, BSON_TYPE_UTF8);
+			uint32_t strLength = 0;
+			const char *roleNameValue = bson_iter_utf8(&dropRoleIter, &strLength);
+
+			if (strLength == 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg("'dropRole' cannot be empty.")));
+			}
+
+			if (IS_BUILTIN_ROLE(roleNameValue) || IS_SYSTEM_ROLE(roleNameValue))
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"Cannot drop built-in role '%s'.",
+									roleNameValue)));
+			}
+
+			dropRoleSpec->roleName = pstrdup(roleNameValue);
+		}
+		else if (IsCommonSpecIgnoredField(key))
+		{
+			continue;
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+							errmsg("Unsupported field specified: '%s'.", key)));
+		}
+	}
+
+	if (dropRoleSpec->roleName == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("'dropRole' is a required field.")));
+	}
+}
+
+
+/*
  * roles_info implements the core logic for rolesInfo command
  */
 Datum
@@ -298,98 +446,6 @@ roles_info(pgbson *rolesInfoBson)
 	PgbsonWriterAppendInt32(&finalWriter, "ok", 2, 1);
 
 	return PointerGetDatum(PgbsonWriterGetPgbson(&finalWriter));
-}
-
-
-/*
- * ParseCreateRoleSpec parses the createRole command parameters
- */
-static void
-ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec)
-{
-	bson_iter_t createRoleIter;
-	PgbsonInitIterator(createRoleBson, &createRoleIter);
-
-	while (bson_iter_next(&createRoleIter))
-	{
-		const char *key = bson_iter_key(&createRoleIter);
-
-		if (strcmp(key, "createRole") == 0)
-		{
-			EnsureTopLevelFieldType(key, &createRoleIter, BSON_TYPE_UTF8);
-			uint32_t strLength = 0;
-			createRoleSpec->roleName = bson_iter_utf8(&createRoleIter, &strLength);
-
-			if (strLength == 0)
-			{
-				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-								errmsg(
-									"The 'createRole' field must not be left empty.")));
-			}
-
-			if (ContainsSystemPgRoleNamePrefix(createRoleSpec->roleName))
-			{
-				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-								errmsg(
-									"Cannot create system built-in role '%s'.",
-									createRoleSpec->roleName)));
-			}
-		}
-		else if (strcmp(key, "roles") == 0)
-		{
-			if (bson_iter_type(&createRoleIter) == BSON_TYPE_ARRAY)
-			{
-				bson_iter_t rolesArrayIter;
-				bson_iter_recurse(&createRoleIter, &rolesArrayIter);
-
-				while (bson_iter_next(&rolesArrayIter))
-				{
-					if (bson_iter_type(&rolesArrayIter) == BSON_TYPE_UTF8)
-					{
-						uint32_t roleNameLength = 0;
-						const char *inheritedBuiltInRole = bson_iter_utf8(&rolesArrayIter,
-																		  &roleNameLength);
-
-						if (roleNameLength > 0)
-						{
-							createRoleSpec->inheritedBuiltInRoles = lappend(
-								createRoleSpec->inheritedBuiltInRoles,
-								pstrdup(
-									inheritedBuiltInRole));
-						}
-					}
-					else
-					{
-						ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-										errmsg(
-											"Invalid inherited from role name provided.")));
-					}
-				}
-			}
-			else
-			{
-				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-								errmsg(
-									"Expected 'array' type for 'roles' parameter but found '%s' type",
-									BsonTypeName(bson_iter_type(&createRoleIter)))));
-			}
-		}
-		else if (IsCommonSpecIgnoredField(key))
-		{
-			continue;
-		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-							errmsg("The specified field '%s' is not supported.", key)));
-		}
-	}
-
-	if (createRoleSpec->roleName == NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-						errmsg("'createRole' is a required field.")));
-	}
 }
 
 
@@ -489,37 +545,6 @@ ParseRolesInfoSpec(pgbson *rolesInfoBson, RolesInfoSpec *rolesInfoSpec)
 
 
 /*
- * Helper function to parse a role definition (string or document)
- */
-static void
-ParseRoleDefinition(bson_iter_t *iter, RolesInfoSpec *rolesInfoSpec)
-{
-	if (bson_iter_type(iter) == BSON_TYPE_UTF8)
-	{
-		uint32_t roleNameLength = 0;
-		const char *roleName = bson_iter_utf8(iter, &roleNameLength);
-
-		/* If the string is empty, we will not add it to the list of roles to fetched */
-		if (roleNameLength > 0)
-		{
-			rolesInfoSpec->roleNames = lappend(rolesInfoSpec->roleNames, pstrdup(
-												   roleName));
-		}
-	}
-	else if (bson_iter_type(iter) == BSON_TYPE_DOCUMENT)
-	{
-		ParseRoleDocument(iter, rolesInfoSpec);
-	}
-	else
-	{
-		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-						errmsg(
-							"'rolesInfo' must be 1, a string, a document, or an array.")));
-	}
-}
-
-
-/*
  * Helper function to parse a role document from an array element or single document
  */
 static void
@@ -588,54 +613,31 @@ ParseRoleDocument(bson_iter_t *rolesArrayIter, RolesInfoSpec *rolesInfoSpec)
 
 
 /*
- * ParseDropRoleSpec parses the dropRole command parameters
+ * Helper function to parse a role definition (string or document)
  */
 static void
-ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec)
+ParseRoleDefinition(bson_iter_t *iter, RolesInfoSpec *rolesInfoSpec)
 {
-	bson_iter_t dropRoleIter;
-	PgbsonInitIterator(dropRoleBson, &dropRoleIter);
-
-	while (bson_iter_next(&dropRoleIter))
+	if (bson_iter_type(iter) == BSON_TYPE_UTF8)
 	{
-		const char *key = bson_iter_key(&dropRoleIter);
+		uint32_t roleNameLength = 0;
+		const char *roleName = bson_iter_utf8(iter, &roleNameLength);
 
-		if (strcmp(key, "dropRole") == 0)
+		/* If the string is empty, we will not add it to the list of roles to fetched */
+		if (roleNameLength > 0)
 		{
-			EnsureTopLevelFieldType(key, &dropRoleIter, BSON_TYPE_UTF8);
-			uint32_t strLength = 0;
-			const char *roleNameValue = bson_iter_utf8(&dropRoleIter, &strLength);
-
-			if (strLength == 0)
-			{
-				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-								errmsg("'dropRole' cannot be empty.")));
-			}
-
-			if (IS_SUPPORTED_BUILTIN_ROLE(roleNameValue) || IS_SYSTEM_ROLE(roleNameValue))
-			{
-				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-								errmsg(
-									"Cannot drop built-in role '%s'.",
-									roleNameValue)));
-			}
-
-			dropRoleSpec->roleName = pstrdup(roleNameValue);
-		}
-		else if (IsCommonSpecIgnoredField(key))
-		{
-			continue;
-		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-							errmsg("Unsupported field specified: '%s'.", key)));
+			rolesInfoSpec->roleNames = lappend(rolesInfoSpec->roleNames, pstrdup(
+												   roleName));
 		}
 	}
-
-	if (dropRoleSpec->roleName == NULL)
+	else if (bson_iter_type(iter) == BSON_TYPE_DOCUMENT)
+	{
+		ParseRoleDocument(iter, rolesInfoSpec);
+	}
+	else
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-						errmsg("'dropRole' is a required field.")));
+						errmsg(
+							"'rolesInfo' must be 1, a string, a document, or an array.")));
 	}
 }
