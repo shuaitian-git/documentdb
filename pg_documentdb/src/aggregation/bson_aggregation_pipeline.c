@@ -6729,27 +6729,16 @@ GenerateBaseTableQuery(text *databaseDatum, const StringView *collectionNameView
 #endif
 		rte->rellockmode = AccessShareLock;
 
-		Oid emptyDataTableFuncOid = BsonEmptyDataTableFunctionId();
-
 		/* Now create the rtfunc*/
-		FuncExpr *rangeFunc = makeFuncExpr(emptyDataTableFuncOid, RECORDOID, NIL,
+		FuncExpr *rangeFunc = makeFuncExpr(BsonEmptyDataTableFunctionId(), RECORDOID, NIL,
 										   InvalidOid, InvalidOid, COERCE_EXPLICIT_CALL);
 
-		/* TODO: Starting from v107, we can assume the function returns 3 columns, so determining the result type won't be necessary. */
-		Oid retType;
-		TupleDesc retTupdesc;
-		emptyDataTableFuncOid = get_func_result_type(emptyDataTableFuncOid, &retType,
-													 &retTupdesc);
 
 		rangeFunc->funcretset = true;
 		RangeTblFunction *rangeTableFunction = makeNode(RangeTblFunction);
-		rangeTableFunction->funccolcount = retTupdesc->natts;
+		rangeTableFunction->funccolcount = 3;
 		rangeTableFunction->funcparams = NULL;
 		rangeTableFunction->funcexpr = (Node *) rangeFunc;
-		if (retTupdesc->natts == 4)
-		{
-			colNames = lappend(colNames, makeString("creation_time"));
-		}
 
 		rte->alias = makeAlias(collectionAlias, NIL);
 		rte->eref = makeAlias(collectionAlias, colNames);
