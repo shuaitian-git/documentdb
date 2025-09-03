@@ -249,6 +249,8 @@ async fn get_response<T>(
 where
     T: PgDataClient,
 {
+    let interop_and_sdk_start = request_context.tracker.start_timer();
+
     if !connection_context.auth_state.authorized
         || request_context.payload.request_type().handle_with_auth()
     {
@@ -265,6 +267,10 @@ where
     // Process the actual request
     let response =
         processor::process_request(request_context, connection_context, data_client).await?;
+
+    request_context
+        .tracker
+        .record_duration(RequestIntervalKind::InteropAndSdk, interop_and_sdk_start);
 
     Ok(response)
 }
@@ -299,7 +305,6 @@ where
     request_tracker.record_duration(RequestIntervalKind::BufferRead, buffer_read_start);
 
     let handle_request_start = request_tracker.start_timer();
-
     let format_request_start = request_tracker.start_timer();
     let request = protocol::reader::parse_request(&message, connection_context).await?;
     request_tracker.record_duration(RequestIntervalKind::FormatRequest, format_request_start);
@@ -333,7 +338,7 @@ where
     {
         log::info!(
             activity_id = activity_id;
-            "Latency for Mongo Request with ActivityId: {}, BufferRead={}ms, HandleRequest={}ms, FormatRequest={}ms, ProcessRequest={}ms, PostgresBeginTransaction={}ms, PostgresSetStatementTimeout={}ms, PostgresTransactionCommit={}ms, FormatResponse={}ms",
+            "Latency for Mongo Request with ActivityId: {}, BufferRead={}ms, HandleRequest={}ms, FormatRequest={}ms, ProcessRequest={}ms, PostgresBeginTransaction={}ms, PostgresSetStatementTimeout={}ms, PostgresTransactionCommit={}ms, HandleResponse={}ms",
             activity_id,
             request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::BufferRead),
             request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::HandleRequest),
@@ -342,7 +347,7 @@ where
             request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresBeginTransaction),
             request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresSetStatementTimeout),
             request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresTransactionCommit),
-            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::FormatResponse)
+            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::HandleResponse)
         );
     }
 
@@ -384,7 +389,7 @@ where
     // Process the response for the message
     let response = get_response::<T>(request_context, connection_context).await?;
 
-    let format_response_start = request_context.tracker.start_timer();
+    let handle_response_start = request_context.tracker.start_timer();
 
     // Write the response back to the stream
     if connection_context.requires_response {
@@ -408,7 +413,7 @@ where
 
     request_context
         .tracker
-        .record_duration(RequestIntervalKind::FormatResponse, format_response_start);
+        .record_duration(RequestIntervalKind::HandleResponse, handle_response_start);
 
     Ok(())
 }
