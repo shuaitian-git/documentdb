@@ -166,7 +166,7 @@ if [[ "$PACKAGE_TYPE" == "deb" ]]; then
         --build-arg POSTGRES_VERSION="$PG" \
         --build-arg DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" .
     # Run the Docker container to build the packages
-    docker run --rm --env OS="$OS" -v "$abs_output_dir:/output" "$TAG"
+    docker run --rm --env OS="$OS" --env DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" -v "$abs_output_dir:/output" "$TAG"
 elif [[ "$PACKAGE_TYPE" == "rpm" ]]; then
     docker build -t "$TAG" -f "$DOCKERFILE" \
         --build-arg BASE_IMAGE="$DOCKER_IMAGE" \
@@ -174,7 +174,7 @@ elif [[ "$PACKAGE_TYPE" == "rpm" ]]; then
         --build-arg DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" \
         --build-arg OS_VERSION_ARG="$OS_VERSION_NUMBER" .
     # Run the Docker container to build the packages
-    docker run --rm --env OS="$OS" --env POSTGRES_VERSION="$PG" -v "$abs_output_dir:/output" "$TAG"
+    docker run --rm --env OS="$OS" --env POSTGRES_VERSION="$PG" --env DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" -v "$abs_output_dir:/output" "$TAG"
 fi
 
 echo "Packages built successfully!!"
