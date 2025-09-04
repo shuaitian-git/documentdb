@@ -23,8 +23,7 @@ use crate::{
 use super::header::Header;
 use super::message::{self, Message, MessageSection};
 
-// Read a standard message header off the client stream
-
+/// Read a standard message header from the client stream
 pub async fn read_header<R>(stream: &mut R) -> Result<Option<Header>>
 where
     R: AsyncRead + Unpin + Send,
@@ -45,7 +44,7 @@ where
     }
 }
 
-// Given an already read header, read the remaining message bytes into a RequestMessage
+/// Given an already read header, read the remaining message bytes into a RequestMessage
 pub async fn read_request<R>(header: &Header, stream: &mut R) -> Result<RequestMessage>
 where
     R: AsyncRead + Unpin + Send,
@@ -67,7 +66,7 @@ where
     })
 }
 
-// Parse a request message into a typed Request
+/// Parse a request message into a typed Request
 pub async fn parse_request<'a>(
     message: &'a RequestMessage,
     ctx: &mut ConnectionContext,
@@ -85,7 +84,7 @@ pub async fn parse_request<'a>(
     Ok(request)
 }
 
-// Parse a OP_QUERY message
+/// Parse a OP_QUERY message
 async fn parse_query(message: &[u8]) -> Result<Request> {
     let mut reader = Cursor::new(message);
 

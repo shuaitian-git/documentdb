@@ -8,40 +8,31 @@
 
 use crate::{
     context::ConnectionContext,
-    error::DocumentDBError,
+    error::{DocumentDBError, Result},
     protocol::{header::Header, opcode::OpCode},
     responses::constant::bson_serialize_error_message,
 };
 use bson::{to_raw_document_buf, RawDocument};
-use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
-    net::TcpStream,
-};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 use tokio_openssl::SslStream;
 
 use super::{CommandError, Response};
 
 /// Write a server response to the client stream
-pub async fn write<R>(
+pub async fn write(
     header: &Header,
     response: &Response,
-    stream: &mut R,
-) -> Result<(), DocumentDBError>
-where
-    R: AsyncRead + AsyncWrite + Unpin + Send,
-{
+    stream: &mut SslStream<TcpStream>,
+) -> Result<()> {
     write_response(header, response.as_raw_document()?, stream).await
 }
 
 /// Write a raw BSON object to the client stream
-pub async fn write_response<R>(
+pub async fn write_response(
     header: &Header,
     response: &RawDocument,
-    stream: &mut R,
-) -> Result<(), DocumentDBError>
-where
-    R: AsyncRead + AsyncWrite + Unpin + Send,
-{
+    stream: &mut SslStream<TcpStream>,
+) -> Result<()> {
     // The format of the response will depend on the OP which the client sent
     match header.op_code {
         OpCode::Command => unimplemented!(),
@@ -82,14 +73,11 @@ where
 }
 
 /// Serializes the Message to bytes and writes them to `writer`.
-pub async fn write_message<R>(
+pub async fn write_message(
     header: &Header,
     response: &RawDocument,
-    writer: &mut R,
-) -> Result<(), DocumentDBError>
-where
-    R: AsyncRead + AsyncWrite + Unpin + Send,
-{
+    writer: &mut SslStream<TcpStream>,
+) -> Result<()> {
     let total_length = Header::LENGTH
         + std::mem::size_of::<u32>()
         + std::mem::size_of::<u8>()
@@ -119,7 +107,7 @@ pub async fn write_error(
     header: &Header,
     err: DocumentDBError,
     stream: &mut SslStream<TcpStream>,
-) -> Result<(), DocumentDBError> {
+) -> Result<()> {
     let response = to_raw_document_buf(&CommandError::from_error(connection_context, &err).await)
         .map_err(|e| DocumentDBError::internal_error(bson_serialize_error_message(e)))?;
     write_response(header, &response, stream).await?;
@@ -127,14 +115,11 @@ pub async fn write_error(
     Ok(())
 }
 
-pub async fn write_error_without_header<R>(
+pub async fn write_error_without_header(
     connection_context: &ConnectionContext,
     err: DocumentDBError,
-    stream: &mut R,
-) -> Result<(), DocumentDBError>
-where
-    R: AsyncRead + AsyncWrite + Unpin + Send,
-{
+    stream: &mut SslStream<TcpStream>,
+) -> Result<()> {
     let response = to_raw_document_buf(&CommandError::from_error(connection_context, &err).await)
         .map_err(|e| DocumentDBError::internal_error(bson_serialize_error_message(e)))?;
 

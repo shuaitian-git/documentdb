@@ -12,7 +12,10 @@ use serde::Deserialize;
 use tokio::fs::File;
 
 use super::SetupConfiguration;
-use crate::error::{DocumentDBError, Result};
+use crate::{
+    configuration::CertificateOptions,
+    error::{DocumentDBError, Result},
+};
 
 // Configurations which are populated statically on process start
 #[derive(Debug, Deserialize, Default, Clone)]
@@ -36,23 +39,13 @@ pub struct DocumentDBSetupConfiguration {
     pub allow_transaction_snapshot: Option<bool>,
     pub transaction_timeout_secs: Option<u64>,
     pub cursor_timeout_secs: Option<u64>,
-    pub enforce_ssl_tcp: Option<bool>,
-    pub certificate_options: Option<CertificateOptions>,
+    pub certificate_options: CertificateOptions,
 
     #[serde(default)]
     pub dynamic_configuration_file: String,
     pub dynamic_configuration_refresh_interval_secs: Option<u32>,
     pub postgres_command_timeout_secs: Option<u64>,
     pub postgres_startup_wait_time_seconds: Option<u64>,
-}
-
-#[derive(Debug, Deserialize, Default, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct CertificateOptions {
-    pub cert_type: String,
-    pub file_path: String,
-    pub key_file_path: String,
-    pub ca_path: Option<String>,
 }
 
 impl DocumentDBSetupConfiguration {
@@ -113,10 +106,6 @@ impl SetupConfiguration for DocumentDBSetupConfiguration {
         self.gateway_listen_port.unwrap_or(10260)
     }
 
-    fn enforce_ssl_tcp(&self) -> bool {
-        self.enforce_ssl_tcp.unwrap_or(true)
-    }
-
     fn blocked_role_prefixes(&self) -> &[String] {
         &self.blocked_role_prefixes
     }
@@ -125,8 +114,8 @@ impl SetupConfiguration for DocumentDBSetupConfiguration {
         self.postgres_command_timeout_secs.unwrap_or(120)
     }
 
-    fn certificate_options(&self) -> Option<CertificateOptions> {
-        self.certificate_options.clone()
+    fn certificate_options(&self) -> &CertificateOptions {
+        &self.certificate_options
     }
 
     fn node_host_name(&self) -> &str {
