@@ -1,13 +1,13 @@
-### documentdb v1.108-0 (Unreleased) ###
+### documentdb v0.108-0 (Unreleased) ###
 * Top-level `let` variables and `$$NOW` supported by default.
 * Fix collation support on find and aggregation when variableSpec is not available.
 * Support `dropRole` command *[Feature]*
 
-### documentdb v1.107-0 (Unreleased) ###
+### documentdb v0.107-0 (Unreleased) ###
 * Support sort by _id against the _id index using the enableIndexOrderbyPushdown flag *[Feature]*.
 * Improvements to explain for various scan types *[Feature]*.
 
-### documentdb v1.106-0 (Unreleased) ###
+### documentdb v0.106-0 (August 29, 2025) ###
 * Add internal extension that provides extensions to the `rum` index. *[Feature]*
 * Enable let support for update queries *[Feature]*. Requires `EnableVariablesSupportForWriteCommands` to be `on`.
 * Enable let support for findAndModify queries *[Feature]*. Requires `EnableVariablesSupportForWriteCommands` to be `on`.
