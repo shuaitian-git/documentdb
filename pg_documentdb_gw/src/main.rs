@@ -10,19 +10,21 @@ use simple_logger::SimpleLogger;
 use std::{env, path::PathBuf, sync::Arc};
 
 use documentdb_gateway::{
-    configuration::{DocumentDBSetupConfiguration, PgConfiguration, SetupConfiguration},
+    configuration::{
+        CertificateProvider, DocumentDBSetupConfiguration, PgConfiguration, SetupConfiguration,
+    },
     postgres::{create_query_catalog, DocumentDBDataClient},
-    run_server,
+    run_gateway,
     shutdown_controller::SHUTDOWN_CONTROLLER,
     startup::{
         create_postgres_object, get_service_context, get_system_connection_pool,
-        populate_ssl_certificates, AUTHENTICATION_MAX_CONNECTIONS, SYSTEM_REQUESTS_MAX_CONNECTIONS,
+        AUTHENTICATION_MAX_CONNECTIONS, SYSTEM_REQUESTS_MAX_CONNECTIONS,
     },
 };
 
 use tokio::signal;
 
-#[ntex::main]
+#[tokio::main]
 async fn main() {
     // Takes the configuration file as an argument
     let cfg_file = if let Some(arg1) = env::args().nth(1) {
@@ -48,6 +50,12 @@ async fn main() {
         "Starting server with configuration: {:?}",
         setup_configuration
     );
+
+    let certificate_provider = CertificateProvider::new(SetupConfiguration::certificate_options(
+        &setup_configuration,
+    ))
+    .await
+    .expect("Failed to create certificate provider");
 
     SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
@@ -82,12 +90,6 @@ async fn main() {
     )
     .await;
 
-    let certificate_options = if let Some(co) = setup_configuration.certificate_options() {
-        co
-    } else {
-        populate_ssl_certificates().await.unwrap()
-    };
-
     let authentication_pool = get_system_connection_pool(
         &setup_configuration,
         &query_catalog,
@@ -103,15 +105,10 @@ async fn main() {
         query_catalog,
         system_requests_pool,
         authentication_pool,
+        certificate_provider,
     );
 
-    run_server::<DocumentDBDataClient>(
-        service_context,
-        certificate_options,
-        None,
-        shutdown_token,
-        None,
-    )
-    .await
-    .unwrap();
+    run_gateway::<DocumentDBDataClient>(service_context, None, shutdown_token, None)
+        .await
+        .unwrap();
 }

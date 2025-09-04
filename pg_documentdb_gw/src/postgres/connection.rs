@@ -49,8 +49,7 @@ pub fn pg_configuration(
         .user(user)
         .application_name(&application_name)
         .options(
-            &query_catalog
-                .set_search_path_and_timeout(&command_timeout_ms, &transaction_timeout_ms),
+            query_catalog.set_search_path_and_timeout(&command_timeout_ms, &transaction_timeout_ms),
         );
 
     if let Some(pass) = pass {

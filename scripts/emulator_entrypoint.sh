@@ -54,9 +54,6 @@ Launches DocumentDB
 
 Optional arguments:
   -h, --help            Display information on available configuration
-  --enforce-ssl         Enforce SSL for all connections. 
-                        Defaults to true
-                        Overrides ENFORCE_SSL environment variable.
   --cert-path [PATH]    Specify a path to a certificate for securing traffic. You need to mount this file into the 
                         container (e.g. if CERT_PATH=/mycert.pfx, you'd add an option like the following to your 
                         docker run: --mount type=bind,source=./mycert.pfx,target=/mycert.pfx)
@@ -120,11 +117,6 @@ do
     -h|--help) 
         usage;
         exit 0;;
-
-    --enforce-ssl)
-        shift
-        export ENFORCE_SSL=$1
-        shift;;
 
     --cert-path)
         shift
@@ -240,24 +232,6 @@ if { [ -n "${CERT_PATH:-}" ] && [ -z "${KEY_FILE:-}" ]; } || \
    { [ -z "${CERT_PATH:-}" ] && [ -n "${KEY_FILE:-}" ]; }; then
     echo "Error: Both CERT_PATH and KEY_FILE must be set together, or neither should be set."
     exit 1
-fi
-
-if { [ -z "${CERT_PATH:-}" ] && [ -z "${KEY_FILE:-}" ]; }; then
-    echo "CERT_PATH and KEY_FILE not provided. Generating self-signed certificate and key..."
-    CERT_PATH="$HOME/self_signed_cert.pem"
-    KEY_FILE="$HOME/self_signed_key.pem"
-    openssl req -x509 -newkey rsa:4096 -keyout "$KEY_FILE" -out "$CERT_PATH" -days 365 -nodes -subj "/CN=localhost"
-    
-    echo "Generated certificate at $CERT_PATH and key at $KEY_FILE."
-
-    # Combine the key and certificate into a single PEM file
-    COMBINED_PEM="$HOME/self_signed_combined.pem"
-    cat "$CERT_PATH" "$KEY_FILE" > "$COMBINED_PEM"
-    echo "Combined certificate and key into $COMBINED_PEM."
-
-    # Export docker cp command for copying the PEM file to the local machine
-    echo "To copy the combined PEM file to your local machine, use the following command:"
-    echo "docker cp <container_id>:$COMBINED_PEM ./self_signed_combined.pem"
 fi
 
 num='^[0-9]+$'
@@ -392,15 +366,8 @@ fi
 if [ -n "${CERT_PATH:-}" ] && [ -n "${KEY_FILE:-}" ]; then
     echo "Adding CertificateOptions to the configuration file..."
     jq --arg certPath "$CERT_PATH" --arg keyFilePath "$KEY_FILE" \
-       '. + { "CertificateOptions": { "CertType": "PemFile", "FilePath": $certPath, "KeyFilePath": $keyFilePath } }' \
+       '.CertificateOptions = { "CertType": "PemFile", "FilePath": $certPath, "KeyFilePath": $keyFilePath }' \
        /home/documentdb/gateway/SetupConfiguration_temp.json > /home/documentdb/gateway/SetupConfiguration_temp.json.tmp && \
-    mv /home/documentdb/gateway/SetupConfiguration_temp.json.tmp /home/documentdb/gateway/SetupConfiguration_temp.json
-fi
-
-if [ -n "${ENFORCE_SSL:-}" ]; then
-    echo "Updating EnforceSslTcp in the configuration file..."
-    jq --arg enforceSsl $ENFORCE_SSL \
-       '.EnforceSslTcp = ($enforceSsl == "true")' /home/documentdb/gateway/SetupConfiguration_temp.json > /home/documentdb/gateway/SetupConfiguration_temp.json.tmp && \
     mv /home/documentdb/gateway/SetupConfiguration_temp.json.tmp /home/documentdb/gateway/SetupConfiguration_temp.json
 fi
 

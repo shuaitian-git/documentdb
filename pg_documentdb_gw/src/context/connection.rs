@@ -7,7 +7,6 @@
  */
 
 use std::{
-    net::SocketAddr,
     sync::{
         atomic::{AtomicI64, Ordering},
         Arc,
@@ -36,7 +35,7 @@ pub struct ConnectionContext {
     pub client_information: Option<RawDocumentBuf>,
     pub transaction: Option<(Vec<u8>, i64)>,
     pub telemetry_provider: Option<Box<dyn TelemetryProvider>>,
-    pub ip: SocketAddr,
+    pub ip_address: String,
     pub cipher_type: i32,
     pub ssl_protocol: String,
 }
@@ -95,7 +94,7 @@ impl ConnectionContext {
     pub async fn new(
         sc: ServiceContext,
         telemetry_provider: Option<Box<dyn TelemetryProvider>>,
-        ip: SocketAddr,
+        ip_address: String,
         ssl_protocol: String,
     ) -> Self {
         let connection_id = CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
@@ -108,7 +107,7 @@ impl ConnectionContext {
             client_information: None,
             transaction: None,
             telemetry_provider,
-            ip,
+            ip_address,
             cipher_type: 0,
             ssl_protocol,
         }
