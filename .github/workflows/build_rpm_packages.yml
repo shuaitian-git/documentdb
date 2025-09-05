@@ -17,6 +17,7 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - 'packaging/**'
+      - '.github/workflows/**'
 
 
 jobs:
