@@ -126,8 +126,8 @@ typedef struct
 	/* The number of nested levels (incremented by MigrateSubQuery) */
 	int numNestedLevels;
 
-	/* The database associated with this request */
-	Datum databaseNameDatum;
+	/* The database name associated with this request */
+	text *databaseNameDatum;
 
 	/* The collection name associated with this request (if applicable) */
 	StringView collectionNameView;
@@ -197,10 +197,10 @@ Aggref * CreateMultiArgAggregate(Oid aggregateFunctionId, List *args, List *argT
 								 ParseState *parseState);
 List * ExtractAggregationStages(const bson_value_t *pipelineValue,
 								AggregationPipelineBuildContext *context);
-Query * GenerateBaseTableQuery(Datum databaseDatum, const StringView *collectionNameView,
-							   pg_uuid_t *collectionUuid,
+Query * GenerateBaseTableQuery(text *databaseDatum, const StringView *collectionNameView,
+							   pg_uuid_t *collectionUuid, const bson_value_t *indexHint,
 							   AggregationPipelineBuildContext *context);
-Query * GenerateBaseAgnosticQuery(Datum databaseDatum,
+Query * GenerateBaseAgnosticQuery(text *databaseDatum,
 								  AggregationPipelineBuildContext *context);
 RangeTblEntry * MakeSubQueryRte(Query *subQuery, int stageNum, int pipelineDepth,
 								const char *prefix, bool includeAllColumns);
@@ -278,9 +278,9 @@ Query * HandleMerge(const bson_value_t *existingValue, Query *query,
 Query * HandleOut(const bson_value_t *existingValue, Query *query,
 				  AggregationPipelineBuildContext *context);
 
-/* atlas vector search related aggregation stages */
-Query * HandleMongoNativeVectorSearch(const bson_value_t *existingValue, Query *query,
-									  AggregationPipelineBuildContext *context);
+/* Native vector search related aggregation stages */
+Query * HandleNativeVectorSearch(const bson_value_t *existingValue, Query *query,
+								 AggregationPipelineBuildContext *context);
 
 /* Metadata based query generators */
 Query * GenerateConfigDatabaseQuery(AggregationPipelineBuildContext *context);
@@ -288,7 +288,8 @@ Query * GenerateConfigDatabaseQuery(AggregationPipelineBuildContext *context);
 bool IsPartitionByFieldsOnShardKey(const pgbson *partitionByFields,
 								   const MongoCollection *collection);
 
-Expr * GenerateMultiExpressionRepathExpression(List *repathArgs);
+Expr * GenerateMultiExpressionRepathExpression(List *repathArgs,
+											   bool overrideArrayInProjection);
 Stage GetAggregationStageAtPosition(const List *aggregationStages, int position);
 
 /* Helper methods */

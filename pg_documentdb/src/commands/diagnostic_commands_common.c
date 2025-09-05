@@ -170,7 +170,7 @@ RunQueryOnAllServerNodes(const char *commandName, Datum *values, Oid *types,
 
 					StringView errorView = CreateStringViewFromString(workerError);
 					StringView connectivityView = CreateStringViewFromString(
-						"failed to connect to");
+						"Unable to establish connection with");
 					StringView recoveryErrorView = CreateStringViewFromString(
 						"terminating connection due to conflict with recovery");
 					StringView recoveryCancelErrorView = CreateStringViewFromString(
@@ -203,10 +203,10 @@ RunQueryOnAllServerNodes(const char *commandName, Datum *values, Oid *types,
 					{
 						ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
 										errmsg(
-											"%s on worker failed with recovery errors",
+											"Worker %s operation failed due to recovery-related errors",
 											commandName),
 										errdetail_log(
-											"%s on worker failed with an recovery error: %s",
+											"Worker %s operation failed due to recovery-related errors: %s",
 											commandName, workerError)));
 					}
 					else if (StringViewStartsWithStringView(&errorView, &outOfMemoryView))
@@ -270,7 +270,7 @@ RunWorkerDiagnosticLogic(pgbson *(*workerFunc)(void *state), void *state)
 		MemoryContextSwitchTo(savedMemoryContext);
 		ErrorData *errorData = CopyErrorDataAndFlush();
 
-		/* Abort the inner transaction */
+		/* Abort inner transaction */
 		RollbackAndReleaseCurrentSubTransaction();
 
 		/* Rollback changes MemoryContext */

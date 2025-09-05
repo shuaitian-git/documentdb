@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation.  All rights reserved.
  *
- * src/bson/bson_positional_query.c
+ * src/aggregation/bson_positional_query.c
  *
  * Implementation of the BSON Positional $ operator (shared between projection and update)
  *
@@ -32,10 +32,10 @@
  */
 typedef struct BsonPositionalQueryQual
 {
-	/* The path to the query filter (e.g. a.b.c) */
+	/* The path to the query filter (e.g., a.b.c) */
 	const char *path;
 
-	/* The expression to evaluate for this filter */
+	/* The expression that needs to be evaluated for applying this filter */
 	ExprEvalState *evalState;
 
 	/* Whether or not the filter only matches an array */
@@ -87,7 +87,8 @@ static bool PositionalQueryVisitArrayField(pgbsonelement *element, const
 										   StringView *filterPath,
 										   int arrayIndex, void *state);
 static bool PositionalQueryContinueProcessIntermediateArray(void *state, const
-															bson_value_t *value);
+															bson_value_t *value, bool
+															isArrayIndexSearch);
 static void PositionalSetIntermediateArrayIndex(void *state, int32_t index);
 
 /* --------------------------------------------------------- */
@@ -99,10 +100,12 @@ static void PositionalSetIntermediateArrayIndex(void *state, int32_t index);
  * object that is used in evaluation of the positional $ operator.
  */
 BsonPositionalQueryData *
-GetPositionalQueryData(const pgbson *query)
+GetPositionalQueryData(const bson_value_t *query)
 {
 	/* Step 1: Create Quals for the query based on BSON value inputs */
-	List *queryQuals = CreateQualsForBsonValueTopLevelQuery(query);
+	bson_iter_t queryDocIterator;
+	BsonValueInitIterator(query, &queryDocIterator);
+	List *queryQuals = CreateQualsForBsonValueTopLevelQueryIter(&queryDocIterator);
 
 	List *finalQuals = NIL;
 
@@ -141,6 +144,8 @@ MatchPositionalQueryAgainstDocument(const BsonPositionalQueryData *data, const
 		.VisitArrayField = PositionalQueryVisitArrayField,
 		.VisitTopLevelField = PositionalQueryVisitTopLevelField,
 		.SetIntermediateArrayIndex = PositionalSetIntermediateArrayIndex,
+		.HandleIntermediateArrayPathNotFound = NULL,
+		.SetIntermediateArrayStartEnd = NULL,
 	};
 
 	/* Walk the quals and find a match */
@@ -337,7 +342,8 @@ ProcessSingleFuncExpr(FuncExpr *expr, List **finalList, bool isArrayMatch, const
  */
 static bool
 PositionalQueryContinueProcessIntermediateArray(void *state, const
-												bson_value_t *value)
+												bson_value_t *value, bool
+												isArrayIndexSearch)
 {
 	TraverseBsonPositionalQualState *queryState =
 		(TraverseBsonPositionalQualState *) state;

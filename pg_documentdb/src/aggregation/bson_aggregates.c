@@ -81,37 +81,6 @@ typedef struct BsonAddToSetState
 	bool isWindowAggregation;
 } BsonAddToSetState;
 
-typedef struct BsonOutAggregateState
-{
-	/*
-	 * Cached collection object to which documents are added via the
-	 * transaction function. If the $out collection does not exist
-	 * it will be the new collection created. Otherwise, it's a temporary
-	 * collection where the data is parked before we copy the data over to
-	 * the target collection. The copying is done via renaming if the target
-	 * collection has a different name than the source collection. Otherwise,
-	 * we drop all rows from the source collection and then copy from the temp
-	 * collection. Renaming is a DDL change which is not allowed in the same
-	 * transaction where we are also reading from the collection.
-	 */
-	MongoCollection *stagingCollection;
-
-	/* Object holding that write error that we will send to the user*/
-	WriteError *writeError;
-
-	/* Final $out collection name. This can be same as the input collection */
-	char targetCollectioName[MAX_COLLECTION_NAME_LENGTH];
-
-	/* If the target collection already exists.*/
-	bool collectionExists;
-
-	/* If the target collection exists and it's the same collection on which
-	 * the aggregation pipeline is being run.*/
-	bool sameSourceAndTarget;
-	int64_t docsWritten;
-	bool hasFailure;
-} BsonOutAggregateState;
-
 /* state used for maxN and minN both */
 typedef struct BinaryHeapState
 {
@@ -198,7 +167,8 @@ BsonArrayAggTransitionCore(PG_FUNCTION_ARGS, bool handleSingleValueElement,
 	int aggregationContext = AggCheckCallContext(fcinfo, &aggregateContext);
 	if (aggregationContext == 0)
 	{
-		ereport(ERROR, errmsg("aggregate function called in non-aggregate context"));
+		ereport(ERROR, errmsg(
+					"Aggregate function invoked in non-aggregate context"));
 	}
 
 	bool isWindowAggregation = aggregationContext == AGG_CONTEXT_WINDOW;
@@ -491,7 +461,8 @@ AggregateObjectsCore(PG_FUNCTION_ARGS)
 	MemoryContext aggregateContext;
 	if (!AggCheckCallContext(fcinfo, &aggregateContext))
 	{
-		ereport(ERROR, errmsg("aggregate function called in non-aggregate context"));
+		ereport(ERROR, errmsg(
+					"Aggregate function invoked in non-aggregate context"));
 	}
 
 	/* Create the aggregate state in the aggregate context. */
@@ -676,7 +647,8 @@ bson_sum_avg_transition(PG_FUNCTION_ARGS)
 		MemoryContext aggregateContext;
 		if (!AggCheckCallContext(fcinfo, &aggregateContext))
 		{
-			ereport(ERROR, errmsg("aggregate function called in non-aggregate context"));
+			ereport(ERROR, errmsg(
+						"Aggregate function invoked in non-aggregate context"));
 		}
 
 		/* Create the aggregate state in the aggregate context. */
@@ -954,7 +926,8 @@ bson_sum_avg_combine(PG_FUNCTION_ARGS)
 	MemoryContext aggregateContext;
 	if (!AggCheckCallContext(fcinfo, &aggregateContext))
 	{
-		ereport(ERROR, errmsg("aggregate function called in non-aggregate context"));
+		ereport(ERROR, errmsg(
+					"Aggregate function invoked in non-aggregate context"));
 	}
 
 	/* Create the aggregate state in the aggregate context. */
@@ -1018,7 +991,8 @@ bson_min_combine(PG_FUNCTION_ARGS)
 	MemoryContext aggregateContext;
 	if (!AggCheckCallContext(fcinfo, &aggregateContext))
 	{
-		ereport(ERROR, errmsg("aggregate function called in non-aggregate context"));
+		ereport(ERROR, errmsg(
+					"Aggregate function invoked in non-aggregate context"));
 	}
 
 	/* Create the aggregate state in the aggregate context. */
@@ -1077,7 +1051,8 @@ bson_max_combine(PG_FUNCTION_ARGS)
 	MemoryContext aggregateContext;
 	if (!AggCheckCallContext(fcinfo, &aggregateContext))
 	{
-		ereport(ERROR, errmsg("aggregate function called in non-aggregate context"));
+		ereport(ERROR, errmsg(
+					"Aggregate function invoked in non-aggregate context"));
 	}
 
 	/* Create the aggregate state in the aggregate context. */
@@ -1180,7 +1155,8 @@ bson_add_to_set_transition(PG_FUNCTION_ARGS)
 	int aggregationContext = AggCheckCallContext(fcinfo, &aggregateContext);
 	if (aggregationContext == 0)
 	{
-		ereport(ERROR, errmsg("aggregate function called in non-aggregate context"));
+		ereport(ERROR, errmsg(
+					"Aggregate function invoked in non-aggregate context"));
 	}
 
 	bool isWindowAggregation = aggregationContext == AGG_CONTEXT_WINDOW;
@@ -1278,7 +1254,7 @@ bson_add_to_set_final(PG_FUNCTION_ARGS)
 		}
 
 		/*
-		 * For window aggregation, with the HASHTBL destroyed (on the call for the first group),
+		 * For window aggregation, with the HASHCTL destroyed (on the call for the first group),
 		 * subsequent calls to this final function for other groups will fail
 		 * for certain bounds such as ["unbounded", constant].
 		 * This is because the head never moves and the aggregation is not restarted.
@@ -1422,11 +1398,12 @@ ValidateMergeObjectsInput(pgbson *input)
 	{
 		ereport(ERROR,
 				errcode(ERRCODE_DOCUMENTDB_DOLLARMERGEOBJECTSINVALIDTYPE),
-				errmsg("$mergeObjects requires object inputs, but input %s is of type %s",
-					   BsonValueToJsonForLogging(&singleBsonElement.bsonValue),
-					   BsonTypeName(singleBsonElement.bsonValue.value_type)),
+				errmsg(
+					"$mergeObjects needs both inputs to be objects, but the provided input %s has the type %s",
+					BsonValueToJsonForLogging(&singleBsonElement.bsonValue),
+					BsonTypeName(singleBsonElement.bsonValue.value_type)),
 				errdetail_log(
-					"$mergeObjects requires object inputs, but input is of type %s",
+					"$mergeObjects needs both inputs to be objects, but the provided input has the type %s",
 					BsonTypeName(singleBsonElement.bsonValue.value_type)));
 	}
 }
@@ -1519,13 +1496,11 @@ bson_maxminn_transition(PG_FUNCTION_ARGS, bool isMaxN)
 	if (!AggCheckCallContext(fcinfo, &aggregateContext))
 	{
 		ereport(ERROR, errmsg(
-					"aggregate function %s transition called in non-aggregate context",
+					"Aggregate function %s transition invoked in non-aggregate context",
 					isMaxN ? "maxN" : "minN"));
 	}
 
 	/* Create the aggregate state in the aggregate context. */
-	/* MemoryContext oldContext = MemoryContextSwitchTo(aggregateContext); */
-
 	pgbson *copiedPgbson = PG_GETARG_MAYBE_NULL_PGBSON(1);
 	pgbson *currentValue = CopyPgbsonIntoMemoryContext(copiedPgbson, aggregateContext);
 
@@ -1551,7 +1526,7 @@ bson_maxminn_transition(PG_FUNCTION_ARGS, bool isMaxN)
 		}
 	}
 
-	/* Verify that N is an integer. */
+	/* Ensure that N is a valid integer value. */
 	ValidateElementForNGroupAccumulators(&elementBsonValue, isMaxN == true ? "maxN" :
 										 "minN");
 	bool throwIfFailed = true;
@@ -1826,7 +1801,7 @@ bson_maxminn_combine(PG_FUNCTION_ARGS)
 	if (!AggCheckCallContext(fcinfo, &aggregateContext))
 	{
 		ereport(ERROR, errmsg(
-					"aggregate function maxN/minN combine called in non-aggregate context"));
+					"Aggregate functions maxN or minN have been invoked within a non-aggregation context."));
 	}
 
 	if (PG_ARGISNULL(0))

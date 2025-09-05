@@ -72,14 +72,13 @@ typedef struct NodeInfo
 	bool isactive;
 
 	/*
-	 * The formatted "Mongo compatible" node name
+	 * The formatted node name
 	 * uses node_<clusterName>_<nodeId>
 	 */
 	const char *mongoNodeName;
 
 	/*
-	 * The logical shard for the node in Mongo output
-	 * Uses "shard_<groupId>"
+	 * The logical shard for the node "shard_<groupId>"
 	 */
 	const char *mongoShardName;
 } NodeInfo;
@@ -112,7 +111,7 @@ static void WriteShardMap(pgbson_writer *writer, List *groupNodes);
 static void WriteShardList(pgbson_writer *writer, List *groupNodes);
 
 /*
- * Implements the mongo wire-protocol getShardMap command
+ * Implements the getShardMap command
  */
 Datum
 command_get_shard_map(PG_FUNCTION_ARGS)
@@ -180,7 +179,7 @@ HandleDistributedColocation(MongoCollection *collection, const
 	if (colocationValue->value_type != BSON_TYPE_DOCUMENT)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_FAILEDTOPARSE),
-						errmsg("colocation options must be a document.")));
+						errmsg("Colocation options must be provided as a document.")));
 	}
 
 	char *tableWithNamespace = psprintf("%s.%s", ApiDataSchemaName,
@@ -219,8 +218,8 @@ HandleDistributedColocation(MongoCollection *collection, const
 		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_FAILEDTOPARSE),
-							errmsg("Unknown field colocation.%s", key),
-							errdetail_log("Unknown field colocation.%s", key)));
+							errmsg("Unrecognized field in colocation.%s", key),
+							errdetail_log("Unrecognized field in colocation.%s", key)));
 		}
 	}
 
@@ -268,10 +267,10 @@ HandleDistributedColocation(MongoCollection *collection, const
 		if (targetCollection == NULL)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDNAMESPACE),
-							errmsg("ns %s.%s does not exist",
+							errmsg("Namespace %s.%s cannot be found",
 								   collection->name.databaseName,
 								   targetCollectionName),
-							errdetail_log("ns %s.%s does not exist",
+							errdetail_log("Namespace %s.%s cannot be found",
 										  collection->name.databaseName,
 										  targetCollectionName)));
 		}
@@ -287,12 +286,12 @@ HandleDistributedColocation(MongoCollection *collection, const
 												 targetWithNamespace);
 
 		/* Get the colocationId of the changes table */
-		char *mongoDataWithNamespace = psprintf("%s.changes", ApiDataSchemaName);
+		char *documentdbDataWithNamespace = psprintf("%s.changes", ApiDataSchemaName);
 		RangeVar *rangeVar = makeRangeVar(ApiDataSchemaName, "changes", -1);
 		Oid changesRelId = RangeVarGetRelid(rangeVar, AccessShareLock, false);
 
 		int colocationIdOfChangesTable = GetColocationForTable(changesRelId, "changes",
-															   mongoDataWithNamespace);
+															   documentdbDataWithNamespace);
 		if (colocationId == colocationIdOfChangesTable)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTED),
@@ -308,7 +307,7 @@ HandleDistributedColocation(MongoCollection *collection, const
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTED),
 							errmsg(
-								"Cannot colocate current collection with a sharded collection.")));
+								"Current collection cannot be colocated with any sharded collection.")));
 		}
 
 		/* Also check if the colocated source has only 1 shard (otherwise require colocate=null explicitly) */
@@ -478,11 +477,13 @@ RewriteListCollectionsQueryForDistribution(Query *source)
 											repathArgs, InvalidOid, InvalidOid,
 											COERCE_EXPLICIT_CALL);
 
-
+	/* Since no dotted paths in projection no need to override */
+	bool overrideArray = false;
 	Oid addFieldsOid = BsonDollaMergeDocumentsFunctionOid();
 	TargetEntry *firstEntry = linitial(source->targetList);
 	FuncExpr *addFields = makeFuncExpr(addFieldsOid, BsonTypeId(),
-									   list_make2(firstEntry->expr, colocationArgs),
+									   list_make3(firstEntry->expr, colocationArgs,
+												  MakeBoolValueConst(overrideArray)),
 									   InvalidOid, InvalidOid, COERCE_EXPLICIT_CALL);
 	firstEntry->expr = (Expr *) addFields;
 
@@ -493,7 +494,7 @@ RewriteListCollectionsQueryForDistribution(Query *source)
 /*
  * The config.shards query in a distributed query scenario
  * will end up querying the pg_dist_node table to get the list of shards
- * and output them in a mongo compatible format.
+ * and output them in a compatible format.
  */
 static Query *
 RewriteConfigShardsQueryForDistribution(Query *baseQuery)

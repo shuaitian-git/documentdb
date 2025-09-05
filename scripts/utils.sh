@@ -24,7 +24,7 @@ function GetPostgresPath()
   local pgVersion=$1
   local osVersion=$(cat /etc/os-release | grep "^ID=");
 
-  if [[ "$osVersion" == "ID=ubuntu" || "$osVersion" == "ID=debian"|| "$osVersion" == "ID=mariner" ]]; then
+  if [[ "$osVersion" == "ID=ubuntu" || "$osVersion" == "ID=debian"|| "$osVersion" == "ID=mariner" || "$osVersion" == "ID=azurelinux" ]]; then
     echo "/usr/lib/postgresql/$pgVersion/bin"
   else
     echo "/usr/pgsql-$pgVersion/bin"
@@ -77,7 +77,7 @@ function StartServer()
   local _pgctlPath=$(GetPGCTL)
 
   echo "Starting postgres in $_directory"
-  echo "Calling: $_pgctlPath start -D $_directory -o \"-p $_port -l $_logPath\""
+  echo "Calling: $_pgctlPath start -D $_directory -o \"-p $_port\" -l $_logPath"
   $_pgctlPath start -D $_directory -o "-p $_port" -l $_logPath
 }
 
@@ -105,10 +105,19 @@ function InitDatabaseExtended()
 {
   local _directory=$1
   local _preloadLibraries=$2
+
+  echo "Initializing PostgreSQL database in $_directory with preload libraries: $_preloadLibraries"
+
+  if [ -d "$_directory" ]; then
+    echo "Removing contents of $_directory"
+    rm -rf $_directory/*
+    rm -rf $_directory/.[!.]*
+  fi
   
-  echo "Deleting directory $_directory"
-  rm -rf $_directory
-  mkdir -p $_directory
+  if [ ! -d "$_directory" ]; then
+    echo "Creating directory $_directory"
+    mkdir -p $_directory
+  fi
 
   echo "Calling initdb for $_directory"
   $(GetInitDB) -D $_directory
@@ -120,9 +129,11 @@ function SetupPostgresConfigurations()
 {
   local installdir=$1;
   local preloadLibraries=$2;
-  requiredLibraries="citus, pg_cron, ${preloadLibraries}";
+  requiredLibraries="pg_cron, ${preloadLibraries}";
   echo shared_preload_libraries = \'$requiredLibraries\' | tee -a $installdir/postgresql.conf
   echo cron.database_name = \'postgres\' | tee -a $installdir/postgresql.conf
+  echo documentdb.enableBackgroundWorker = 'true' | tee -a $installdir/postgresql.conf
+  echo documentdb.enableBackgroundWorkerJobs = 'true' | tee -a $installdir/postgresql.conf
   echo ssl = off | tee -a $installdir/postgresql.conf
 }
 

@@ -45,8 +45,8 @@ typedef struct
 {
 	char *db;
 	int64 collections;              /* total number of collections in db */
-	int64 views;                    /* total number of views in db */
-	int64 objects;                  /* total number of documents in db */
+	int64 views;                    /* Total count of views stored in database */
+	int64 objects;                  /* Total count of documents present in the database */
 	double avgObjSize;              /* "dataSize" divided by "objects" */
 	double dataSize;                /* Total size of the uncompressed data held in the database */
 	double storageSize;             /* does not include index size */
@@ -83,7 +83,7 @@ command_db_stats(PG_FUNCTION_ARGS)
 {
 	if (PG_ARGISNULL(0))
 	{
-		ereport(ERROR, (errmsg("db name cannot be NULL")));
+		ereport(ERROR, (errmsg("Database name must not be NULL")));
 	}
 	Datum databaseName = PG_GETARG_DATUM(0);
 
@@ -109,7 +109,7 @@ command_db_stats(PG_FUNCTION_ARGS)
 	/* Truncate the fractional part of the scale */
 	scaleDouble = trunc(scaleDouble);
 
-	/* MongoDB docs don't mention this, but behaviour is to cap 'scale' to int32 */
+	/* The 'scale' value is capped to int32 for compatibility with expected behavior */
 	int32 scale = scaleDouble > INT32_MAX ? INT32_MAX :
 				  scaleDouble < INT32_MIN ? INT32_MIN :
 				  (int32) scaleDouble;
@@ -166,7 +166,7 @@ command_list_databases(PG_FUNCTION_ARGS)
 		else if (!IsCommonSpecIgnoredField(key))
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-							errmsg("%s is an unknown field", key)));
+							errmsg("%s is an unrecognized field name", key)));
 		}
 	}
 
@@ -178,7 +178,7 @@ command_list_databases(PG_FUNCTION_ARGS)
 	{
 		sizeOnDiskSelector = ", 0::int8 AS \"sizeOnDisk\", false AS empty";
 		totalSizeSelector =
-			"pg_catalog.pg_database_size(pg_catalog.current_database())::int4 AS \"totalSize\", ";
+			"pg_catalog.pg_database_size(pg_catalog.current_database())::int8 AS \"totalSize\", ";
 	}
 
 	if (filter != NULL)

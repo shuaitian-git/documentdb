@@ -38,6 +38,9 @@ typedef enum IndexOptionsType
 
 	/* This is a 2dsphere index on a path */
 	IndexOptionsType_2dsphere,
+
+	/* This is a composite index on a path */
+	IndexOptionsType_Composite,
 } IndexOptionsType;
 
 
@@ -79,6 +82,7 @@ typedef struct
 	BsonGinIndexOptionsBase base;
 	bool isWildcard;
 	bool generateNotFoundTerm;
+	bool useReducedWildcardTerms;
 	int path;
 } BsonGinSinglePathOptions;
 
@@ -161,6 +165,13 @@ typedef struct
 	int path;
 } Bson2dGeographyPathOptions;
 
+typedef struct
+{
+	BsonGinIndexOptionsBase base;
+	int compositePathSpec;
+} BsonGinCompositePathOptions;
+
+
 bool ValidateIndexForQualifierValue(bytea *indexOptions, Datum queryValue,
 									BsonIndexStrategy
 									strategy);
@@ -171,11 +182,49 @@ Size FillSinglePathSpec(const char *prefix, void *buffer);
 void ValidateSinglePathSpec(const char *prefix);
 Size FillDeprecatedStringSpec(const char *value, void *ptr);
 
+struct PathKey;
+struct Expr;
+typedef struct SortIndexInputDetails
+{
+	const char *sortPath;
+	struct Expr *sortVar;
+	struct Expr *sortDatum;
+	struct PathKey *sortPathKey;
+} SortIndexInputDetails;
+
+
+struct IndexPath;
+bool CompositeIndexSupportsOrderByPushdown(struct IndexPath *indexPath,
+										   List *sortDetails,
+										   int32_t *maxPathKeySupported,
+										   bool *isReverseOrder,
+										   bool isGroupBy);
+bool CompositeIndexSupportsIndexOnlyScan(const struct IndexPath *indexPath);
+
+int32_t GetCompositeOpClassColumnNumber(const char *currentPath, void *contextOptions,
+										int8_t *sortDirection);
+
+int32_t GetCompositeOpClassPathCount(void *contextOptions);
+const char * GetCompositeFirstIndexPath(void *contextOptions);
+const char * GetFirstPathFromIndexOptionsIfApplicable(bytea *indexOptions,
+													  bool *isWildcardIndex);
+bool PathHasArrayIndexElements(const StringView *path);
+
+struct PlannerInfo;
+bool TraverseIndexPathForCompositeIndex(struct IndexPath *indexPath, struct
+										PlannerInfo *root);
+
 /* Helper macro to retrieve a length prefixed value in the index options */
 #define Get_Index_Path_Option(options, field, result, resultFieldLength) \
 	const char *pathDefinition = GET_STRING_RELOPTION(options, field); \
 	if (pathDefinition == NULL) { resultFieldLength = 0; result = NULL; } \
 	else { resultFieldLength = *(uint32_t *) pathDefinition; result = pathDefinition + \
 																	  sizeof(uint32_t); }
+
+
+#define Get_Index_Path_Option_Length(options, field, resultFieldLength) \
+	const char *pathDefinition = GET_STRING_RELOPTION(options, field); \
+	if (pathDefinition == NULL) { resultFieldLength = 0; } \
+	else { resultFieldLength = *(uint32_t *) pathDefinition; }
 
 #endif

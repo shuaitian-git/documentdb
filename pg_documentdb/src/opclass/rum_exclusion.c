@@ -295,13 +295,7 @@ Datum
 bson_unique_index_term_equal(PG_FUNCTION_ARGS)
 {
 	/* In this case, we presume that the index is correct (for recheck purposes) */
-	if (IsClusterVersionAtleast(DocDB_V0, 24, 0))
-	{
-		PG_RETURN_BOOL(true);
-	}
-
-	ereport(ERROR, errmsg(
-				"Unique index term equal operator class function is not supported."));
+	PG_RETURN_BOOL(true);
 }
 
 
@@ -490,7 +484,8 @@ ExtractUniqueShardTermsFromInput(pgbson *input, int32_t *nentries, Pointer **ext
 	else
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
-						errmsg("$numTerms must be the second field in the document")));
+						errmsg(
+							"$numTerms should always appear as the second field within the document.")));
 	}
 
 	/* next field is numTerms */
@@ -730,7 +725,7 @@ GetShardKeyAndDocument(HeapTupleHeader input, int64_t *shardKey)
 	Datum documentDatum = GetAttributeByNum(tupleHeader, 2, &isNull);
 	if (isNull)
 	{
-		ereport(ERROR, (errmsg("document should not be null")));
+		ereport(ERROR, (errmsg("The document value must not be null")));
 	}
 
 	*shardKey = DatumGetInt64(shardKeyDatum);

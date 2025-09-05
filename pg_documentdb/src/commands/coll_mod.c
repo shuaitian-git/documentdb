@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation.  All rights reserved.
  *
- * src/oss_backend/commands/coll_mod.c
+ * src/commands/coll_mod.c
  *
  * Implementation of the collMod command.
  *-------------------------------------------------------------------------
@@ -59,7 +59,7 @@ typedef struct
 	/* The validator for the collection */
 	bson_value_t validator;
 
-	/* The validation level for the collection */
+	/* The collection's validation level setting */
 	char *validationLevel;
 
 	/* The validation action for the collection */
@@ -124,7 +124,7 @@ command_coll_mod(PG_FUNCTION_ARGS)
 {
 	if (PG_ARGISNULL(0))
 	{
-		ereport(ERROR, (errmsg("db name cannot be NULL")));
+		ereport(ERROR, (errmsg("Database name must not be NULL")));
 	}
 
 	if (PG_ARGISNULL(1))
@@ -145,12 +145,10 @@ command_coll_mod(PG_FUNCTION_ARGS)
 	 */
 
 	/*
-	 * Get the mongo collection with the right set of locks for coll_mod
-	 * Native mongo gets an exclusive lock on the complete database of the collection
-	 * (which means all the other collection as well because these can be part of the modification)
-	 *
-	 * We currently lock the collection data table only because none of the other option which can potentially
-	 * refer other collections are supported right now . e.g. viewOn, pipelines, validators etc
+	 * Acquire the appropriate lock on the collection for coll_mod.
+	 * An exclusive lock is obtained on the collection's data table.
+	 * Currently, only the collection itself is locked, since options that could affect
+	 * other collections (such as viewOn, pipelines, or validators) are not yet supported.
 	 */
 	Datum databaseDatum = PG_GETARG_DATUM(0);
 
@@ -162,7 +160,7 @@ command_coll_mod(PG_FUNCTION_ARGS)
 	if (collModOptions.collectionName == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_FAILEDTOPARSE), (errmsg(
-																		"collMod must be specified"))));
+																		"Collection name of collMod options must be specified"))));
 	}
 
 	if (!PG_ARGISNULL(1))
@@ -186,7 +184,7 @@ command_coll_mod(PG_FUNCTION_ARGS)
 	if (collection == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_NAMESPACENOTFOUND),
-						errmsg("ns does not exist")));
+						errmsg("The specified namespace does not exist")));
 	}
 
 	pgbson_writer writer;
@@ -208,9 +206,10 @@ command_coll_mod(PG_FUNCTION_ARGS)
 	else if (collection->viewDefinition != NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTEDONVIEW),
-						errmsg("Namespace %s.%s is a view, not a collection",
-							   collection->name.databaseName,
-							   collection->name.collectionName)));
+						errmsg(
+							"The namespace %s.%s refers to a view object rather than a collection",
+							collection->name.databaseName,
+							collection->name.collectionName)));
 	}
 
 	if (specFlags & HAS_INDEX_OPTION)
@@ -345,12 +344,14 @@ ParseSpecSetCollModOptions(const pgbson *collModSpec,
 			 * TODO: implement "validationAction","validationLevel",
 			 * "validator","viewOn", "pipeline", "expireAfterSeconds"
 			 */
-			elog(DEBUG1, "Unrecognized command field: collMod.%s", key);
+			elog(DEBUG1, "Command field not recognized: collMod.%s", key);
 		}
 		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_UNKNOWNBSONFIELD),
-							errmsg("BSON field 'collMod.%s' is an unknown field.", key)));
+							errmsg(
+								"The BSON field 'collMod.%s' is not recognized as a valid field.",
+								key)));
 		}
 	}
 
@@ -390,7 +391,8 @@ ParseIndexSpecSetCollModOptions(bson_iter_t *indexSpecIter,
 			if (*specFlags & HAS_INDEX_OPTION_NAME)
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
-								errmsg("Cannot specify both key pattern and name.")));
+								errmsg(
+									"Both name and key pattern cannot be present")));
 			}
 			collModIndexOptions->keyPattern = PgbsonInitFromDocumentBsonValue(value);
 			*specFlags |= HAS_INDEX_OPTION_KEYPATTERN;
@@ -401,7 +403,8 @@ ParseIndexSpecSetCollModOptions(bson_iter_t *indexSpecIter,
 			if (*specFlags & HAS_INDEX_OPTION_KEYPATTERN)
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
-								errmsg("Cannot specify both key pattern and name.")));
+								errmsg(
+									"Both name and key pattern cannot be present")));
 			}
 			collModIndexOptions->name = palloc(value->value.v_utf8.len + 1);
 			strcpy(collModIndexOptions->name, value->value.v_utf8.str);
@@ -425,7 +428,6 @@ ParseIndexSpecSetCollModOptions(bson_iter_t *indexSpecIter,
 			int64 expireAfterSeconds = BsonValueAsInt64(value);
 			if (expireAfterSeconds < 0)
 			{
-				/* this is interesting mongo db does not fail for this */
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
 								errmsg(
 									"BSON field 'collMod.index.expireAfterSeconds' cannot be less than 0.")));
@@ -436,8 +438,9 @@ ParseIndexSpecSetCollModOptions(bson_iter_t *indexSpecIter,
 		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_UNKNOWNBSONFIELD),
-							errmsg("BSON field 'collMod.index.%s' is an unknown field.",
-								   key)));
+							errmsg(
+								"The BSON field 'collMod.index.%s' is not recognized as a valid field.",
+								key)));
 		}
 	}
 
@@ -533,7 +536,7 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 	{
 		if (indexDetails.indexSpec.indexExpireAfterSeconds == NULL)
 		{
-			/* 5.0 doesn't allow non-TTL index to be converted to TTL index */
+			/* we doesn't allow non-TTL index to be converted to TTL index */
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
 							errmsg("no expireAfterSeconds field to update")));
 		}
@@ -577,9 +580,9 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 	if ((*specFlags & HAS_INDEX_OPTION_HIDDEN) == HAS_INDEX_OPTION_HIDDEN)
 	{
 		PgbsonWriterAppendBool(writer, "hidden_old",
-							   10, GetBoolFromBoolIndexOption(oldHidden));
+							   10, GetBoolFromBoolIndexOptionDefaultTrue(oldHidden));
 		PgbsonWriterAppendBool(writer, "hidden_new",
-							   10, GetBoolFromBoolIndexOption(newHidden));
+							   10, GetBoolFromBoolIndexOptionDefaultTrue(newHidden));
 	}
 
 	if ((*specFlags & HAS_INDEX_OPTION_EXPIRE_AFTER_SECONDS) ==
@@ -618,7 +621,7 @@ ModifyViewDefinition(Datum databaseDatum,
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
 						errmsg(
-							"Must specify both 'viewOn' and 'pipeline' when modifying a view and auth is enabled")));
+							"Both 'viewOn' and 'pipeline' must be specified when altering a view while authorization is active")));
 	}
 
 	ValidateViewDefinition(

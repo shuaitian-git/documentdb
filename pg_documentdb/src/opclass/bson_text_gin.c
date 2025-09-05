@@ -308,7 +308,7 @@ bson_dollar_text_meta_qual(PG_FUNCTION_ARGS)
 
 /*
  * Given a '$text' filter and an associated index with options, generates a
- * mongo compatible TSQuery that can be used to query the index.
+ * compatible TSQuery that can be used to query the index.
  */
 Datum
 BsonTextGenerateTSQuery(const bson_value_t *queryValue, bytea *indexOptions)
@@ -387,7 +387,7 @@ EvaluateMetaTextScore(pgbson *document)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION40218),
 						errmsg(
-							"query requires text score metadata, but it is not available")));
+							"The query needs text score metadata, but this required information is currently unavailable.")));
 	}
 
 	if (QueryTextData->indexOptions == NULL ||
@@ -456,7 +456,7 @@ TryCheckMetaScoreOrderBy(const bson_value_t *value)
 		if (metaOrderingElement.bsonValue.value_type != BSON_TYPE_UTF8)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION31138),
-							errmsg("Illegal $meta sort: $meta: \"%s\"",
+							errmsg("Invalid use of $meta sort: $meta: \"%s\"",
 								   BsonValueToJsonForLogging(
 									   &metaOrderingElement.bsonValue))));
 		}
@@ -476,7 +476,7 @@ TryCheckMetaScoreOrderBy(const bson_value_t *value)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_FAILEDTOPARSE),
 							errmsg(
-								"Cannot have additional keys in a $meta sort specification")));
+								"Additional keys are not permitted within a $meta sort specification.")));
 		}
 
 		return true;
@@ -497,7 +497,7 @@ BsonTextGenerateTSQueryCore(const bson_value_t *queryValue, bytea *indexOptions,
 	if (queryValue->value_type != BSON_TYPE_DOCUMENT)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-						errmsg("$text expects an object")));
+						errmsg("Expected 'document' type for $text")));
 	}
 
 	bson_iter_t queryIterator;
@@ -750,7 +750,8 @@ RewriteQueryTree(QTNode *node, bool *rewrote)
 inline static IndexTraverseOption
 FormatTraverseOptionForText(IndexTraverseOption pathOption, bson_type_t bsonType)
 {
-	if (pathOption == IndexTraverse_Match)
+	if (pathOption == IndexTraverse_Match ||
+		pathOption == IndexTraverse_MatchAndRecurse)
 	{
 		switch (bsonType)
 		{
@@ -782,7 +783,7 @@ FormatTraverseOptionForText(IndexTraverseOption pathOption, bson_type_t bsonType
 /*
  * Implements the GetTextIndexTraverseOption for index term generation.
  * Validates that the term is valid given tha path filter, and also ensures that
- * the path is a "TEXTT or "array" of texts.
+ * the path is a "TEXT" or "array" of texts.
  */
 static IndexTraverseOption
 GetTextIndexTraverseOption(void *contextOptions,
@@ -860,7 +861,7 @@ ExtractTsConfigFromLanguage(const StringView *language,
 	}
 
 	/* First canonicalize language to a PG supported form and parse out
-	 * the ones from Mongo supported values
+	 * the ones from supported values
 	 */
 	for (int i = 0; i < NumberOfLanguages; i++)
 	{
@@ -906,7 +907,7 @@ BsonValidateAndExtractTextQuery(const bson_value_t *queryValue,
 	if (queryValue->value_type != BSON_TYPE_DOCUMENT)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-						errmsg("$text expects an object")));
+						errmsg("Expected 'document' type for $text")));
 	}
 
 	bson_iter_t queryIterator;
@@ -946,16 +947,18 @@ BsonValidateAndExtractTextQuery(const bson_value_t *queryValue,
 	if (searchValue->value_type != BSON_TYPE_UTF8)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-						errmsg("$search had the wrong type. Expected string, found %s",
-							   BsonTypeName(searchValue->value_type))));
+						errmsg(
+							"The $search was given a value of the wrong type; a string was expected, but instead a %s was provided.",
+							BsonTypeName(searchValue->value_type))));
 	}
 
 	if (languageValue.value_type != BSON_TYPE_EOD &&
 		languageValue.value_type != BSON_TYPE_UTF8)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-						errmsg("$language had the wrong type. Expected string, found %s",
-							   BsonTypeName(languageValue.value_type))));
+						errmsg(
+							"Expected 'string' type for $language but found '%s' type",
+							BsonTypeName(languageValue.value_type))));
 	}
 
 	if (caseSensitive->value_type != BSON_TYPE_EOD &&
@@ -963,7 +966,7 @@ BsonValidateAndExtractTextQuery(const bson_value_t *queryValue,
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 						errmsg(
-							"$caseSensitive had the wrong type. Expected bool, found %s",
+							"Expected 'bool' type for $caseSensitive but found '%s' type",
 							BsonTypeName(caseSensitive->value_type))));
 	}
 
@@ -972,7 +975,7 @@ BsonValidateAndExtractTextQuery(const bson_value_t *queryValue,
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 						errmsg(
-							"$diacriticSensitive had the wrong type. Expected bool, found %s",
+							"Expected 'bool' type for $diacriticSensitivebut found '%s' type",
 							BsonTypeName(diacriticSensitive->value_type))));
 	}
 
@@ -1276,7 +1279,7 @@ GetLanguagePathOverride(const StringView *pathView, StringView *lastParentPath,
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION17261),
 							errmsg(
-								"found language override field in document with non-string type")));
+								"The language override field within the document is detected not a string type.")));
 		}
 
 		StringView languageView = { 0 };

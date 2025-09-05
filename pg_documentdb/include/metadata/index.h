@@ -7,8 +7,8 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifndef MONGO_INDEXES_H
-#define MONGO_INDEXES_H
+#ifndef INDEXES_H
+#define INDEXES_H
 
 #include <postgres.h>
 #include <utils/array.h>
@@ -61,12 +61,12 @@ typedef enum BoolIndexOption
  */
 typedef struct IndexSpec
 {
-	/* Mongo index name, cannot be NULL */
+	/* index name, cannot be NULL */
 	char *indexName;
 
 	/** index options start here **/
 
-	/* "v" number, must be greater than 0 */
+	/* index version specified by "v" number. must be a positive number */
 	int indexVersion;
 
 	/* "key" document, cannot be NULL */
@@ -149,10 +149,10 @@ typedef struct IndexCmdRequest
 	/* Postgres command */
 	char *cmd;
 
-	/* index id assigned to this Mongo index */
+	/* index id assigned to this index */
 	int indexId;
 
-	/* collection id of a collection to which this Mongo index belongs*/
+	/* collection id of a collection to which this index belongs*/
 	uint64 collectionId;
 
 	/* Internal retry attempt count that we maintain for each request*/
@@ -180,14 +180,58 @@ typedef struct
 	int64 global_pid;
 } IndexJobOpId;
 
+/*
+ * Represents the type of index for a given path.
+ * Treat this as a flags so that we can check for
+ * plugins.
+ */
+typedef enum MongoIndexKind
+{
+	/* Unrecognized or unsupported index plugin */
+	MongoIndexKind_Unknown = 0x0,
+
+	/* Regular asc/desc index */
+	MongoIndexKind_Regular = 0x1,
+
+	/* Hashed index */
+	MongoIndexKind_Hashed = 0x2,
+
+	/* Geospatial 2D index */
+	MongoIndexKind_2d = 0x4,
+
+	/* Text search index */
+	MongoIndexKind_Text = 0x8,
+
+	/* Geospatial 2D index */
+	MongoIndexKind_2dsphere = 0x10,
+
+	/* A CosmosDB Indexing kind */
+	MongoIndexingKind_CosmosSearch = 0x20,
+} MongoIndexKind;
+
+typedef struct
+{
+	const char *mongoIndexName;
+	bool isSupported;
+	MongoIndexKind indexKind;
+} MongoIndexSupport;
+
+/* index build tasks */
+void UnscheduleIndexBuildTasks(char *extensionPrefix);
+void ScheduleIndexBuildTasks(char *extensionPrefix);
+
+MongoIndexKind GetMongoIndexKind(char *indexKindName, bool *isSupported);
 
 /* query index metadata */
 IndexDetails * FindIndexWithSpecOptions(uint64 collectionId,
 										const IndexSpec *targetIndexSpec);
 IndexDetails * IndexIdGetIndexDetails(int indexId);
 IndexDetails * IndexNameGetIndexDetails(uint64 collectionId, const char *indexName);
+IndexDetails * IndexNameGetReadyIndexDetails(uint64 collectionId, const char *indexName);
 List * IndexKeyGetMatchingIndexes(uint64 collectionId,
 								  const pgbson *indexKeyDocument);
+List * IndexKeyGetReadyMatchingIndexes(uint64 collectionId,
+									   const pgbson *indexKeyDocument);
 List * CollectionIdGetIndexes(uint64 collectionId, bool excludeIdIndex,
 							  bool enableNestedDistribution);
 List * CollectionIdGetValidIndexes(uint64 collectionId, bool excludeIdIndex,
@@ -196,6 +240,8 @@ List * CollectionIdGetIndexNames(uint64 collectionId, bool excludeIdIndex, bool
 								 inProgressOnly);
 int CollectionIdGetIndexCount(uint64 collectionId);
 int CollectionIdsGetIndexCount(ArrayType *collectionIdsArray);
+bool IndexSpecIsWildcardIndex(const IndexSpec *indexSpec);
+bool IndexSpecIsOrderedIndex(const IndexSpec *indexSpec);
 
 
 /* modify/write index metadata */
@@ -262,7 +308,8 @@ void MarkIndexRequestStatus(int indexId, char cmdType, IndexCmdStatus status,
 							pgbson *comment,
 							IndexJobOpId *opId, int16 attemptCount);
 IndexCmdStatus GetIndexBuildStatusFromIndexQueue(int indexId);
-IndexCmdRequest * GetRequestFromIndexQueue(char cmdType, uint64 collectionId);
+IndexCmdRequest * GetRequestFromIndexQueue(char cmdType, uint64 collectionId,
+										   MemoryContext mcxt);
 IndexCmdRequest * GetSkippableRequestFromIndexQueue(char cmdType, int
 													expireTimeInSeconds,
 													List *skipCollections);
@@ -270,14 +317,22 @@ uint64 * GetCollectionIdsForIndexBuild(char cmdType, List *excludeCollectionIds)
 void AddRequestInIndexQueue(char *createIndexCmd, int indexId, uint64 collectionId, char
 							cmd_type, Oid userOid);
 char * GetIndexQueueName(void);
+const char * GetIndexTypeFromKeyDocument(pgbson *keyDocument);
 
 /* Static utilities */
 
 static inline bool
-GetBoolFromBoolIndexOption(BoolIndexOption option)
+GetBoolFromBoolIndexOptionDefaultTrue(BoolIndexOption option)
 {
 	return option == BoolIndexOption_Undefined ||
 		   option == BoolIndexOption_False ? false : true;
+}
+
+
+static inline bool
+GetBoolFromBoolIndexOptionDefaultFalse(BoolIndexOption option)
+{
+	return option == BoolIndexOption_True;
 }
 
 

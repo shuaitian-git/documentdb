@@ -23,7 +23,9 @@
  */
 typedef struct BsonExtractQueryArgs
 {
-	pgbson *query;
+	pgbsonelement filterElement;
+
+	const char *collationString;
 
 	int32 *nentries;
 
@@ -56,7 +58,7 @@ int32_t GinBsonComparePartialCore(BsonIndexStrategy strategy, BsonIndexTerm *que
 								  BsonIndexTerm *compareValue, Pointer extraData);
 bool GinBsonConsistentCore(BsonIndexStrategy strategy, bool *check,
 						   Pointer *extra_data, int32_t numKeys, bool *recheck,
-						   Datum *queryKeys, bytea *options);
+						   Datum *queryKeys, bytea *options, bool isPreconsistent);
 int32_t GinBsonComparePartialElemMatchExpression(BsonIndexTerm *queryValue,
 												 BsonIndexTerm *compareValue,
 												 BsonElemMatchIndexExprState *exprState);
@@ -85,6 +87,9 @@ typedef enum IndexTraverseOption
 
 	/* the path is a match and should be added to the index. */
 	IndexTraverse_Match,
+
+	/* The path is a match and child paths are also matches */
+	IndexTraverse_MatchAndRecurse,
 } IndexTraverseOption;
 
 
@@ -145,11 +150,20 @@ typedef struct
 	/* Whether or not to generate the not found term for a path */
 	bool generateNotFoundTerm;
 
+	/* Whether or not to skip generating the path undefined term on null */
+	bool skipGeneratedPathUndefinedTermOnLiteralNull;
+
 	/* metadata including truncation limit for index terms. */
 	IndexTermCreateMetadata termMetadata;
 
 	/* Whether a root truncation term has already been created for this document */
 	bool hasTruncatedTerms;
+
+	/* Whether or not to skip generating the top level array term */
+	bool skipGenerateTopLevelArrayTerm;
+
+	/* Whether or not to generate path based undefined terms (used in composite indexes) */
+	bool generatePathBasedUndefinedTerms;
 
 	/*
 	 * Whether or not the path has array ancestors in the pre paths:
@@ -158,6 +172,20 @@ typedef struct
 	 * For wildcard indexes, returns true if any path had an array ancestor
 	 */
 	bool hasArrayAncestors;
+
+	/*
+	 * When an array path has subtrees that have terms, and other other subtrees
+	 * that do not have terms, this is marked as true.
+	 */
+	bool hasArrayPartialTermExistence;
+
+	/*
+	 * Whether or not to use the reduced wildcard term generation support.
+	 */
+	bool useReducedWildcardTerms;
+
+	/* Whether array values were encountered during term generation */
+	bool hasArrayValues;
 } GenerateTermsContext;
 
 
@@ -177,4 +205,10 @@ int32_t GinBsonComparePartialOrderBy(BsonIndexTerm *queryValue,
 
 IndexTermCreateMetadata GetIndexTermMetadata(void *indexOptions);
 
+IndexTraverseOption GetCompositePathIndexTraverseOption(BsonIndexStrategy strategy,
+														void *contextOptions, const
+														char *currentPath, uint32_t
+														currentPathLength,
+														const bson_value_t *bsonValue,
+														int32_t *compositeIndexCol);
 #endif

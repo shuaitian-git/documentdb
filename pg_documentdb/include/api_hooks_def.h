@@ -28,7 +28,7 @@ typedef bool (*IsMetadataCoordinator_HookType)(void);
 extern IsMetadataCoordinator_HookType is_metadata_coordinator_hook;
 
 /*
- * Returns true if the Change Stream feature is enabled.
+ * Indicates whether the Change Stream feature is currently enabled
  */
 typedef bool (*IsChangeStreamEnabledAndCompatible)(void);
 extern IsChangeStreamEnabledAndCompatible is_changestream_enabled_and_compatible_hook;
@@ -87,6 +87,47 @@ extern DistributePostgresTable_HookType distribute_postgres_table_hook;
 typedef List *(*ModifyTableColumnNames_HookType)(List *tableColumns);
 extern ModifyTableColumnNames_HookType modify_table_column_names_hook;
 
+/*
+ * Creates a user using an external identity provider
+ */
+typedef bool (*CreateUserWithExernalIdentityProvider_HookType)(const char *userName,
+															   char *pgRole, bson_value_t
+															   customData);
+extern CreateUserWithExernalIdentityProvider_HookType
+	create_user_with_exernal_identity_provider_hook;
+
+/*
+ * Drops a user using an external identity provider
+ */
+typedef bool (*DropUserWithExernalIdentityProvider_HookType)(const char *userName);
+extern DropUserWithExernalIdentityProvider_HookType
+	drop_user_with_exernal_identity_provider_hook;
+
+/*
+ * Method to verify if a user is native
+ */
+typedef bool (*IsUserExternal_HookType)(const char *userName);
+extern IsUserExternal_HookType
+	is_user_external_hook;
+
+
+/*
+ * Method to get user info from external identity provider
+ */
+typedef const pgbson *(*GetUserInfoFromExternalIdentityProvider_HookType)();
+extern GetUserInfoFromExternalIdentityProvider_HookType
+	get_user_info_from_external_identity_provider_hook;
+
+
+/* Method for username validation */
+typedef bool (*UserNameValidation_HookType)(const char *username);
+extern UserNameValidation_HookType username_validation_hook;
+
+
+/* Method for password validation */
+typedef bool (*PasswordValidation_HookType)(const char *username, const char *password);
+extern PasswordValidation_HookType password_validation_hook;
+
 
 /*
  * Hook for enabling running a query with nested distribution enabled.
@@ -102,10 +143,14 @@ typedef void (*RunQueryWithNestedDistribution_HookType)(const char *query,
 														int numValues);
 extern RunQueryWithNestedDistribution_HookType run_query_with_nested_distribution_hook;
 
-typedef bool (*IsShardTableForMongoTable_HookType)(const char *relName, const
-												   char *numEndPointer);
+typedef void (*AllowNestedDistributionInCurrentTransaction_HookType)(void);
+extern AllowNestedDistributionInCurrentTransaction_HookType
+	allow_nested_distribution_in_current_transaction_hook;
 
-extern IsShardTableForMongoTable_HookType is_shard_table_for_mongo_table_hook;
+typedef bool (*IsShardTableForDocumentDbTable_HookType)(const char *relName, const
+														char *numEndPointer);
+
+extern IsShardTableForDocumentDbTable_HookType is_shard_table_for_documentdb_table_hook;
 
 typedef void (*HandleColocation_HookType)(MongoCollection *collection,
 										  const bson_value_t *colocationOptions);
@@ -164,12 +209,6 @@ typedef void (*PostSetupCluster_HookType)(bool, bool (shouldUpgradeFunc(void *, 
 																		int)), void *);
 extern PostSetupCluster_HookType post_setup_cluster_hook;
 
-typedef IndexAmRoutine *(*GetIndexAmRoutine_HookType)(PG_FUNCTION_ARGS);
-extern GetIndexAmRoutine_HookType get_index_amroutine_hook;
-
-typedef void *(*GetMultiAndBitmapIndexFunc_HookType)(void);
-extern GetMultiAndBitmapIndexFunc_HookType get_multi_and_bitmap_func_hook;
-
 /*
  * Hook for customizing the validation of vector query spec.
  */
@@ -182,15 +221,8 @@ typedef void
 extern TryCustomParseAndValidateVectorQuerySpec_HookType
 	try_custom_parse_and_validate_vector_query_spec_hook;
 
-
-typedef Path *(*TryOptimizePathForBitmapAndHookType)(PlannerInfo *root, RelOptInfo *rel,
-													 RangeTblEntry *rte,
-													 BitmapHeapPath *heapPath);
-extern TryOptimizePathForBitmapAndHookType try_optimize_path_for_bitmap_and_hook;
-
 extern bool DefaultInlineWriteOperations;
 extern bool ShouldUpgradeDataTables;
-
 
 typedef char *(*TryGetExtendedVersionRefreshQuery_HookType)(void);
 extern TryGetExtendedVersionRefreshQuery_HookType
@@ -203,6 +235,22 @@ typedef void (*GetShardIdsAndNamesForCollection_HookType)(Oid relationOid, const
 														  int32_t *shardCount);
 extern GetShardIdsAndNamesForCollection_HookType
 	get_shard_ids_and_names_for_collection_hook;
+
+
+typedef const char *(*GetPidForIndexBuild_HookType)(void);
+extern GetPidForIndexBuild_HookType get_pid_for_index_build_hook;
+
+
+typedef const char *(*TryGetIndexBuildJobOpIdQuery_HookType)(void);
+extern TryGetIndexBuildJobOpIdQuery_HookType try_get_index_build_job_op_id_query_hook;
+
+
+typedef char *(*TryGetCancelIndexBuildQuery_HookType)(int32_t indexId, char cmdType);
+extern TryGetCancelIndexBuildQuery_HookType try_get_cancel_index_build_query_hook;
+
+
+typedef bool (*ShouldScheduleIndexBuilds_HookType)();
+extern ShouldScheduleIndexBuilds_HookType should_schedule_index_builds_hook;
 
 
 #endif

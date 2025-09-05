@@ -24,9 +24,11 @@ CORE_SCHEMA_NAME=documentdb_core
 API_DATA_SCHEMA_NAME=documentdb_data
 API_ADMIN_ROLE=documentdb_admin_role
 API_READONLY_ROLE=documentdb_readonly_role
+API_BG_WORKER_ROLE=documentdb_bg_worker_role
 POSTGIS_SCHEMA_NAME=public
 EXTENSION_OBJECT_PREFIX=documentdb
 API_GUC_PREFIX=documentdb
+API_GUC_PREFIX_V2=documentdb
 
 # TODO: Need to remove this with PG16 and expose only valid exports
 ALLOW_DEFAULT_VISIBILITY=yes
@@ -36,6 +38,10 @@ include $(OSS_SRC_DIR)/Makefile.cflags
 SOURCES = $(wildcard src/*.c) $(wildcard src/**/*.c)
 
 OBJS = $(patsubst %.c,%.o,$(SOURCES))
+
+# Update to notify roaring to use the C atomics implementation (as opposed to c++): See roaring.h CROARING_ATOMIC_IMPL_C
+PG_CFLAGS += -DCROARING_ATOMIC_IMPL=3
+PG_CPPFLAGS += -DCROARING_ATOMIC_IMPL=3
 
 DEBUG ?= no
 ifeq ($(DEBUG),yes)

@@ -17,6 +17,7 @@
 #include "common/hmac.h"   /* Postgres hmac functions */
 #include "utils/varlena.h" /* Postgres variable-length builtIn types functions*/
 #include "common/cryptohash.h"
+#include "utils/documentdb_errors.h"
 
 /* Including Postgresql headers for test helper functions.*/
 #include "common/saslprep.h" /* Postgres SASLprep normalization functions */
@@ -35,7 +36,7 @@
 #define AUTH_SERV_SIGN_KEY "ServerSignature" /* Server signature key */
 #define AUTH_SERV_SIGN_KEY_LEN strlen(AUTH_SERV_SIGN_KEY) /* Serv sign length */
 
-/* For test helper functions */
+/* Test helper functions in use */
 #define AUTH_MSG_KEY "AuthMessage"
 #define AUTH_MSG_KEY_LEN strlen(AUTH_MSG_KEY)
 #define AUTH_CLIENT_PROOF_KEY "ClientProof"
@@ -53,7 +54,7 @@
 
 
 /*
- * Response to be send to the Compute gateway during the salt and iteration
+ * Response to be send during the salt and iteration
  * count request while authenticating the client using SCRAM SHA 256
  */
 typedef struct SaltIterationsReqResult
@@ -69,7 +70,7 @@ typedef struct SaltIterationsReqResult
 } SaltIterationsReqResult;
 
 /*
- * Response to be send to the Compute gateway during SCRAM SHA 256
+ * Response to be send during SCRAM SHA 256
  * authentication request while authenticating the client
  */
 typedef struct ScramAuthResult
@@ -77,8 +78,8 @@ typedef struct ScramAuthResult
 	/* Status of the request. 1 if ok; 0 otherwise */
 	int ok;
 
-	/* Server signature string to be used by the compute gateway and then
-	 * pass on to the mongo client */
+	/* Server signature string to be used by the caller and then
+	 * pass on to the client */
 	char *serverSignature;
 } ScramAuthResult;
 
@@ -113,6 +114,10 @@ typedef struct ScramState
 
 /* ------------------------------------------------------------------------- */
 
+/* GUC that controls whether native authentication is enabled*/
+extern bool IsNativeAuthEnabled;
+
+/* ------------------------------------------------------------------------- */
 
 /* STATIC FUNCTION DECLARATIONS */
 
@@ -181,7 +186,7 @@ PG_FUNCTION_INFO_V1(command_authenticate_with_pwd);
 
 /*
  * This function provides the encoded salt and iteration count corresponding to
- * the given user name to the Compute gateway while authenticating the Mongo
+ * the given user name to the caller while authenticating the
  * client using SCRAM SHA 256
  * Input argument 1: User name. Type: text
  * Output: { "ok" : 1, "iterations" : int, "salt" : text }
@@ -245,6 +250,13 @@ command_authenticate_with_scram_sha256(PG_FUNCTION_ARGS)
 	/* Initializing the members of ScramAuthResult */
 	memset(&authResult, 0, sizeof(ScramAuthResult));
 	authResult.serverSignature = "";
+
+	if (!IsNativeAuthEnabled)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTED),
+						errmsg(
+							"Native authentication is disabled on cluster. Enable native authentication or use Entra ID authentication.")));
+	}
 
 	/* User Name */
 	if (PG_ARGISNULL(0))
@@ -336,6 +348,13 @@ command_authenticate_with_scram_sha256(PG_FUNCTION_ARGS)
 Datum
 command_authenticate_with_pwd(PG_FUNCTION_ARGS)
 {
+	if (!IsNativeAuthEnabled)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTED),
+						errmsg(
+							"Native authentication is disabled on cluster. Enable native authentication or use Entra ID authentication.")));
+	}
+
 	/* User Name */
 	if (PG_ARGISNULL(0))
 	{
@@ -503,6 +522,7 @@ command_generate_server_signature_for_test(PG_FUNCTION_ARGS)
 	ScramState scramState;
 	ScramAuthResult result;
 
+	memset(&scramState, 0, sizeof(ScramState));
 	memset(&result, 0, sizeof(result));
 	result.serverSignature = "";
 
@@ -516,6 +536,8 @@ command_generate_server_signature_for_test(PG_FUNCTION_ARGS)
 	scramState.userName = text_to_cstring(PG_GETARG_TEXT_P(0));
 	char *password = text_to_cstring(PG_GETARG_TEXT_P(1));
 	scramState.authMessage = text_to_cstring(PG_GETARG_TEXT_P(2));
+	scramState.keyLength = SCRAM_SHA_256_KEY_LEN;
+	scramState.hashType = PG_SHA256;
 
 	ereport(DEBUG1, (errmsg("Auth Message received is [%s].",
 							scramState.authMessage)));
@@ -713,7 +735,7 @@ VerifyClientProof(ScramState *state)
 	/* H(ClientSignature ^ ClientProof) = StoredKey */
 	if (memcmp(clientStoredKey, state->storedKey, state->keyLength) != 0)
 	{
-		ereport(LOG, (errmsg("Client proof verification failed.")));
+		ereport(LOG, (errmsg("Failed to verify the provided client proof.")));
 		return false;
 	}
 

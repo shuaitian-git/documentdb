@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation.  All rights reserved.
  *
- * src/bson/io/pgbson.c
+ * src/io/pgbson.c
  *
  * The BSON type serialization.
  *
@@ -12,6 +12,7 @@
 #include <utils/builtins.h>
 #include <lib/stringinfo.h>
 #include <utils/timestamp.h>
+#include <utils/json.h>
 
 #define PRIVATE_PGBSON_H
 #include "io/pgbson.h"
@@ -92,7 +93,7 @@ BsonDocumentValueCountKeys(const bson_value_t *value)
 	if (value->value_type != BSON_TYPE_ARRAY && value->value_type != BSON_TYPE_DOCUMENT)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-						errmsg("Expected value of type array or document")));
+						errmsg("Value must be either an array type or a document type")));
 	}
 	bson_t bson;
 	if (!bson_init_static(&bson, value->value.v_doc.data,
@@ -187,7 +188,7 @@ PgbsonToHexadecimalString(const pgbson *bsonDocument)
 
 
 /*
- * Initializes a pgbson structure from a mongodb extended json
+ * Initializes a pgbson structure from an extended json
  * syntax string.
  */
 pgbson *
@@ -208,8 +209,7 @@ PgbsonInitFromJson(const char *jsonString)
 
 
 /*
- * PgbsonToJsonForLogging converts a pgbson structure to a mongodb
- * extended json syntax string.
+ * PgbsonToJsonForLogging converts a pgbson structure to an extended json syntax string.
  */
 const char *
 PgbsonToJsonForLogging(const pgbson *bsonDocument)
@@ -226,12 +226,8 @@ PgbsonToJsonForLogging(const pgbson *bsonDocument)
 }
 
 
-/*
- * BsonValueToJsonForLogging converts a bson_value structure to a mongodb
- * extended json syntax string.
- */
-const char *
-BsonValueToJsonForLogging(const bson_value_t *value)
+static const char *
+BsonValueToJsonForLoggingCore(const bson_value_t *value, bool quoteStrings)
 {
 	bson_t bson;
 	pgbson *bsonDocument;
@@ -262,13 +258,18 @@ BsonValueToJsonForLogging(const bson_value_t *value)
 		case BSON_TYPE_UTF8:
 		{
 			/* create a string that has the original string, \0, and the quotes. */
-			char *finalString = palloc(value->value.v_utf8.len + 1 + 2);
-			finalString[0] = '"';
-			memcpy(&finalString[1], value->value.v_utf8.str, value->value.v_utf8.len);
-			finalString[value->value.v_utf8.len + 1] = '"';
-			finalString[value->value.v_utf8.len + 2] = 0;
+			if (quoteStrings)
+			{
+				StringInfoData strData;
+				initStringInfo(&strData);
+				escape_json(&strData, value->value.v_utf8.str);
+				returnValue = strData.data;
+			}
+			else
+			{
+				returnValue = pnstrdup(value->value.v_utf8.str, value->value.v_utf8.len);
+			}
 
-			returnValue = finalString;
 			break;
 		}
 
@@ -333,6 +334,28 @@ BsonValueToJsonForLogging(const bson_value_t *value)
 }
 
 
+/*
+ * BsonValueToJsonForLogging converts a bson_value structure to an extended json syntax string.
+ */
+const char *
+BsonValueToJsonForLogging(const bson_value_t *value)
+{
+	bool quoteStrings = true;
+	return BsonValueToJsonForLoggingCore(value, quoteStrings);
+}
+
+
+/*
+ * BsonValueToJsonForLogging converts a bson_value structure to
+ * simplified an extended json syntax string.
+ */
+const char *
+BsonValueToJsonForLoggingWithOptions(const bson_value_t *value, bool quoteStrings)
+{
+	return BsonValueToJsonForLoggingCore(value, quoteStrings);
+}
+
+
 /**
  * Gets the prefix for bson values of BSON for constructing messages
  *
@@ -369,7 +392,7 @@ FormatBsonValueForShellLogging(const bson_value_t *bson)
 		case BSON_TYPE_DECIMAL128:
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("Decimal 128 operation is not supported yet")));
+							errmsg("Decimal 128 operations are currently unsupported")));
 		}
 
 		case BSON_TYPE_DOCUMENT:
@@ -415,7 +438,7 @@ FormatBsonValueForShellLogging(const bson_value_t *bson)
 
 
 /*
- * Converts a pgbson structure to a mongodb extended json
+ * Converts a pgbson structure to an extended json
  * syntax string.
  */
 const char *
@@ -449,7 +472,15 @@ PgbsonToLegacyJson(const pgbson *bsonDocument)
 	}
 
 	/* since bson strings are palloced - we can simply return the string created. */
+#if BSON_CHECK_VERSION(1, 29, 0)
+
+	/*
+	 * bson_as_json is deprecated since mongodb-c-driver 1.29.0
+	 */
+	return bson_as_legacy_extended_json(&bson, NULL);
+#else
 	return bson_as_json(&bson, NULL);
+#endif
 }
 
 
@@ -741,6 +772,13 @@ PgbsonHeapWriterInit()
 }
 
 
+void
+PgbsonHeapWriterReset(pgbson_heap_writer *writer)
+{
+	bson_reinit(writer->innerBsonRef);
+}
+
+
 /*
  * Gets the length of the bson currently written into the writer.
  */
@@ -796,6 +834,23 @@ PgbsonWriterAppendValue(pgbson_writer *writer, const char *path, uint32_t pathLe
 						const bson_value_t *value)
 {
 	if (!bson_append_value(&(writer->innerBson), path, pathLength, value))
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
+							"adding %s value: failed due to value being too large",
+							BsonTypeName(value->value_type)))
+				);
+	}
+}
+
+
+/*
+ * Appends a bson value as a single element array to pgbson heap writer.
+ */
+void
+PgbsonHeapWriterAppendValue(pgbson_heap_writer *writer, const char *path,
+							uint32_t pathLength, const bson_value_t *value)
+{
+	if (!bson_append_value(writer->innerBsonRef, path, pathLength, value))
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
 							"adding %s value: failed due to value being too large",
@@ -1375,6 +1430,30 @@ PgbsonWriterCopyDocumentDataToBsonValue(pgbson_writer *writer, bson_value_t *bso
 }
 
 
+bson_value_t
+PgbsonWriterGetValue(pgbson_writer *writer)
+{
+	bson_value_t bsonValue = { 0 };
+	uint32_t writerSize = PgbsonWriterGetSize(writer);
+	bsonValue.value_type = BSON_TYPE_DOCUMENT;
+	bsonValue.value.v_doc.data = (uint8_t *) bson_get_data(&writer->innerBson);
+	bsonValue.value.v_doc.data_len = writerSize;
+	return bsonValue;
+}
+
+
+bson_value_t
+PgbsonHeapWriterGetValue(pgbson_heap_writer *writer)
+{
+	bson_value_t bsonValue = { 0 };
+	uint32_t writerSize = PgbsonHeapWriterGetSize(writer);
+	bsonValue.value_type = BSON_TYPE_DOCUMENT;
+	bsonValue.value.v_doc.data = (uint8_t *) bson_get_data(writer->innerBsonRef);
+	bsonValue.value.v_doc.data_len = writerSize;
+	return bsonValue;
+}
+
+
 /*
  * Finalizes the pgbson_writer and creates a pgbson structure from the writer.
  * The writer is deemed unusable after this point.
@@ -1387,7 +1466,7 @@ PgbsonWriterGetPgbson(pgbson_writer *writer)
 
 
 /*
- * Gets an iterator over the current pgbson_writer.
+ * Retrieves an iterator object for accessing the current pgbson_writer instance.
  */
 void
 PgbsonWriterGetIterator(pgbson_writer *writer, bson_iter_t *iterator)

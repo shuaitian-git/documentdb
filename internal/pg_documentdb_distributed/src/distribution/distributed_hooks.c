@@ -14,6 +14,7 @@
 #include <catalog/namespace.h>
 #include <utils/lsyscache.h>
 #include <utils/memutils.h>
+#include <metadata/index.h>
 
 #include "io/bson_core.h"
 #include "utils/query_utils.h"
@@ -33,6 +34,7 @@ extern char *ApiDistributedSchemaName;
 
 extern bool EnableMetadataReferenceTableSync;
 extern char *DistributedOperationsQuery;
+extern char *DistributedApplicationNamePrefix;
 
 /* Cached value for the current Global PID - can cache once
  * Since nodeId, Pid are stable.
@@ -152,7 +154,7 @@ RunQueryWithSequentialModificationCore(const char *query, int expectedSPIOK, boo
 
 
 static bool
-IsShardTableForMongoTableCore(const char *relName, const char *numEndPointer)
+IsShardTableForDocumentDbTableCore(const char *relName, const char *numEndPointer)
 {
 	/* It's definitely a documents query - it's a shard query if there's a documents_<num>_<num>
 	 * So treat it as such if there's 2 '_'.
@@ -283,6 +285,13 @@ DistributePostgresTableCore(const char *postgresTable, const char *distributionC
 }
 
 
+static void
+AllowNestedDistributionInCurrentTransactionCore(void)
+{
+	SetGUCLocally("citus.allow_nested_distributed_execution", "true");
+}
+
+
 /*
  * Allows nested distributed execution in the current query for citus.
  */
@@ -294,7 +303,7 @@ RunMultiValueQueryWithNestedDistributionCore(const char *query, int nArgs, Oid *
 											 bool *isNull, int numValues)
 {
 	int gucLevel = NewGUCNestLevel();
-	SetGUCLocally("citus.allow_nested_distributed_execution", "true");
+	AllowNestedDistributionInCurrentTransactionCore();
 	ExtensionExecuteMultiValueQueryWithArgsViaSPI(query, nArgs, argTypes, argDatums,
 												  argNulls, readOnly,
 												  expectedSPIOK, datums, isNull,
@@ -488,8 +497,7 @@ TryGetExtendedVersionRefreshQueryCore(void)
 					 CoreSchemaName, ApiDistributedSchemaName, ExtensionObjectPrefix);
 	MemoryContextSwitchTo(currContext);
 
-	elog(LOG, "Version refresh query is %s", s->data);
-
+	ereport(DEBUG1, (errmsg("Version refresh query is %s", s->data)));
 	return s->data;
 }
 
@@ -577,6 +585,49 @@ GetShardIdsAndNamesForCollectionCore(Oid relationOid, const char *tableName,
 
 
 /*
+ * Get an index build request from the Index queue.
+ */
+static const char *
+GetPidForIndexBuildCore(void)
+{
+	const char *queryStrDistributed = " citus_pid_for_gpid(iq.global_pid)";
+
+	return queryStrDistributed;
+}
+
+
+static const char *
+TryGetIndexBuildJobOpIdQueryCore(void)
+{
+	const char *queryStrDistributed =
+		"SELECT citus_backend_gpid(), query_start FROM pg_stat_activity where pid = pg_backend_pid();";
+
+	return queryStrDistributed;
+}
+
+
+static char *
+TryGetCancelIndexBuildQueryCore(int32_t indexId, char cmdType)
+{
+	StringInfo cmdStr = makeStringInfo();
+	appendStringInfo(cmdStr,
+					 "SELECT citus_pid_for_gpid(iq.global_pid) AS pid, iq.start_time AS timestamp");
+	appendStringInfo(cmdStr,
+					 " FROM %s iq WHERE index_id = %d AND cmd_type = '%c'",
+					 GetIndexQueueName(), indexId, CREATE_INDEX_COMMAND_TYPE);
+
+	return cmdStr->data;
+}
+
+
+static bool
+ShouldScheduleIndexBuildsCore()
+{
+	return false;
+}
+
+
+/*
  * Register hook overrides for DocumentDB.
  */
 void
@@ -590,18 +641,28 @@ InitializeDocumentDBDistributedHooks(void)
 	distribute_postgres_table_hook = DistributePostgresTableCore;
 	run_query_with_nested_distribution_hook =
 		RunMultiValueQueryWithNestedDistributionCore;
-	is_shard_table_for_mongo_table_hook = IsShardTableForMongoTableCore;
+	allow_nested_distribution_in_current_transaction_hook =
+		AllowNestedDistributionInCurrentTransactionCore;
+	is_shard_table_for_documentdb_table_hook = IsShardTableForDocumentDbTableCore;
 	try_get_shard_name_for_unsharded_collection_hook =
 		TryGetShardNameForUnshardedCollectionCore;
 	get_distributed_application_name_hook = GetDistributedApplicationNameCore;
 	ensure_metadata_table_replicated_hook = EnsureMetadataTableReplicatedCore;
 	DefaultInlineWriteOperations = false;
 	ShouldUpgradeDataTables = false;
+
 	UpdateColocationHooks();
 
 	try_get_extended_version_refresh_query_hook = TryGetExtendedVersionRefreshQueryCore;
 	get_shard_ids_and_names_for_collection_hook = GetShardIdsAndNamesForCollectionCore;
 
+	get_pid_for_index_build_hook = GetPidForIndexBuildCore;
+	try_get_index_build_job_op_id_query_hook = TryGetIndexBuildJobOpIdQueryCore;
+	try_get_cancel_index_build_query_hook = TryGetCancelIndexBuildQueryCore;
+
+	should_schedule_index_builds_hook = ShouldScheduleIndexBuildsCore;
+
 	DistributedOperationsQuery =
-		"SELECT * FROM pg_stat_activity LEFT JOIN pg_catalog.get_all_active_transactions() ON process_id = pid";
+		"SELECT * FROM pg_stat_activity LEFT JOIN pg_catalog.get_all_active_transactions() ON process_id = pid JOIN pg_catalog.pg_dist_local_group ON TRUE";
+	DistributedApplicationNamePrefix = "citus_internal";
 }

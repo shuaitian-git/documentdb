@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation.  All rights reserved.
  *
- * include/bson/pgbson.h
+ * include/io/pgbson.h
  *
  * The BSON type serialization.
  *
@@ -36,6 +36,8 @@ typedef struct
 } pgbson;
 
 #define DatumGetPgBson(n) ((pgbson *) PG_DETOAST_DATUM(n))
+#define DatumGetPgBson_MAYBE_NULL(n) (DatumGetPointer(n) == NULL ? NULL : \
+									  (pgbson *) PG_DETOAST_DATUM(n))
 #define PG_GETARG_PGBSON(n) (DatumGetPgBson(PG_GETARG_DATUM(n)))
 #define PG_GETARG_MAYBE_NULL_PGBSON(n) PG_ARGISNULL(n) ? NULL : PG_GETARG_PGBSON(n)
 
@@ -75,6 +77,8 @@ pgbson * CastByteaToPgbson(bytea *byteBuffer);
 /* output functions functions to various formats (json string, bytea)s */
 const char * PgbsonToJsonForLogging(const pgbson *bsonDocument);
 const char * BsonValueToJsonForLogging(const bson_value_t *value);
+const char * BsonValueToJsonForLoggingWithOptions(const bson_value_t *value, bool
+												  quoteStrings);
 const char * FormatBsonValueForShellLogging(const bson_value_t *bson);
 const char * PgbsonIterDocumentToJsonForLogging(const bson_iter_t *iter);
 const char * PgbsonToCanonicalExtendedJson(const pgbson *bsonDocument);

@@ -134,6 +134,12 @@ TryCreatePointReadPlan(Query *query)
 	indexScan->scan.plan.targetlist = FormatProjections(query->targetList);
 	stmt->planTree = (Plan *) indexScan;
 
+#if (PG_VERSION_NUM >= 160000)
+
+	/* Add the permsInfo on the planned statement */
+	stmt->permInfos = query->rteperminfos;
+#endif
+
 	return stmt;
 }
 
@@ -265,13 +271,13 @@ SetPointReadQualsOnIndexScan(IndexScan *indexScan, Expr *queryQuals)
 			}
 			else
 			{
-				/* Cannot push to index */
+				/* Unable to push data into the specified index */
 				runtimeClauses = lappend(runtimeClauses, expr);
 			}
 		}
 		else
 		{
-			/* Cannot push to index */
+			/* Unable to push data into the specified index */
 			if (IsA(expr, FuncExpr))
 			{
 				FuncExpr *funcExpr = (FuncExpr *) expr;

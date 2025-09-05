@@ -11,12 +11,11 @@
 #ifndef METADATA_CACHE_H
 #define METADATA_CACHE_H
 
+#include <nodes/parsenodes.h>
+
 #include "utils/type_cache.h"
 
 extern PGDLLIMPORT char *ApiDataSchemaName;
-extern PGDLLIMPORT char *ApiAdminRole;
-extern PGDLLIMPORT char *ApiAdminRoleV2;
-extern PGDLLIMPORT char *ApiReadOnlyRole;
 extern PGDLLIMPORT char *ApiSchemaName;
 extern PGDLLIMPORT char *ApiSchemaNameV2;
 extern PGDLLIMPORT char *ApiInternalSchemaName;
@@ -33,6 +32,15 @@ extern PGDLLIMPORT char *ApiCatalogToApiInternalSchemaName;
 extern PGDLLIMPORT char *PostgisSchemaName;
 extern PGDLLIMPORT char *DocumentDBApiInternalSchemaName;
 extern PGDLLIMPORT char *ApiCatalogToCoreSchemaName;
+
+/* Roles */
+extern PGDLLIMPORT char *ApiAdminRole;
+extern PGDLLIMPORT char *ApiAdminRoleV2;
+extern PGDLLIMPORT char *ApiBgWorkerRole;
+extern PGDLLIMPORT char *ApiReadOnlyRole;
+extern PGDLLEXPORT char *ApiReadWriteRole;
+extern PGDLLIMPORT char *ApiRootRole;
+extern PGDLLEXPORT char *ApiUserAdminRole;
 
 extern MemoryContext DocumentDBApiMetadataCacheContext;
 
@@ -65,6 +73,8 @@ Oid BsonLessThanEqualMatchRuntimeOperatorId(void);
 Oid BsonLessThanEqualMatchIndexFunctionId(void);
 Oid BsonRangeMatchFunctionId(void);
 Oid BsonRangeMatchOperatorOid(void);
+Oid BsonFullScanFunctionOid(void);
+Oid BsonIndexHintFunctionOid(void);
 Oid BsonInMatchFunctionId(void);
 Oid BsonNinMatchFunctionId(void);
 Oid BsonNotEqualMatchFunctionId(void);
@@ -122,6 +132,7 @@ Oid BsonIndexBoundsEqualOperatorFuncId(void);
 
 /* operators */
 Oid BigintEqualOperatorId(void);
+Oid BigIntGreaterOperatorId(void);
 Oid TextEqualOperatorId(void);
 Oid TextNotEqualOperatorId(void);
 Oid TextLessOperatorId(void);
@@ -143,11 +154,17 @@ Oid PostgresInt4LessOperatorOid(void);
 Oid PostgresInt4LessOperatorFunctionOid(void);
 Oid PostgresInt4EqualOperatorOid(void);
 
+/* Opclass */
+Oid IntegerOpsOpFamilyOid(void);
+Oid BsonBtreeOpFamilyOid(void);
+Oid BsonRumCompositeIndexOperatorFamily(void);
+
 /* types */
 Oid BsonQueryTypeId(void);
 Oid VectorTypeId(void);
+Oid HalfVectorTypeId(void);
 Oid IndexSpecTypeId(void);
-Oid MongoCatalogCollectionsTypeOid(void);
+Oid ApiCatalogCollectionsTypeOid(void);
 Oid GetClusterBsonQueryTypeId(void);
 Oid GetBsonArrayTypeOid(void);
 Oid BsonIndexBoundsTypeId(void);
@@ -159,7 +176,18 @@ Oid ApiCatalogCollectionIndexIdSequenceId(void);
 
 /* order by */
 Oid BsonOrderByFunctionOid(void);
+Oid BsonOrderByWithCollationFunctionOid(void);
 Oid BsonOrderByPartitionFunctionOid(void);
+Oid BsonOrderByPartitionWithCollationFunctionOid(void);
+Oid BsonOrderByCompareFunctionOId(void);
+Oid BsonOrderByLtFunctionOId(void);
+Oid BsonOrderByEqFunctionOId(void);
+Oid BsonOrderByGtFunctionOId(void);
+Oid BsonOrderyByLtOperatorId(void);
+Oid BsonOrderyByEqOperatorId(void);
+Oid BsonOrderyByGtOperatorId(void);
+Oid BsonOrderByIndexOperatorId(void);
+Oid BsonOrderByReverseIndexOperatorId(void);
 
 /* Postgres internal functions */
 Oid PostgresDrandomFunctionId(void);
@@ -178,7 +206,6 @@ Oid PostgresMakeIntervalFunctionId(void);
 Oid PostgresDateBinFunctionId(void);
 Oid PostgresAgeBetweenTimestamp(void);
 Oid PostgresDatePartFromInterval(void);
-Oid PostgresUUIDInFunctionId(void);
 
 /* Index AM */
 Oid RumIndexAmId(void);
@@ -202,22 +229,34 @@ Oid BsonRumSinglePathOperatorFamily(void);
 Oid Float8PlusOperatorId(void);
 Oid Float8MinusOperatorId(void);
 Oid Float8MultiplyOperatorId(void);
+Oid BsonRumHashPathOperatorFamily(void);
+Oid BsonRumUniquePathOperatorFamily(void);
 
 /* Vector Functions */
 Oid PgDoubleToVectorFunctionOid(void);
+Oid PgDoubleToSparseVecFunctionOid(bool missingOK);
 Oid VectorAsVectorFunctionOid(void);
+Oid VectorAsHalfVecFunctionOid(bool missingOK);
 Oid ApiCatalogBsonExtractVectorFunctionId(void);
 Oid ApiBsonSearchParamFunctionId(void);
 Oid ApiBsonDocumentAddScoreFieldFunctionId(void);
 
 /* Vector Operators */
 Oid VectorOrderByQueryOperatorId(void);
-Oid VectorCosineSimilaritySearchOperatorId(void);
-Oid VectorL2SimilaritySearchOperatorId(void);
-Oid VectorIPSimilaritySearchOperatorId(void);
-Oid VectorCosineSimilaritySearchFunctionId(void);
-Oid VectorL2SimilaritySearchFunctionId(void);
-Oid VectorIPSimilaritySearchFunctionId(void);
+Oid VectorCosineSimilarityOperatorId(void);
+Oid VectorL2SimilarityOperatorId(void);
+Oid VectorIPSimilarityOperatorId(void);
+Oid VectorCosineSimilarityFunctionId(void);
+Oid VectorL2SimilarityFunctionId(void);
+Oid VectorIPSimilarityFunctionId(void);
+
+/* Half Vector Operators */
+Oid VectorHalfCosineSimilarityOperatorId(void);
+Oid VectorHalfL2SimilarityOperatorId(void);
+Oid VectorHalfIPSimilarityOperatorId(void);
+Oid VectorHalfCosineSimilarityFunctionId(void);
+Oid VectorHalfL2SimilarityFunctionId(void);
+Oid VectorHalfIPSimilarityFunctionId(void);
 
 /* Geospatial data/type/support functions */
 Oid Box2dfTypeId(void);
@@ -317,11 +356,14 @@ Oid BsonAvgAggregateFunctionOid(void);
 Oid BsonRepathAndBuildFunctionOid(void);
 Oid BsonExpressionGetFunctionOid(void);
 Oid BsonExpressionGetWithLetFunctionOid(void);
+Oid BsonExpressionGetWithLetAndCollationFunctionOid(void);
 Oid BsonExpressionPartitionGetFunctionOid(void);
 Oid BsonExpressionPartitionByFieldsGetFunctionOid(void);
 Oid BsonExpressionPartitionGetWithLetFunctionOid(void);
+Oid BsonExpressionPartitionGetWithLetAndCollationFunctionOid(void);
 Oid BsonExpressionMapFunctionOid(void);
 Oid BsonExpressionMapWithLetFunctionOid(void);
+Oid BsonExpressionAppendCollationFunctionOid(void);
 Oid BsonMaxAggregateFunctionOid(void);
 Oid BsonMinAggregateFunctionOid(void);
 Oid PgRandomFunctionOid(void);
@@ -359,6 +401,7 @@ Oid BsonDollarLookupJoinFilterFunctionOid(void);
 Oid BsonLookupExtractFilterArrayFunctionOid(void);
 Oid BsonLookupUnwindFunctionOid(void);
 Oid BsonDistinctUnwindFunctionOid(void);
+Oid BsonDollarBucketAutoFunctionOid(void);
 Oid BsonDistinctAggregateFunctionOid(void);
 Oid RowGetBsonFunctionOid(void);
 Oid ApiChangeStreamAggregationFunctionOid(void);
@@ -395,5 +438,8 @@ Oid DeleteWorkerFunctionOid(void);
 
 /* Compat functions*/
 Oid DocumentDBCoreBsonToBsonFunctionOId(void);
+
+/* Helper functions */
+TypeName * ParseTypeNameCore(const char *typeName);
 
 #endif

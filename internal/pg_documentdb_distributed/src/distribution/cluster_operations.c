@@ -20,6 +20,7 @@
 
 #include "utils/documentdb_errors.h"
 #include "metadata/collection.h"
+#include "metadata/index.h"
 #include "metadata/metadata_cache.h"
 #include "utils/guc_utils.h"
 #include "utils/query_utils.h"
@@ -29,8 +30,6 @@
 #include "utils/data_table_utils.h"
 #include "api_hooks.h"
 
-extern int MaxNumActiveUsersIndexBuilds;
-extern int IndexBuildScheduleInSec;
 extern char *ApiExtensionName;
 extern char *ApiGucPrefix;
 extern char *ClusterAdminRole;
@@ -50,8 +49,6 @@ extern char * GetIndexQueueName(void);
 
 static char * GetClusterInitializedVersion(void);
 static void DistributeCrudFunctions(void);
-static void ScheduleIndexBuildTasks(char *extensionPrefix);
-static void UnscheduleIndexBuildTasks(char *extensionPrefix);
 static void CreateIndexBuildsTable(void);
 static void CreateValidateDbNameTrigger(void);
 static void AlterDefaultDatabaseObjects(void);
@@ -73,6 +70,7 @@ static void ParseVersionString(ExtensionVersion *extensionVersion, char *version
 static bool SetupCluster(bool isInitialize);
 static void SetPermissionsForReadOnlyRole(void);
 static void CheckAndReplicateReferenceTable(const char *schema, const char *tableName);
+static void UpdateChangesTableOwnerToAdminRole(void);
 
 
 PG_FUNCTION_INFO_V1(command_initialize_cluster);
@@ -322,9 +320,9 @@ SetupCluster(bool isInitialize)
 		CheckAndReplicateReferenceTable(ApiDistributedSchemaName, relationName->data);
 	}
 
-	if (ShouldRunSetupForVersion(&versions, DocDB_V0, 101, 0))
+	if (ShouldRunSetupForVersion(&versions, DocDB_V0, 102, 0))
 	{
-		AlterCreationTime();
+		UpdateChangesTableOwnerToAdminRole();
 	}
 
 	/* we call the post setup cluster hook to allow the extension to do any additional setup */
@@ -421,65 +419,6 @@ DistributeCrudFunctions()
 		changesRelation,
 		forceDelegation
 		);
-}
-
-
-/*
- * Schedule background jobs that will later be used to create indexes in the cluster.
- */
-static void
-ScheduleIndexBuildTasks(char *extensionPrefix)
-{
-	char scheduleInterval[50];
-	if (IndexBuildScheduleInSec < 60)
-	{
-		sprintf(scheduleInterval, "%d seconds", IndexBuildScheduleInSec);
-	}
-	else
-	{
-		sprintf(scheduleInterval, "* * * * *");
-	}
-
-	bool isNull = false;
-	bool readOnly = false;
-
-	const int maxActiveIndexBuilds = MaxNumActiveUsersIndexBuilds;
-	for (int i = 1; i <= maxActiveIndexBuilds; i++)
-	{
-		StringInfo scheduleStr = makeStringInfo();
-		appendStringInfo(scheduleStr,
-						 "SELECT cron.schedule('%s_index_build_task_'"
-						 " || %d, '%s',"
-						 "'CALL %s.build_index_concurrently(%d);');",
-						 extensionPrefix, i, scheduleInterval,
-						 ApiInternalSchemaName, i);
-		ExtensionExecuteQueryViaSPI(scheduleStr->data, readOnly, SPI_OK_SELECT,
-									&isNull);
-	}
-}
-
-
-/*
- * Unschedule background jobs for index creation.
- */
-static void
-UnscheduleIndexBuildTasks(char *extensionPrefix)
-{
-	bool isNull = false;
-	bool readOnly = false;
-
-	/*
-	 * These schedule the index build tasks at the coordinator.
-	 * Since we leave behind the jobs when dropping the extension (during development), it would be nice to unschedule
-	 * existing ones first in case something changed.
-	 * PS: We need to run this with array_agg because otherwise the SPI API would only execute unschedule for the first job.
-	 */
-	StringInfo unscheduleStr = makeStringInfo();
-	appendStringInfo(unscheduleStr,
-					 "SELECT array_agg(cron.unschedule(jobid)) FROM cron.job WHERE jobname LIKE"
-					 "'%s_index_build_task%%';", extensionPrefix);
-	ExtensionExecuteQueryViaSPI(unscheduleStr->data, readOnly, SPI_OK_SELECT,
-								&isNull);
 }
 
 
@@ -631,7 +570,7 @@ AddAttributeHandleIfExists(const char *addAttributeQuery)
 		MemoryContextSwitchTo(oldContext);
 		ErrorData *errorData = CopyErrorDataAndFlush();
 
-		/* Abort the inner transaction */
+		/* Abort inner transaction */
 		RollbackAndReleaseCurrentSubTransaction();
 
 		/* Rollback changes MemoryContext */
@@ -1094,11 +1033,48 @@ UpdateClusterMetadata(bool isInitialize)
 	Datum updateArgs[1] = { PointerGetDatum(PgbsonWriterGetPgbson(&writer)) };
 	Oid updateTypes[1] = { BsonTypeId() };
 
-	/*  Update the row */
+	/* Modify the existing row data */
 	const char *updateQuery = FormatSqlQuery(
 		"UPDATE %s.%s_cluster_data SET metadata = %s.bson_dollar_set(metadata, $1)",
 		ApiDistributedSchemaName, ExtensionObjectPrefix, ApiCatalogSchemaName);
 	ExtensionExecuteQueryWithArgsViaSPI(updateQuery, 1, updateTypes, updateArgs, NULL,
 										false, SPI_OK_UPDATE, &isNull);
 	return clusterVersion;
+}
+
+
+/* If the changes table exists, then update the owner to the cluster admin role */
+static void
+UpdateChangesTableOwnerToAdminRole(void)
+{
+	/* First query if the changes table exists */
+	const char *query = FormatSqlQuery(
+		"SELECT relowner::regrole::text FROM pg_class WHERE relname = 'changes' AND relnamespace = %d",
+		ApiDataNamespaceOid());
+	bool isNull = false;
+	Datum resultDatum = ExtensionExecuteQueryViaSPI(query, true, SPI_OK_SELECT, &isNull);
+
+	if (isNull)
+	{
+		/* Changes table does not exist, can bail */
+		return;
+	}
+
+	/* Get the current owner of the changes table */
+	char *currentOwner = TextDatumGetCString(resultDatum);
+
+	/* If the current owner is already the cluster admin role, no need to change */
+	if (strcmp(currentOwner, ApiAdminRole) == 0 ||
+		strcmp(currentOwner, ApiAdminRoleV2) == 0)
+	{
+		return;
+	}
+
+	/* Otherwise update the owner to the ApiAdminRole */
+	const char *alterQuery = FormatSqlQuery(
+		"ALTER TABLE %s.changes OWNER TO %s;",
+		ApiDataSchemaName, ApiAdminRole);
+
+	/* Execute the query to change the owner */
+	ExtensionExecuteQueryViaSPI(alterQuery, false, SPI_OK_UTILITY, &isNull);
 }

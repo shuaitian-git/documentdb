@@ -24,8 +24,13 @@ typedef struct DollarRangeParams
 	bson_value_t maxValue;
 	bool isMinInclusive;
 	bool isMaxInclusive;
+
+	bool isFullScan;
+	int32_t orderScanDirection;
 } DollarRangeParams;
 
-DollarRangeParams * ParseQueryDollarRange(pgbson *rangeFilter);
+DollarRangeParams * ParseQueryDollarRange(pgbsonelement *filterElement);
+
+void InitializeQueryDollarRange(pgbsonelement *filterElement, DollarRangeParams *params);
 
 #endif

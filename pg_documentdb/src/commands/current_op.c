@@ -2,7 +2,7 @@
 /*-------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation.  All rights reserved.
  *
- * src/oss_backend/commands/current_op.c
+ * src/commands/current_op.c
  *
  * Implementation of the current_op command.
  *-------------------------------------------------------------------------
@@ -31,6 +31,7 @@
 #include "metadata/collection.h"
 #include "metadata/index.h"
 #include "utils/guc_utils.h"
+#include "index_am/index_am_utils.h"
 
 
 /*
@@ -68,33 +69,36 @@ typedef struct
 	const char *query;
 
 	/* the seconds since Epoch */
-	int64 query_start;
+	int64 queryStart;
 
 	/* Seconds that the command is running */
-	int secs_running;
+	int secsRunning;
 
-	/* The mongo specific operationId for the operation */
+	/* The operationId associated with this specific operation */
 	const char *operationId;
 
 	/* The raw mongo table (if it could be determined) */
 	char *rawMongoTable;
 
 	/* The wait_event_type in the pg_stat_activity */
-	const char *wait_event_type;
+	const char *waitEventType;
 
 	/* The postgres PID for the operation */
-	int64 stat_pid;
+	int64 statPid;
 
 	/* The global pid for the operation */
-	int64 global_pid;
+	int64 globalPid;
 
 	/* The seconds since the backend last state change */
 	int64 state_change_since;
 
-	/* Mongo collection name determined from the table name */
+	/* The shard_id of the entity running this activity */
+	int32 shardId;
+
+	/* collection name determined from the table name */
 	const char *processedMongoCollection;
 
-	/* Mongo collection name determined from the table name */
+	/* collection name determined from the table name */
 	const char *processedMongoDatabase;
 
 	/* During processing, whether or not to add index build stats */
@@ -133,15 +137,20 @@ static void WriteGlobalPidOfLockingProcess(SingleWorkerActivity *activity,
 static void WriteIndexSpec(SingleWorkerActivity *activity, pgbson_writer *commandWriter);
 
 extern char *CurrentOpApplicationName;
+extern bool CurrentOpAddSqlCommand;
 
 
 /* Single node scenario - the global_pid can be assumed to be just the one for the coordinator */
 char *DistributedOperationsQuery =
-	"SELECT *, (10000000000 + pid)::int8 as global_pid FROM pg_stat_activity";
+	"SELECT *, (10000000000 + pid)::int8 as global_pid, FALSE as worker_query, 0 AS groupid FROM pg_stat_activity";
 
 /* Similar in logic to the distributed node-id calculation */
 const char *FirstLockingPidQuery =
 	"SELECT array_agg( (($2 / 10000000000) * 10000000000) + pid::integer) FROM unnest(pg_blocking_pids($1::integer)) pid LIMIT 1";
+
+
+/* Application name of any distributed operation schedulers. */
+char *DistributedApplicationNamePrefix = NULL;
 
 /*
  * Command wrapper for CurrentOp. Tracks feature counter usage
@@ -409,6 +418,13 @@ CurrentOpWorkerCore(void *specPointer)
 			continue;
 		}
 
+		if (activity->query != NULL &&
+			IsVersionRefreshQueryString(activity->query))
+		{
+			/* Skip version refresh query calls */
+			continue;
+		}
+
 		/* by default we would want to just send the activity up - but we really
 		 * need to post-process the activity here. This is because things like
 		 * index progress need to be handled fully on the worker (the tables aren't
@@ -454,7 +470,8 @@ WorkerGetBaseActivities()
 						   " EXTRACT(epoch FROM now() - pa.query_start)::bigint AS secs_running, "
 						   " pa.wait_event_type AS wait_event_type, "
 						   " pa.global_pid || ':' || (EXTRACT(epoch FROM pa.query_start) * 1000000)::numeric(20,0) AS op_id, "
-						   " EXTRACT(epoch FROM now() - pa.state_change)::bigint AS state_change_since FROM (");
+						   " EXTRACT(epoch FROM now() - pa.state_change)::bigint AS state_change_since, "
+						   " pa.groupid AS shard_id FROM (");
 
 	appendStringInfoString(queryInfo, DistributedOperationsQuery);
 
@@ -478,8 +495,17 @@ WorkerGetBaseActivities()
 		strlen(CurrentOpApplicationName) > 0)
 	{
 		appendStringInfo(queryInfo,
-						 " AND (application_name = '%s' OR application_name LIKE '%%%s')",
+						 " AND (application_name = '%s' OR application_name LIKE '%%%s'",
 						 CurrentOpApplicationName, GetExtensionApplicationName());
+
+		if (DistributedApplicationNamePrefix != NULL)
+		{
+			appendStringInfo(queryInfo,
+							 " OR (application_name LIKE '%s%%' AND worker_query AND state != 'idle')",
+							 DistributedApplicationNamePrefix);
+		}
+
+		appendStringInfo(queryInfo, ") ");
 	}
 
 	List *workerActivities = NIL;
@@ -533,7 +559,7 @@ WorkerGetBaseActivities()
 									&isNull);
 		if (!isNull)
 		{
-			activity->stat_pid = DatumGetInt64(resultDatum);
+			activity->statPid = DatumGetInt64(resultDatum);
 		}
 
 		/* state (Attr 3) */
@@ -557,7 +583,7 @@ WorkerGetBaseActivities()
 									&isNull);
 		if (!isNull)
 		{
-			activity->global_pid = DatumGetInt64(resultDatum);
+			activity->globalPid = DatumGetInt64(resultDatum);
 		}
 
 		/* CollectionNameRaw (attr 5) */
@@ -581,7 +607,7 @@ WorkerGetBaseActivities()
 									&isNull);
 		if (!isNull)
 		{
-			activity->query_start = DatumGetInt64(resultDatum);
+			activity->queryStart = DatumGetInt64(resultDatum);
 		}
 
 		/* secs_running (Attr 7) */
@@ -590,7 +616,7 @@ WorkerGetBaseActivities()
 									&isNull);
 		if (!isNull)
 		{
-			activity->secs_running = DatumGetInt64(resultDatum);
+			activity->secsRunning = DatumGetInt64(resultDatum);
 		}
 
 		/* wait_event_type (Attr 8) */
@@ -600,12 +626,12 @@ WorkerGetBaseActivities()
 		if (!isNull)
 		{
 			spiContext = MemoryContextSwitchTo(priorMemoryContext);
-			activity->wait_event_type = TextDatumGetCString(resultDatum);
+			activity->waitEventType = TextDatumGetCString(resultDatum);
 			MemoryContextSwitchTo(spiContext);
 		}
 		else
 		{
-			activity->wait_event_type = "";
+			activity->waitEventType = "";
 		}
 
 		/* op_id (Attr 9) */
@@ -632,6 +658,15 @@ WorkerGetBaseActivities()
 			activity->state_change_since = DatumGetInt64(resultDatum);
 		}
 
+		/* shard_id (Attr 11) */
+		resultDatum = SPI_getbinval(SPI_tuptable->vals[0],
+									SPI_tuptable->tupdesc, 11,
+									&isNull);
+		if (!isNull)
+		{
+			activity->shardId = DatumGetInt32(resultDatum);
+		}
+
 		spiContext = MemoryContextSwitchTo(priorMemoryContext);
 		workerActivities = lappend(workerActivities, activity);
 		MemoryContextSwitchTo(spiContext);
@@ -647,16 +682,16 @@ WorkerGetBaseActivities()
 /*
  * Given an activity on a worker node via SingleWorkerActivity,
  * writes the activity to the target pgbson_writer. The activity
- * is written in the Mongo Compatible currentOp format.
+ * is written in a format compatible with the currentOp command output.
  */
 static void
 WriteOneActivityToDocument(SingleWorkerActivity *workerActivity,
 						   pgbson_writer *singleActivityWriter)
 {
-	/* First step - detect the mongo collection */
 	DetectMongoCollection(workerActivity);
 
-	PgbsonWriterAppendUtf8(singleActivityWriter, "shard", 5, "defaultShard");
+	char *shardId = psprintf("shard_%d", workerActivity->shardId);
+	PgbsonWriterAppendUtf8(singleActivityWriter, "shard", 5, shardId);
 	bool isActive = false;
 	const char *type = "unknown";
 	if (strcmp(workerActivity->state, "active") == 0)
@@ -686,7 +721,7 @@ WriteOneActivityToDocument(SingleWorkerActivity *workerActivity,
 
 	/* report the globalPid so that we can track locks back to this process */
 	PgbsonWriterAppendInt64(singleActivityWriter, "op_prefix", 9,
-							workerActivity->global_pid);
+							workerActivity->globalPid);
 
 
 	if (isActive)
@@ -711,16 +746,16 @@ WriteOneActivityToDocument(SingleWorkerActivity *workerActivity,
 		}
 
 		bson_value_t stagingValue = { 0 };
-		if (workerActivity->query_start > 0)
+		if (workerActivity->queryStart > 0)
 		{
 			stagingValue.value_type = BSON_TYPE_DATE_TIME;
-			stagingValue.value.v_datetime = workerActivity->query_start * 1000;
+			stagingValue.value.v_datetime = workerActivity->queryStart * 1000;
 			PgbsonWriterAppendValue(singleActivityWriter, "currentOpTime", 13,
 									&stagingValue);
 		}
 
 		PgbsonWriterAppendInt64(singleActivityWriter, "secs_running", 12,
-								workerActivity->secs_running);
+								workerActivity->secsRunning);
 
 		pgbson_writer commandDocumentWriter;
 		PgbsonWriterStartDocument(singleActivityWriter, "command", 7,
@@ -739,9 +774,9 @@ WriteOneActivityToDocument(SingleWorkerActivity *workerActivity,
 	}
 
 	bool waitingForLock = false;
-	if (strcmp(workerActivity->wait_event_type, "Lock") == 0 ||
-		strcmp(workerActivity->wait_event_type, "Extension") == 0 ||
-		strcmp(workerActivity->wait_event_type, "LWLock") == 0)
+	if (strcmp(workerActivity->waitEventType, "Lock") == 0 ||
+		strcmp(workerActivity->waitEventType, "Extension") == 0 ||
+		strcmp(workerActivity->waitEventType, "LWLock") == 0)
 	{
 		waitingForLock = true;
 	}
@@ -754,8 +789,14 @@ WriteOneActivityToDocument(SingleWorkerActivity *workerActivity,
 		WriteGlobalPidOfLockingProcess(workerActivity, singleActivityWriter);
 	}
 
+	if (CurrentOpAddSqlCommand)
+	{
+		/* If the command requested the SQL command, add it */
+		PgbsonWriterAppendUtf8(singleActivityWriter, "sql", 3, workerActivity->query);
+	}
+
 	/* If the command requested logging index build progress, query and log it */
-	if (workerActivity->processedBuildIndexStatProgress && workerActivity->stat_pid > 0)
+	if (workerActivity->processedBuildIndexStatProgress && workerActivity->statPid > 0)
 	{
 		pgbson_writer progressWriter;
 		PgbsonWriterStartDocument(singleActivityWriter, "progress", 8, &progressWriter);
@@ -905,6 +946,12 @@ DetectApiSchemaCommand(const char *topLevelQuery, const char *schemaName,
 							   activity->processedMongoDatabase);
 		return "command";
 	}
+	else if (strstr(query, ".compact(") == query)
+	{
+		PgbsonWriterAppendUtf8(commandWriter, "compact", 7,
+							   activity->processedMongoCollection);
+		return "command";
+	}
 
 	return NULL;
 }
@@ -959,7 +1006,7 @@ DetectApiInternalSchemaCommand(const char *topLevelQuery, const char *schemaName
  * Parses the "query" of the pg_stat_activity and returns the top level "op"
  * for that query. Also updates the "command" document for the operation in the
  * writer.
- * Note that beyond Mongo's commands, we add a "workerCommand" type for internal
+ * Note that beyond standard commands, we add a "workerCommand" type for internal
  * queries e.g. the actual CREATE INDEX or ALTER TABLE, or the update_one calls.
  * TODO: Can we figure out a way to do a binary search for this code?
  */
@@ -1005,7 +1052,7 @@ WriteCommandAndGetQueryType(const char *query, SingleWorkerActivity *activity,
 		}
 	}
 
-	if (strstr(query, "CREATE INDEX") != NULL)
+	if (strstr(query, "CREATE INDEX") != NULL || strstr(query, "CREATE  INDEX") != NULL)
 	{
 		PgbsonWriterAppendUtf8(commandWriter, "createIndexes", 13,
 							   activity->processedMongoCollection);
@@ -1081,14 +1128,19 @@ static IndexSpec *
 GetIndexSpecForShardedCreateIndexQuery(SingleWorkerActivity *activity)
 {
 	ArrayType *indexAmIdsArray = NULL;
-	int arraySize = 4;
-	Datum indexAmIdsDatum[4] = { 0 };
+	int preloadedIndexAmCount = 4;
+
+	/* Size of indexAmIdsDatum should be = (preloadedIndexAmCount + preloadedIndexAmCount)*/
+	Datum indexAmIdsDatum[9] = { 0 };
 	indexAmIdsDatum[0] = RumIndexAmId();
 	indexAmIdsDatum[1] = PgVectorHNSWIndexAmId();
 	indexAmIdsDatum[2] = PgVectorIvfFlatIndexAmId();
 	indexAmIdsDatum[3] = GIST_AM_OID;
 
 	/* TODO - Add diskann index am id */
+
+	int arraySize = preloadedIndexAmCount + SetDynamicIndexAmOidsAndGetCount(
+		indexAmIdsDatum, preloadedIndexAmCount);
 
 	indexAmIdsArray = construct_array(indexAmIdsDatum, arraySize, OIDOID,
 									  sizeof(Oid), true,
@@ -1097,7 +1149,7 @@ GetIndexSpecForShardedCreateIndexQuery(SingleWorkerActivity *activity)
 	StringInfo cmdStr = makeStringInfo();
 	appendStringInfo(cmdStr,
 					 "SELECT pc.relname::text AS relation_name FROM pg_stat_activity psa LEFT JOIN pg_locks pl ON psa.pid = pl.pid LEFT JOIN pg_class pc ON pl.relation = pc.oid WHERE psa.application_name = 'citus_internal gpid=%ld' AND pc.relam = ANY($1) LIMIT 1",
-					 activity->global_pid);
+					 activity->globalPid);
 
 	int argCount = 1;
 	Oid argTypes[1] = { OIDARRAYOID };
@@ -1283,7 +1335,8 @@ AddIndexBuilds(TupleDesc descriptor, Tuplestorestate *tupleStore)
 		}
 		else if (status == IndexCmdStatus_Queued)
 		{
-			msg = "Index build is queued";
+			msg =
+				"The index build is currently queued";
 		}
 
 		pgbson_writer finalWriter;
@@ -1337,6 +1390,70 @@ PhaseToUserMessage(const char *phaseString)
 	{
 		return "Validating index.";
 	}
+	else if (strstr(phaseString, "scanning table") != NULL)
+	{
+		return "Scanning Table (building index).";
+	}
+	else if (strstr(phaseString, "sorting tuples (workers)") != NULL)
+	{
+		return "Concurrently Sorting tuples (building index).";
+	}
+	else if (strstr(phaseString, "sorting tuples") != NULL)
+	{
+		return "Sorting tuples (building index).";
+	}
+	else if (strstr(phaseString, "merging tuples (workers)") != NULL)
+	{
+		return "Concurrently merging tuples on workers (building index).";
+	}
+	else if (strstr(phaseString, "merging tuples") != NULL)
+	{
+		return "Merging tuples into index (building index).";
+	}
+	else if (strcmp(phaseString, "cleaning up") == 0)
+	{
+		return "Cleaning up.";
+	}
+	else if (strcmp(phaseString, "concurrent cleanup") == 0)
+	{
+		return "Concurrent cleanup.";
+	}
+	else if (strcmp(phaseString, "finalizing") == 0)
+	{
+		return "Finalizing.";
+	}
+	else if (strcmp(phaseString, "aborting") == 0)
+	{
+		return "Aborting.";
+	}
+	else if (strcmp(phaseString, "waiting for workers to join") == 0)
+	{
+		return "Waiting for workers to join.";
+	}
+	else if (strcmp(phaseString, "waiting for worker to finish") == 0)
+	{
+		return "Waiting for worker to finish.";
+	}
+	else if (strcmp(phaseString, "waiting for worker to start") == 0)
+	{
+		return "Awaiting initialization of worker process.";
+	}
+	else if (strcmp(phaseString, "waiting for worker to abort") == 0)
+	{
+		return "Waiting for worker to abort.";
+	}
+	else if (strcmp(phaseString, "waiting for worker to finalize") == 0)
+	{
+		return "Waiting for worker to finalize.";
+	}
+	else if (strcmp(phaseString, "waiting for worker to clean up") == 0)
+	{
+		return "Waiting for worker to clean up.";
+	}
+	else if (strcmp(phaseString, "(null)") == 0)
+	{
+		return "(null)";
+	}
 	else
 	{
 		ereport(WARNING, (errmsg("Index build is in an unknown phase %s",
@@ -1361,7 +1478,8 @@ WriteIndexBuildProgressAndGetMessage(SingleWorkerActivity *activity,
 	/* NULLIF(blocks_total) ensures that "Progress" is NULL if blocks_total is 0 so we don't get div by zero errors and row_get_bson skips the field. */
 	appendStringInfo(str,
 					 "WITH c1 AS (SELECT phase, blocks_done, blocks_total, (blocks_done * 100.0 / NULLIF(blocks_total, 0)) AS \"Progress\", "
-					 " tuples_done AS \"documents_done\", tuples_total AS \"documents_total\", ");
+					 " tuples_done AS \"terms_done\", tuples_total AS \"terms_total\", "
+					 " (tuples_done * 100.0 / NULLIF(tuples_total, 0)) AS \"terms_progress\", ");
 
 	if (DefaultInlineWriteOperations)
 	{
@@ -1384,7 +1502,7 @@ WriteIndexBuildProgressAndGetMessage(SingleWorkerActivity *activity,
 
 	Oid argTypes[1] = { INT8OID };
 	Datum argValues[1] = {
-		Int64GetDatum(activity->global_pid)
+		Int64GetDatum(activity->globalPid)
 	};
 	char argNulls[1] = { ' ' };
 	bool readOnly = true;
@@ -1460,7 +1578,7 @@ WriteGlobalPidOfLockingProcess(SingleWorkerActivity *activity, pgbson_writer *wr
 {
 	Oid argTypes[2] = { INT8OID, INT8OID };
 	Datum argValues[2] = {
-		Int64GetDatum(activity->stat_pid), Int64GetDatum(activity->global_pid)
+		Int64GetDatum(activity->statPid), Int64GetDatum(activity->globalPid)
 	};
 	char argNulls[2] = { ' ', ' ' };
 	bool readOnly = true;
