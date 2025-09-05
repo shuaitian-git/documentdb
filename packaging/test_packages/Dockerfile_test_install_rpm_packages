@@ -4,6 +4,7 @@ FROM ${BASE_IMAGE}
 ARG POSTGRES_VERSION=16
 ARG RPM_PACKAGE_REL_PATH
 ARG OS_VERSION_ARG
+ARG TARGETARCH
 
 ENV POSTGRES_VERSION=${POSTGRES_VERSION}
 ENV OS_VERSION=${OS_VERSION_ARG}
@@ -44,11 +45,15 @@ RUN dnf -y swap curl-minimal curl && \
     libicu-devel \
     krb5-devel
 
-# install actual dependencies
+# install actual dependencies (choose PGDG repo by build target arch)
 RUN if [ "${OS_VERSION}" = "9" ]; then \
-        dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm; \
+        if [ -n "${TARGETARCH}" ] && ( [ "${TARGETARCH}" = "arm64" ] || [ "${TARGETARCH}" = "arm64v8" ] ); then ARCH=aarch64; else ARCH=x86_64; fi; \
+        echo "Installing PGDG repo for RHEL 9 (arch=${ARCH})" && \
+        dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm; \
     elif [ "${OS_VERSION}" = "8" ]; then \
-        dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm; \
+        if [ -n "${TARGETARCH}" ] && ( [ "${TARGETARCH}" = "arm64" ] || [ "${TARGETARCH}" = "arm64v8" ] ); then ARCH=aarch64; else ARCH=x86_64; fi; \
+        echo "Installing PGDG repo for RHEL 8 (arch=${ARCH})" && \
+        dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm; \
     else \
         echo "OS_VERSION ${OS_VERSION} not recognized for PGDG repo setup. Must be 8 or 9." && exit 1; \
     fi && \

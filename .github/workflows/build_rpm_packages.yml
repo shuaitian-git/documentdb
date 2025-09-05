@@ -1,4 +1,4 @@
-name: Build RPM packages
+name: Build rpm packages
 concurrency:
   group: build-rpm-packages-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -8,16 +8,16 @@ on:
   push:
     branches:
       - 'main'
+      - 'release/**'
     paths-ignore:
       - 'docs/**'
       - '.devcontainer/**'
       - '*.md'
   pull_request:
     types: [opened, reopened, synchronize]
-    paths-ignore:
-      - 'docs/**'
-      - '.devcontainer/**'
-      - '*.md'
+    paths:
+      - 'packaging/**'
+      - '.github/workflows/**'
 
 
 jobs:
@@ -28,10 +28,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [rhel8, rhel9]
-        arch: [amd64]
+        arch: [amd64, arm64]
         include:
           - arch: amd64
             runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
         pg_version:
           - 16
           - 17
