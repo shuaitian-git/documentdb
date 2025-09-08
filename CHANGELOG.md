@@ -2,6 +2,7 @@
 * Top-level `let` variables and `$$NOW` supported by default.
 * Fix collation support on find and aggregation when variableSpec is not available.
 * Support `dropRole` command *[Feature]*
+* Fix concurrent upsert behavior, update the documents in case of conflicts during insert *[Bugfix]* (#295).
 
 ### documentdb v0.107-0 (Unreleased) ###
 * Support sort by _id against the _id index using the enableIndexOrderbyPushdown flag *[Feature]*.
