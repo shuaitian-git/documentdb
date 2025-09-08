@@ -15,7 +15,7 @@ use rand::Rng;
 use socket2::TcpKeepalive;
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::{
-    io::AsyncWriteExt,
+    io::BufStream,
     net::{TcpListener, TcpStream},
 };
 use tokio_openssl::SslStream;
@@ -39,6 +39,10 @@ pub use crate::postgres::QueryCatalog;
 const TCP_KEEPALIVE_TIME_SECS: u64 = 180;
 const TCP_KEEPALIVE_INTERVAL_SECS: u64 = 60;
 
+// Buffer configuration constants
+const STREAM_READ_BUFFER_SIZE: usize = 8 * 1024;
+const STREAM_WRITE_BUFFER_SIZE: usize = 8 * 1024;
+
 pub mod auth;
 pub mod bson;
 pub mod configuration;
@@ -53,6 +57,8 @@ pub mod responses;
 pub mod shutdown_controller;
 pub mod startup;
 pub mod telemetry;
+
+type GwStream = BufStream<SslStream<TcpStream>>;
 
 /// Runs the DocumentDB gateway server, accepting and handling incoming connections.
 ///
@@ -302,27 +308,32 @@ pub fn get_activity_id(request_id: i32) -> String {
     activity_id.hyphenated().to_string()
 }
 
-async fn handle_stream<T>(
-    mut stream: SslStream<TcpStream>,
-    mut connection_context: ConnectionContext,
-) where
+async fn handle_stream<T>(stream: SslStream<TcpStream>, mut connection_context: ConnectionContext)
+where
     T: PgDataClient,
 {
+    let mut buffered_stream =
+        BufStream::with_capacity(STREAM_READ_BUFFER_SIZE, STREAM_WRITE_BUFFER_SIZE, stream);
+
     loop {
-        match protocol::reader::read_header(&mut stream).await {
+        match protocol::reader::read_header(&mut buffered_stream).await {
             Ok(Some(header)) => {
                 let activity_id = get_activity_id(header.request_id);
 
-                if let Err(e) =
-                    handle_message::<T>(&mut connection_context, &header, &mut stream, &activity_id)
-                        .await
+                if let Err(e) = handle_message::<T>(
+                    &mut connection_context,
+                    &header,
+                    &mut buffered_stream,
+                    &activity_id,
+                )
+                .await
                 {
                     if let Err(e) = log_and_write_error(
                         &connection_context,
                         &header,
                         &e,
                         None,
-                        &mut stream,
+                        &mut buffered_stream,
                         None,
                         &mut RequestTracker::new(),
                         &activity_id,
@@ -345,7 +356,7 @@ async fn handle_stream<T>(
                 if let Err(e) = responses::writer::write_error_without_header(
                     &connection_context,
                     e,
-                    &mut stream,
+                    &mut buffered_stream,
                 )
                 .await
                 {
@@ -397,7 +408,7 @@ where
 async fn handle_message<T>(
     connection_context: &mut ConnectionContext,
     header: &Header,
-    stream: &mut SslStream<TcpStream>,
+    stream: &mut GwStream,
     activity_id: &str,
 ) -> Result<()>
 where
@@ -424,7 +435,9 @@ where
 
     let handle_request_start = request_tracker.start_timer();
     let format_request_start = request_tracker.start_timer();
-    let request = protocol::reader::parse_request(&message, connection_context).await?;
+    let request =
+        protocol::reader::parse_request(&message, &mut connection_context.requires_response)
+            .await?;
     request_tracker.record_duration(RequestIntervalKind::FormatRequest, format_request_start);
 
     let request_info = request.extract_common()?;
@@ -495,7 +508,7 @@ async fn handle_request<T>(
     connection_context: &mut ConnectionContext,
     header: &Header,
     request_context: &mut RequestContext<'_>,
-    stream: &mut SslStream<TcpStream>,
+    stream: &mut GwStream,
     collection: &mut String,
 ) -> Result<()>
 where
@@ -511,7 +524,6 @@ where
     // Write the response back to the stream
     if connection_context.requires_response {
         responses::writer::write(header, &response, stream).await?;
-        stream.flush().await?;
     }
 
     if let Some(telemetry) = connection_context.telemetry_provider.as_ref() {
@@ -541,7 +553,7 @@ async fn log_and_write_error(
     header: &Header,
     e: &DocumentDBError,
     request: Option<&Request<'_>>,
-    stream: &mut SslStream<TcpStream>,
+    stream: &mut GwStream,
     collection: Option<String>,
     request_tracker: &mut RequestTracker,
     activity_id: &str,
@@ -549,7 +561,7 @@ async fn log_and_write_error(
     let error_response = CommandError::from_error(connection_context, e).await;
     let response = error_response.to_raw_document_buf()?;
 
-    responses::writer::write_response(header, &response, stream).await?;
+    responses::writer::write_and_flush(header, &response, stream).await?;
 
     log::error!(activity_id = activity_id; "Request failure: {e}");
 
