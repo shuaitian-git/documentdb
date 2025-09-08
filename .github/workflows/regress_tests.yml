@@ -14,7 +14,7 @@ on:
       - '.devcontainer/**'
       - '*.md'
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize, ready_for_review]
     paths-ignore:
       - 'docs/**'
       - '.devcontainer/**'
@@ -24,6 +24,7 @@ jobs:
   test-run-in-Ubuntu:
     runs-on: ${{ matrix.runner }}
     name: Run sql tests on ${{ matrix.runner }} with pg ${{ matrix.pg_version }}
+    if: github.event.pull_request.draft == false
     strategy:
       fail-fast: false
       matrix:

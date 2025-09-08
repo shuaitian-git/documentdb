@@ -14,7 +14,7 @@ on:
       - '.devcontainer/**'
       - '*.md'
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - 'packaging/**'
       - '.github/workflows/**'
@@ -28,6 +28,7 @@ jobs:
   build-deb-packages:
     runs-on: ${{ matrix.runner }}
     name: Deb packages for ${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}
+    if: github.event.pull_request.draft == false
     strategy:
       fail-fast: false
       matrix:
