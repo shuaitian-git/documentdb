@@ -9,7 +9,7 @@ documentdb_version may be in either '0.106-0' or '0.106.0' form.
 The script extracts sections from CHANGELOG.md starting at the
 specified version header and including that version and all earlier
 (older) versions, then replaces the %changelog block in
-packaging/rpm_files/documentdb.spec with the extracted markdown.
+packaging/rpm/spec/documentdb.spec with the extracted markdown.
 EOF
 }
 
@@ -28,7 +28,7 @@ else
 fi
 
 CHANGELOG=CHANGELOG.md
-SPEC=packaging/rpm_files/documentdb.spec
+SPEC=packaging/rpm/spec/documentdb.spec
 
 if [ ! -f "$CHANGELOG" ]; then
     echo "ERROR: $CHANGELOG not found" >&2
@@ -218,7 +218,7 @@ echo "Updated $SPEC"
 echo "Done."
 
 # Write generated Debian changelog from temp file if present
-DEB_FILE_PACKAGING="packaging/debian_files/changelog"
+DEB_FILE_PACKAGING="packaging/deb/changelog"
 DEB_FILE_DEBIAN="debian/changelog"
 if [[ -s "$DEB_TEMP" ]]; then
     # Update the packaging copy

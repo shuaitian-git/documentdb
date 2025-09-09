@@ -66,11 +66,11 @@ WORKDIR /build
 COPY . /build
 
 # Setup the debian packaging
-COPY packaging/debian_files /build/debian
+COPY packaging/deb/common /build/debian
 RUN sed -i "s/POSTGRES_VERSION/${POSTGRES_VERSION}/g" /build/debian/control
 RUN sed -i "s/DOCUMENTDB_VERSION/${DOCUMENTDB_VERSION}/g" /build/debian/changelog
 
-COPY packaging/packaging-entrypoint.sh /usr/local/bin/packaging-entrypoint.sh
+COPY packaging/deb/packaging-entrypoint.sh /usr/local/bin/packaging-entrypoint.sh
 
 # Set the entrypoint
 ENTRYPOINT ["packaging-entrypoint.sh"]

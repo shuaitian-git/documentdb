@@ -114,7 +114,7 @@ DOCKERFILE=""
 OS_VERSION_NUMBER=""
 
 if [[ "$PACKAGE_TYPE" == "deb" ]]; then
-    DOCKERFILE="packaging/Dockerfile_build_deb_packages"
+    DOCKERFILE="packaging/deb/Dockerfile"
     case $OS in
         deb11)
             DOCKER_IMAGE="debian:bullseye"
@@ -133,15 +133,14 @@ if [[ "$PACKAGE_TYPE" == "deb" ]]; then
             ;;
     esac
 elif [[ "$PACKAGE_TYPE" == "rpm" ]]; then
-    DOCKERFILE="packaging/Dockerfile_build_rpm_packages"
     case $OS in
         rhel8)
+            DOCKERFILE="packaging/rpm/rhel-8/Dockerfile"
             DOCKER_IMAGE="rockylinux:8"
-            OS_VERSION_NUMBER="8"
             ;;
         rhel9)
+            DOCKERFILE="packaging/rpm/rhel-9/Dockerfile"
             DOCKER_IMAGE="rockylinux:9"
-            OS_VERSION_NUMBER="9"
             ;;
         *)
             echo "Error: Invalid OS specified for RPM build: $OS"
@@ -174,8 +173,7 @@ elif [[ "$PACKAGE_TYPE" == "rpm" ]]; then
     docker build -t "$TAG" -f "$DOCKERFILE" \
         --build-arg BASE_IMAGE="$DOCKER_IMAGE" \
         --build-arg POSTGRES_VERSION="$PG" \
-        --build-arg DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" \
-        --build-arg OS_VERSION_ARG="$OS_VERSION_NUMBER" .
+        --build-arg DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" .
     # Run the Docker container to build the packages
     docker run --rm --env OS="$OS" --env POSTGRES_VERSION="$PG" --env DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" -v "$abs_output_dir:/output" "$TAG"
 fi
