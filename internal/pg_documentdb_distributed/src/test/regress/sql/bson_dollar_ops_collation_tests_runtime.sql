@@ -758,12 +758,41 @@ ROLLBACK;
 SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": 1, "pipeline": [ { "$documents": { "$cond": { "if": { "$eq": [ "CaT", "cAt" ] }, "then": [{"result": "case insensitive"}] , "else": [{"res": "case sensitive"}] }} } ], "cursor": {}, "collation": { "locale": "en", "strength" : 1} }');
 SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": 1, "pipeline": [ { "$documents": { "$cond": { "if": { "$eq": [ "CaT", "cAt" ] }, "then": [{"result": "case insensitive"}] , "else": [{"res": "case sensitive"}] }} } ], "cursor": {}, "collation": { "locale": "en", "strength" : 3} }');
 
--- test $documents auto $$NOW generation
+-- test $documents without auto variables ($$NOW) generation
 BEGIN;
 SET LOCAL documentdb.enableNowSystemVariable='off';
 SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": 1, "pipeline": [ { "$documents": { "$cond": { "if": { "$eq": [ "CaT", "cAt" ] }, "then": [{"result": "case insensitive"}] , "else": [{"res": "case sensitive"}] }} } ], "cursor": {}, "collation": { "locale": "en", "strength" : 3} }');
 EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": 1, "pipeline": [ { "$documents": { "$cond": { "if": { "$eq": [ "CaT", "cAt" ] }, "then": [{"result": "case insensitive"}] , "else": [{"res": "case sensitive"}] }} } ], "cursor": {}, "collation": { "locale": "en", "strength" : 3} }');
 ROLLBACK;
+
+-- $sortArray
+SELECT documentdb_api.insert_one('db', 'coll_sortArray', '{"_id":1,"a":"one", "b":["10","1"]}', NULL);
+SELECT documentdb_api.insert_one('db', 'coll_sortArray', '{"_id":2,"a":"two", "b":["2","020"]}', NULL);
+
+SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "coll_sortArray", "pipeline": [ { "$project": { "sortedArray": { "$sortArray": { "input": ["cat", "dog", "DOG"], "sortBy": 1 } } } } ], "cursor": {}, "collation": { "locale": "en", "strength" : 1} }');
+SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "coll_sortArray", "pipeline": [ { "$project": { "sortedArray": { "$sortArray": { "input": ["cat", "dog", "DOG"], "sortBy": 1 } } } } ], "cursor": {}, "collation": { "locale": "en", "strength" : 3} }');
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_sortArray",
+  "filter": { "a": {"$lte": "two"} },
+  "projection": {
+    "sortedArray": { "$sortArray": { "input": "$b", "sortBy": 1 } }
+  },
+  "collation": { "locale": "en", "numericOrdering" : false },
+  "limit": 5
+}');
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_sortArray",
+  "filter": { "a": {"$lte": "two"} },
+  "projection": {
+    "sortedArray": { "$sortArray": { "input": "$b", "sortBy": 1 } }
+  },
+  "collation": { "locale": "en", "numericOrdering" : true },
+  "limit": 5
+}');
+
+SELECT documentdb_api.drop_collection('db', 'coll_sortArray');
 
 -- find
 SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "projection": { "a": 1, "newField": { "$eq": ["$a", "CAT"] } }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "en", "strength" : 1} }');

@@ -163,8 +163,9 @@ CompareBsonValuesForSort(const void *a, const void *b, void *args)
 	if (sortContext->sortType == SortType_WholeElementSort)
 	{
 		direction = sortContext->sortDirection;
-		result = CompareBsonValueAndType(&left->bsonValue, &right->bsonValue,
-										 &isCompareValid);
+		result = CompareBsonValueAndTypeWithCollation(&left->bsonValue, &right->bsonValue,
+													  &isCompareValid,
+													  sortContext->collationString);
 	}
 	else
 	{
@@ -204,8 +205,9 @@ CompareBsonValuesForSort(const void *a, const void *b, void *args)
 			 * Compare the leftValue and rightValue.
 			 * If dotted path is non-existing then these are treated as BSON_TYPE_NULL for comparision
 			 */
-			result = CompareBsonValueAndType(&leftValue, &rightValue,
-											 &isCompareValid);
+			result = CompareBsonValueAndTypeWithCollation(&leftValue, &rightValue,
+														  &isCompareValid,
+														  sortContext->collationString);
 			if (result != 0)
 			{
 				break;

@@ -2024,8 +2024,13 @@ ParseDollarSortArray(const bson_value_t *argument, AggregationExpressionData *da
 	ParseAggregationExpressionData(&arguments->input, &input, context);
 
 	/* Validate $sort spec, and all nested values if value is object */
-	SortContext sortContext;
+	SortContext sortContext = { 0 };
 	ValidateSortSpecAndSetSortContext(sortby, &sortContext);
+
+	if (IsCollationApplicable(context->collationString))
+	{
+		sortContext.collationString = pstrdup(context->collationString);
+	}
 	arguments->sortContext = sortContext;
 
 	if (IsAggregationExpressionConstant(&arguments->input))
@@ -2034,6 +2039,10 @@ ParseDollarSortArray(const bson_value_t *argument, AggregationExpressionData *da
 							   &data->value);
 		data->kind = AggregationExpressionKind_Constant;
 
+		if (IsCollationApplicable(arguments->sortContext.collationString))
+		{
+			pfree((char *) arguments->sortContext.collationString);
+		}
 		pfree(arguments);
 	}
 	else
