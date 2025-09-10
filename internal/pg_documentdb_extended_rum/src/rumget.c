@@ -3690,9 +3690,10 @@ MoveScanForward(RumScanOpaque so, Snapshot snapshot)
 				 */
 				bool resetScan = false;
 				MemoryContext oldCtx = MemoryContextSwitchTo(so->tempCtx);
-				bool attbyval = so->rumstate.origTupdesc[entry->attnum -
-														 1].attrs->attbyval;
-				int attlen = so->rumstate.origTupdesc[entry->attnum - 1].attrs->attlen;
+				bool attbyval = TupleDescAttr(so->rumstate.origTupdesc, entry->attnum -
+											  1)->attbyval;
+				int attlen = TupleDescAttr(so->rumstate.origTupdesc, entry->attnum -
+										   1)->attlen;
 				Datum entryToUse = entry->queryKeyOverride != (Datum) 0 ?
 								   entry->queryKeyOverride : entry->queryKey;
 				Datum recheckDatum = FunctionCall4Coll(

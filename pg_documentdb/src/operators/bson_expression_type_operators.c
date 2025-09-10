@@ -1448,7 +1448,8 @@ ProcessDollarToString(const bson_value_t *currentValue, const bson_value_t *form
 						int encodedValueLen = pg_b64_enc_len(binDataLen) + 1;  /* +1 for '\0' */
 						encodedValue = palloc(encodedValueLen);
 
-						encodedValueLen = pg_b64_encode((char *) binData, binDataLen,
+						encodedValueLen = pg_b64_encode((char_uint8_compat *) binData,
+														binDataLen,
 														encodedValue,
 														encodedValueLen);
 
@@ -1718,7 +1719,8 @@ ProcessDollarToBinData(const bson_value_t *currentValue, const bson_type_t *toTy
 				decodedValue = palloc(decodedValueLen);
 				decodedValueLen = pg_b64_decode(currentString,
 												currentValue->value.v_utf8.len,
-												decodedValue, decodedValueLen);
+												(char_uint8_compat *) decodedValue,
+												decodedValueLen);
 
 				if (decodedValueLen == -1)
 				{
@@ -1765,7 +1767,8 @@ ProcessDollarToBinData(const bson_value_t *currentValue, const bson_type_t *toTy
 
 				/* Decode as base64. */
 				decodedValueLen = pg_b64_decode(decodedValue, decodedValueLen + padding,
-												decodedValue, decodedValueLen);
+												(char_uint8_compat *) decodedValue,
+												decodedValueLen);
 
 				if (decodedValueLen == -1)
 				{

@@ -26,6 +26,10 @@
 #include <access/relscan.h>
 #include <optimizer/tlist.h>
 
+#if PG_VERSION_NUM >= 180000
+#include <commands/explain_format.h>
+#endif
+
 #include "io/bson_core.h"
 #include "planner/documentdb_planner.h"
 #include "customscan/custom_scan_registrations.h"

@@ -821,7 +821,7 @@ DrainStatementViaExecutor(PlannedStmt *queryPlan, ParamListInfo paramList, const
 										   queryEnv, 0);
 
 	ExecutorStart(queryDesc, eflags);
-	ExecutorRun(queryDesc, scanDirection, 0L, true);
+	ExecutorRun_Compat(queryDesc, scanDirection, 0L, true);
 	ExecutorFinish(queryDesc);
 	ExecutorEnd(queryDesc);
 
@@ -896,8 +896,8 @@ PlanStreamingQuery(Query *query, Datum parameter, HTAB *cursorMap)
 								queryPortal->tupDesc->natts)));
 		}
 
-		if (queryPortal->tupDesc->attrs[0].atttypid != BsonTypeId() ||
-			queryPortal->tupDesc->attrs[1].atttypid != BsonTypeId())
+		if (TupleDescAttr(queryPortal->tupDesc, 0)->atttypid != BsonTypeId() ||
+			TupleDescAttr(queryPortal->tupDesc, 1)->atttypid != BsonTypeId())
 		{
 			ereport(ERROR, (errmsg(
 								"Cursor return cannot be anything other than Bson. This is a bug")));
@@ -911,7 +911,7 @@ PlanStreamingQuery(Query *query, Datum parameter, HTAB *cursorMap)
 								"Cursor returning less than 1 column not supported. This is a bug")));
 		}
 
-		if (queryPortal->tupDesc->attrs[0].atttypid != BsonTypeId())
+		if (TupleDescAttr(queryPortal->tupDesc, 0)->atttypid != BsonTypeId())
 		{
 			ereport(ERROR, (errmsg(
 								"Cursor return cannot be anything other than Bson. This is a bug")));

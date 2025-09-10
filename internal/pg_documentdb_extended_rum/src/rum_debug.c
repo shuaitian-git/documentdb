@@ -453,7 +453,7 @@ RumPrintDataPageLineToJsonB(Page page, uint64 counter)
 	else
 	{
 		/* Intermediate data page */
-		PostingItem *pitem = (PostingItem *) RumDataPageGetItem(page, offset);
+		RumPostingItem *pitem = (RumPostingItem *) RumDataPageGetItem(page, offset);
 		item = pitem->item;
 		childBlock = BlockIdGetBlockNumber(&pitem->child_blkno);
 	}

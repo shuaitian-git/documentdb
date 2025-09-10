@@ -1087,37 +1087,23 @@ rumExtractEntries(RumState *rumstate, OffsetNumber attnum,
 bytea *
 rumoptions(Datum reloptions, bool validate)
 {
+#if PG_VERSION_NUM >= 180000
+	static const relopt_parse_elt tab[] = {
+		{ "attach", RELOPT_TYPE_STRING, offsetof(RumOptions, attachColumn), -1 },
+		{ "to", RELOPT_TYPE_STRING, offsetof(RumOptions, addToColumn), -1 },
+		{ "order_by_attach", RELOPT_TYPE_BOOL, offsetof(RumOptions, useAlternativeOrder),
+		  -1 }
+	};
+#else
 	static const relopt_parse_elt tab[] = {
 		{ "attach", RELOPT_TYPE_STRING, offsetof(RumOptions, attachColumn) },
 		{ "to", RELOPT_TYPE_STRING, offsetof(RumOptions, addToColumn) },
 		{ "order_by_attach", RELOPT_TYPE_BOOL, offsetof(RumOptions, useAlternativeOrder) }
 	};
-#if PG_VERSION_NUM < 130000
-	relopt_value *options;
-	RumOptions *rdopts;
-	int numoptions;
+#endif
 
-	options = parseRelOptions(reloptions, validate, rum_relopt_kind,
-							  &numoptions);
-
-	/* if none set, we're done */
-	if (numoptions == 0)
-	{
-		return NULL;
-	}
-
-	rdopts = allocateReloptStruct(sizeof(RumOptions), options, numoptions);
-
-	fillRelOptions((void *) rdopts, sizeof(RumOptions), options, numoptions,
-				   validate, tab, lengthof(tab));
-
-	pfree(options);
-
-	return (bytea *) rdopts;
-#else
 	return (bytea *) build_reloptions(reloptions, validate, rum_relopt_kind,
 									  sizeof(RumOptions), tab, lengthof(tab));
-#endif
 }
 
 
@@ -1210,7 +1196,7 @@ rumproperty(Oid index_oid, int attno,
  * as can rumVersion; but the other fields are as of the last VACUUM.
  */
 void
-rumGetStats(Relation index, GinStatsData *stats)
+rumGetStats(Relation index, RumStatsData *stats)
 {
 	Buffer metabuffer;
 	Page metapage;
@@ -1243,7 +1229,7 @@ rumGetStats(Relation index, GinStatsData *stats)
  * Note: nPendingPages and rumVersion are *not* copied over
  */
 void
-rumUpdateStats(Relation index, const GinStatsData *stats, bool isBuild)
+rumUpdateStats(Relation index, const RumStatsData *stats, bool isBuild)
 {
 	Buffer metaBuffer;
 	Page metapage;

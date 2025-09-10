@@ -25,6 +25,14 @@
 bool RumUseNewVacuumScan = RUM_USE_NEW_VACUUM_SCAN;
 bool RumSkipRetryOnDeletePage = RUM_DEFAULT_SKIP_RETRY_ON_DELETE_PAGE;
 
+#if PG_VERSION_NUM >= 180000
+#define RumVacuumDelayPointCompat() \
+	vacuum_delay_point(false);
+#else
+#define RumVacuumDelayPointCompat() \
+	vacuum_delay_point();
+#endif
+
 typedef struct
 {
 	Relation index;
@@ -316,7 +324,7 @@ rumVacuumPostingTreeLeaves(RumVacuumState *gvs, OffsetNumber attnum,
 
 		for (i = FirstOffsetNumber; i <= RumPageGetOpaque(page)->maxoff; i++)
 		{
-			PostingItem *pitem = (PostingItem *) RumDataPageGetItem(page, i);
+			RumPostingItem *pitem = (RumPostingItem *) RumDataPageGetItem(page, i);
 
 			if (rumVacuumPostingTreeLeaves(gvs, attnum,
 										   PostingItemGetBlockNumber(pitem), false, NULL))
@@ -489,7 +497,7 @@ restart:
 	parentPage = GenericXLogRegisterBuffer(state, pBuffer, 0);
 #ifdef USE_ASSERT_CHECKING
 	do {
-		PostingItem *tod = (PostingItem *) RumDataPageGetItem(parentPage, myoff);
+		RumPostingItem *tod = (RumPostingItem *) RumDataPageGetItem(parentPage, myoff);
 
 		Assert(PostingItemGetBlockNumber(tod) == deleteBlkno);
 	} while (0);
@@ -578,7 +586,7 @@ rumScanToDelete(RumVacuumState *gvs, BlockNumber blkno, bool isRoot,
 		me->blkno = blkno;
 		for (i = FirstOffsetNumber; i <= RumPageGetOpaque(page)->maxoff; i++)
 		{
-			PostingItem *pitem = (PostingItem *) RumDataPageGetItem(page, i);
+			RumPostingItem *pitem = (RumPostingItem *) RumDataPageGetItem(page, i);
 
 			if (rumScanToDelete(gvs, PostingItemGetBlockNumber(pitem), false, me, i,
 								isNewScan, numDeletedPages))
@@ -641,7 +649,7 @@ rumVacuumPostingTreeLeavesNew(RumVacuumState *gvs, OffsetNumber attnum, BlockNum
 	/* Find leftmost leaf page of posting tree and lock it in exclusive mode */
 	while (true)
 	{
-		PostingItem *pitem;
+		RumPostingItem *pitem;
 
 		buffer = ReadBufferExtended(gvs->index, MAIN_FORKNUM, blkno,
 									RBM_NORMAL, gvs->strategy);
@@ -660,7 +668,7 @@ rumVacuumPostingTreeLeavesNew(RumVacuumState *gvs, OffsetNumber attnum, BlockNum
 		isPageRoot = false;
 		Assert(RumPageGetOpaque(page)->maxoff >= FirstOffsetNumber);
 
-		pitem = (PostingItem *) RumDataPageGetItem(page, FirstOffsetNumber);
+		pitem = (RumPostingItem *) RumDataPageGetItem(page, FirstOffsetNumber);
 		blkno = PostingItemGetBlockNumber(pitem);
 		Assert(blkno != InvalidBlockNumber);
 
@@ -770,7 +778,7 @@ rumVacuumPostingTree(RumVacuumState *gvs, OffsetNumber attnum, BlockNumber rootB
 	memset(&root, 0, sizeof(DataPageDeleteStack));
 	root.isRoot = true;
 
-	vacuum_delay_point();
+	RumVacuumDelayPointCompat();
 
 	rumScanToDelete(gvs, rootBlkno, true, &root, InvalidOffsetNumber, isNewScan,
 					&numDeletedPages);
@@ -978,7 +986,7 @@ rumbulkdelete(IndexVacuumInfo *info,
 			UnlockReleaseBuffer(buffer);
 		}
 
-		vacuum_delay_point();
+		RumVacuumDelayPointCompat();
 
 		for (i = 0; i < nRoot; i++)
 		{
@@ -997,7 +1005,7 @@ rumbulkdelete(IndexVacuumInfo *info,
 				rumVacuumPostingTree(&gvs, attnumOfPostingTree[i], rootOfPostingTree[i]);
 			}
 
-			vacuum_delay_point();
+			RumVacuumDelayPointCompat();
 		}
 
 		if (blkno == InvalidBlockNumber)        /* rightmost page */
@@ -1028,7 +1036,7 @@ rumvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 	BlockNumber npages,
 				blkno;
 	BlockNumber totFreePages;
-	GinStatsData idxStat;
+	RumStatsData idxStat;
 
 	/*
 	 * In an autovacuum analyze, we want to clean up pending insertions.
@@ -1080,7 +1088,7 @@ rumvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 		Buffer buffer;
 		Page page;
 
-		vacuum_delay_point();
+		RumVacuumDelayPointCompat();
 
 		buffer = ReadBufferExtended(index, MAIN_FORKNUM, blkno,
 									RBM_NORMAL, info->strategy);
