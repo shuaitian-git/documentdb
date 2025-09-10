@@ -14,7 +14,6 @@
 
 #include "access/amapi.h"
 #include "access/generic_xlog.h"
-#include "access/gin.h"
 #include "access/itup.h"
 #include "access/sdir.h"
 #include "lib/rbtree.h"
@@ -76,6 +75,20 @@ typedef RumPageOpaqueData *RumPageOpaque;
 /* Page numbers of fixed-location pages */
 #define RUM_METAPAGE_BLKNO (0)
 #define RUM_ROOT_BLKNO (1)
+
+/*
+ * GinStatsData represents stats data for planner use
+ * TODO: Keep in sync with PostgreSQL
+ */
+typedef struct RumStatsData
+{
+	BlockNumber nPendingPages;
+	BlockNumber nTotalPages;
+	BlockNumber nEntryPages;
+	BlockNumber nDataPages;
+	int64 nEntries;
+	int32 ginVersion;
+} RumStatsData;
 
 typedef struct RumMetaPageData
 {
@@ -167,6 +180,7 @@ typedef struct RumMetaPageData
  * (which is InvalidBlockNumber/0) as well as from all normal item
  * pointers (which have item numbers in the range 1..MaxHeapTuplesPerPage).
  */
+#ifndef ItemPointerSetMin
 #define ItemPointerSetMin(p) \
 	ItemPointerSet((p), (BlockNumber) 0, (OffsetNumber) 0)
 #define ItemPointerIsMin(p) \
@@ -182,6 +196,7 @@ typedef struct RumMetaPageData
 #define ItemPointerIsLossyPage(p) \
 	(RumItemPointerGetOffsetNumber(p) == (OffsetNumber) 0xffff && \
 	 RumItemPointerGetBlockNumber(p) != InvalidBlockNumber)
+#endif
 
 typedef struct RumItem
 {
@@ -214,7 +229,7 @@ typedef struct
 	/* We use BlockIdData not BlockNumber to avoid padding space wastage */
 	BlockIdData child_blkno;
 	RumItem item;
-} PostingItem;
+} RumPostingItem;
 
 #define PostingItemGetBlockNumber(pointer) \
 	BlockIdGetBlockNumber(&(pointer)->child_blkno)
@@ -240,6 +255,14 @@ typedef signed char RumNullCategory;
 
 /* (Custom documentdb): This is net new from base RUM for ordering */
 #define RUM_CAT_ORDER_ITEM 4
+
+/*
+ * searchMode settings for extractQueryFn.
+ */
+#define GIN_SEARCH_MODE_DEFAULT 0
+#define GIN_SEARCH_MODE_INCLUDE_EMPTY 1
+#define GIN_SEARCH_MODE_ALL 2
+#define GIN_SEARCH_MODE_EVERYTHING 3        /* for internal use only */
 
 /*
  * Access macros for null category byte in entry tuples
@@ -298,8 +321,8 @@ typedef signed char RumNullCategory;
  */
 
 /*
- * FIXME -- Currently RumItem is placed as a pages right bound and PostingItem
- * is placed as a non-leaf pages item. Both RumItem and PostingItem stores
+ * FIXME -- Currently RumItem is placed as a pages right bound and RumPostingItem
+ * is placed as a non-leaf pages item. Both RumItem and RumPostingItem stores
  * AddInfo as a raw Datum, which is bogus. It is fine for pass-by-value
  * attributes, but it isn't for pass-by-reference, which may have variable
  * length of data. This AddInfo is used only by order_by_attach indexes, so it
@@ -311,12 +334,12 @@ typedef signed char RumNullCategory;
 #define RumDataPageGetData(page) \
 	(PageGetContents(page) + MAXALIGN(sizeof(RumItem)))
 #define RumDataPageGetItem(page, i) \
-	(RumDataPageGetData(page) + ((i) - 1) * sizeof(PostingItem))
+	(RumDataPageGetData(page) + ((i) - 1) * sizeof(RumPostingItem))
 
 #define RumDataPageGetFreeSpace(page) \
 	(BLCKSZ - MAXALIGN(SizeOfPageHeaderData) \
 	 - MAXALIGN(sizeof(RumItem)) /* right bound */ \
-	 - RumPageGetOpaque(page)->maxoff * sizeof(PostingItem) \
+	 - RumPageGetOpaque(page)->maxoff * sizeof(RumPostingItem) \
 	 - MAXALIGN(sizeof(RumPageOpaqueData)))
 
 #define RumMaxLeafDataItems \
@@ -475,8 +498,8 @@ extern OffsetNumber rumtuple_get_attrnum(RumState *rumstate, IndexTuple tuple);
 extern Datum rumtuple_get_key(RumState *rumstate, IndexTuple tuple,
 							  RumNullCategory *category);
 
-extern void rumGetStats(Relation index, GinStatsData *stats);
-extern void rumUpdateStats(Relation index, const GinStatsData *stats,
+extern void rumGetStats(Relation index, RumStatsData *stats);
+extern void rumUpdateStats(Relation index, const RumStatsData *stats,
 						   bool isBuild);
 
 /* ruminsert.c */
@@ -495,7 +518,7 @@ extern bool ruminsert(Relation index, Datum *values, bool *isnull,
 					  );
 extern void rumEntryInsert(RumState *rumstate,
 						   OffsetNumber attnum, Datum key, RumNullCategory category,
-						   RumItem *items, uint32 nitem, GinStatsData *buildStats);
+						   RumItem *items, uint32 nitem, RumStatsData *buildStats);
 
 /* rumbtree.c */
 
@@ -551,7 +574,7 @@ typedef struct RumBtreeData
 	uint32 nitem;
 	uint32 curitem;
 
-	PostingItem pitem;
+	RumPostingItem pitem;
 }   RumBtreeData;
 
 extern RumBtreeStack * rumPrepareFindLeafPage(RumBtree btree, BlockNumber blkno);
@@ -561,7 +584,7 @@ extern Buffer rumStep(Buffer buffer, Relation index, int lockmode,
 					  ScanDirection scanDirection);
 extern void freeRumBtreeStack(RumBtreeStack *stack);
 extern void rumInsertValue(Relation index, RumBtree btree, RumBtreeStack *stack,
-						   GinStatsData *buildStats);
+						   RumStatsData *buildStats);
 extern void rumFindParents(RumBtree btree, RumBtreeStack *stack, BlockNumber rootBlkno);
 
 /* rumentrypage.c */
@@ -616,7 +639,7 @@ extern void rumInsertItemPointers(RumState *rumstate,
 								  OffsetNumber attnum,
 								  RumPostingTreeScan *gdi,
 								  RumItem *items, uint32 nitem,
-								  GinStatsData *buildStats);
+								  RumStatsData *buildStats);
 extern Buffer rumScanBeginPostingTree(RumPostingTreeScan *gdi, RumItem *item);
 extern void rumDataFillRoot(RumBtree btree, Buffer root, Buffer lbuf, Buffer rbuf,
 							Page page, Page lpage, Page rpage);
@@ -931,6 +954,15 @@ extern RumItem * rumGetBAEntry(BuildAccumulator *accum,
 							   OffsetNumber *attnum, Datum *key,
 							   RumNullCategory *category,
 							   uint32 *n);
+
+/*
+ * amproc indexes for inverted indexes.
+ */
+#define GIN_COMPARE_PROC 1
+#define GIN_EXTRACTVALUE_PROC 2
+#define GIN_EXTRACTQUERY_PROC 3
+#define GIN_CONSISTENT_PROC 4
+#define GIN_COMPARE_PARTIAL_PROC 5
 
 /* rum_ts_utils.c */
 #define RUM_CONFIG_PROC 6

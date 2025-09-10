@@ -1570,7 +1570,8 @@ ExecuteLocalShardInsertPlan(PlannedStmt *queryPlan, ParamListInfo paramListInfo)
 										   queryEnv, 0);
 
 	ExecutorStart(queryDesc, eflags);
-	ExecutorRun(queryDesc, scanDirection, 0L, true);
+
+	ExecutorRun_Compat(queryDesc, scanDirection, 0L, true);
 
 	uint64_t numRowsProcessed = queryDesc->estate->es_processed;
 

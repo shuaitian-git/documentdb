@@ -296,7 +296,8 @@ row_get_bson(PG_FUNCTION_ARGS)
 	for (int i = 0; i < tupleDescriptor->natts; i++)
 	{
 		bool isnull;
-		if (tupleDescriptor->attrs[i].attisdropped)
+		FormData_pg_attribute *attr = TupleDescAttr(tupleDescriptor, i);
+		if (attr->attisdropped)
 		{
 			continue;
 		}
@@ -310,7 +311,7 @@ row_get_bson(PG_FUNCTION_ARGS)
 		}
 
 		/* get the field name. */
-		const char *fieldName = NameStr(tupleDescriptor->attrs[i].attname);
+		const char *fieldName = NameStr(attr->attname);
 		if (fieldName == NULL)
 		{
 			fieldName = "";
@@ -322,7 +323,7 @@ row_get_bson(PG_FUNCTION_ARGS)
 
 		/* convert the SQL Value and write it into the bson Writer. */
 		PgbsonElementWriterWriteSQLValue(&elementWriter, isnull, fieldValue,
-										 tupleDescriptor->attrs[i].atttypid);
+										 attr->atttypid);
 	}
 
 	ReleaseTupleDesc(tupleDescriptor);

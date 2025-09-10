@@ -1659,7 +1659,7 @@ GetSortDetails(PlannerInfo *root, Index rti,
 				sortElement.path = sortElement.bsonValue.value.v_utf8.str + 1;
 				sortElement.pathLength = sortElement.bsonValue.value.v_utf8.len - 1;
 				sortElement.bsonValue.value_type = BSON_TYPE_INT32;
-				sortElement.bsonValue.value.v_int32 = pathkey->pk_strategy ==
+				sortElement.bsonValue.value.v_int32 = SortPathKeyStrategy(pathkey) ==
 													  BTGreaterStrategyNumber ? -1 : 1;
 				pgbson *sortSpec = PgbsonElementToPgbson(&sortElement);
 
@@ -1785,7 +1785,8 @@ ConsiderIndexOrderByPushdownNew(PlannerInfo *root, RelOptInfo *rel, RangeTblEntr
 			newPath->path.pathkeys = list_make1(sortDetailsInput->sortPathKey);
 
 			/* If the sort is descending, we need to scan the index backwards */
-			if (sortDetailsInput->sortPathKey->pk_strategy == BTGreaterStrategyNumber)
+			if (SortPathKeyStrategy(sortDetailsInput->sortPathKey) ==
+				BTGreaterStrategyNumber)
 			{
 				newPath->indexscandir = BackwardScanDirection;
 			}
@@ -1810,7 +1811,8 @@ ConsiderIndexOrderByPushdownNew(PlannerInfo *root, RelOptInfo *rel, RangeTblEntr
 		if (primaryKeyIndex != NULL)
 		{
 			ScanDirection scanDir =
-				sortDetailsInput->sortPathKey->pk_strategy == BTGreaterStrategyNumber ?
+				SortPathKeyStrategy(sortDetailsInput->sortPathKey) ==
+				BTGreaterStrategyNumber ?
 				BackwardScanDirection : ForwardScanDirection;
 
 			IndexClause *shard_key_clause =
@@ -1936,7 +1938,8 @@ ConsiderIndexOrderByPushdownLegacy(PlannerInfo *root, RelOptInfo *rel, RangeTblE
 			newPath->path.pathkeys = list_make1(sortDetailsInput->sortPathKey);
 
 			/* If the sort is descending, we need to scan the index backwards */
-			if (sortDetailsInput->sortPathKey->pk_strategy == BTGreaterStrategyNumber)
+			if (SortPathKeyStrategy(sortDetailsInput->sortPathKey) ==
+				BTGreaterStrategyNumber)
 			{
 				newPath->indexscandir = BackwardScanDirection;
 			}
@@ -2015,7 +2018,8 @@ ConsiderIndexOrderByPushdownLegacy(PlannerInfo *root, RelOptInfo *rel, RangeTblE
 		if (primaryKeyIndex != NULL)
 		{
 			ScanDirection scanDir =
-				sortDetailsInput->sortPathKey->pk_strategy == BTGreaterStrategyNumber ?
+				SortPathKeyStrategy(sortDetailsInput->sortPathKey) ==
+				BTGreaterStrategyNumber ?
 				BackwardScanDirection : ForwardScanDirection;
 
 			IndexClause *shard_key_clause =

@@ -288,7 +288,11 @@ DocumentDBBackgroundWorkerMain(Datum main_arg)
 		/* An interrupt might have taken place during the waiting process. */
 		CHECK_FOR_INTERRUPTS();
 
+#if PG_VERSION_NUM >= 180000
+		ProcessMainLoopInterrupts();
+#else
 		HandleMainLoopInterrupts();
+#endif
 
 		if (waitResult & WL_LATCH_SET)
 		{
@@ -507,7 +511,11 @@ WaitForBackgroundWorkerDependencies(void)
 		/* An interrupt might have taken place during the waiting process. */
 		CHECK_FOR_INTERRUPTS();
 
+#if PG_VERSION_NUM >= 180000
+		ProcessMainLoopInterrupts();
+#else
 		HandleMainLoopInterrupts();
+#endif
 
 		if (waitResult & WL_TIMEOUT)
 		{

@@ -850,8 +850,10 @@ SegmentizeQuery(IndexBsonGeospatialState *state)
 			}
 
 			Datum segment = SPI_datumTransfer(resultDatum,
-											  SPI_tuptable->tupdesc->attrs[0].attbyval,
-											  SPI_tuptable->tupdesc->attrs[0].attlen);
+											  TupleDescAttr(SPI_tuptable->tupdesc,
+															0)->attbyval,
+											  TupleDescAttr(SPI_tuptable->tupdesc,
+															0)->attlen);
 			MemoryContext spiContext = MemoryContextSwitchTo(current);
 			state->segments = lappend(state->segments, (void *) DatumGetPointer(segment));
 			MemoryContextSwitchTo(spiContext);

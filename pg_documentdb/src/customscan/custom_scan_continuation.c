@@ -23,6 +23,11 @@
 #include <catalog/pg_operator.h>
 #include <optimizer/restrictinfo.h>
 
+#if PG_VERSION_NUM >= 180000
+#include <commands/explain_format.h>
+#include <executor/executor.h>
+#endif
+
 #include "io/bson_core.h"
 #include "customscan/bson_custom_scan.h"
 #include "customscan/custom_scan_registrations.h"
@@ -1270,7 +1275,8 @@ ExtensionScanExecCustomScan(CustomScanState *pstate)
 		{
 			/* attribute numbers are 1 based */
 			int index = node->contentTrackAttributeNumber - 1;
-			Oid currentTypeId = returnSlot->tts_tupleDescriptor->attrs[index].atttypid;
+			Oid currentTypeId = TupleDescAttr(returnSlot->tts_tupleDescriptor,
+											  index)->atttypid;
 			if (currentTypeId == BsonTypeId() && !returnSlot->tts_isnull[index])
 			{
 				/*
@@ -1738,7 +1744,11 @@ BuildPrimaryKeyIndexClauses(PlannerInfo *root, RelOptInfo *rel, ExtensionScanSta
 									 state->primaryKeyDatums[1], false, false);
 	RowCompareExpr *rcexpr = makeNode(RowCompareExpr);
 	rcexpr = makeNode(RowCompareExpr);
+#if PG_VERSION_NUM >= 180000
+	rcexpr->cmptype = COMPARE_GT;
+#else
 	rcexpr->rctype = ROWCOMPARE_GT;
+#endif
 	rcexpr->opnos = list_make2_oid(BigIntGreaterOperatorId(),
 								   BsonGreaterThanOperatorId());
 	rcexpr->opfamilies = list_make2_oid(IntegerOpsOpFamilyOid(), BsonBtreeOpFamilyOid());

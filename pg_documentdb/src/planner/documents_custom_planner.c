@@ -114,7 +114,12 @@ TryCreatePointReadPlan(Query *query)
 	if (indexScan->indexid == InvalidOid)
 	{
 		/* Load the index */
+#if PG_VERSION_NUM >= 180000
+		bool deferrableOk = false;
+		indexScan->indexid = RelationGetPrimaryKeyIndex(relation, deferrableOk);
+#else
 		indexScan->indexid = RelationGetPrimaryKeyIndex(relation);
+#endif
 	}
 
 	RelationClose(relation);

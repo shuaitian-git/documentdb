@@ -25,6 +25,11 @@
 #include <optimizer/paths.h>
 #include <access/ginblock.h>
 
+#if PG_VERSION_NUM >= 180000
+#include <commands/explain_format.h>
+#include <executor/executor.h>
+#endif
+
 #include "io/bson_core.h"
 #include "customscan/bson_custom_query_scan.h"
 #include "customscan/custom_scan_registrations.h"

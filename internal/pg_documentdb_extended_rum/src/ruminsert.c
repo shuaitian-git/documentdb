@@ -139,7 +139,7 @@ typedef struct
 {
 	RumState rumstate;
 	double indtuples;
-	GinStatsData buildStats;
+	RumStatsData buildStats;
 	MemoryContext tmpCtx;
 	MemoryContext funcCtx;
 	BuildAccumulator accum;
@@ -440,7 +440,7 @@ RumFormTuple(RumState *rumstate,
 static IndexTuple
 addItemPointersToLeafTuple(RumState *rumstate,
 						   IndexTuple old, RumItem *items, uint32 nitem,
-						   GinStatsData *buildStats)
+						   RumStatsData *buildStats)
 {
 	OffsetNumber attnum;
 	Datum key;
@@ -522,7 +522,7 @@ addItemPointersToLeafTuple(RumState *rumstate,
 static IndexTuple
 buildFreshLeafTuple(RumState *rumstate,
 					OffsetNumber attnum, Datum key, RumNullCategory category,
-					RumItem *items, uint32 nitem, GinStatsData *buildStats)
+					RumItem *items, uint32 nitem, RumStatsData *buildStats)
 {
 	IndexTuple res;
 
@@ -609,7 +609,7 @@ void
 rumEntryInsert(RumState *rumstate,
 			   OffsetNumber attnum, Datum key, RumNullCategory category,
 			   RumItem *items, uint32 nitem,
-			   GinStatsData *buildStats)
+			   RumStatsData *buildStats)
 {
 	RumBtreeData btree;
 	RumBtreeStack *stack;
@@ -829,7 +829,7 @@ rumbuild(Relation heap, Relation index, struct IndexInfo *indexInfo)
 	initRumState(&buildstate.rumstate, index);
 	buildstate.rumstate.isBuild = true;
 	buildstate.indtuples = 0;
-	memset(&buildstate.buildStats, 0, sizeof(GinStatsData));
+	memset(&buildstate.buildStats, 0, sizeof(RumStatsData));
 
 	buildstate.bs_numtuples = 0;
 	buildstate.bs_reltuples = 0;
@@ -2616,7 +2616,7 @@ rum_parallel_build_main(dsm_segment *seg, shm_toc *toc)
 	/* initialize the RUM build state */
 	initRumState(&buildstate.rumstate, indexRel);
 	buildstate.indtuples = 0;
-	memset(&buildstate.buildStats, 0, sizeof(GinStatsData));
+	memset(&buildstate.buildStats, 0, sizeof(RumStatsData));
 
 	memset(&buildstate.tid, 0, sizeof(ItemPointerData));
 

@@ -22,6 +22,11 @@
 #include <commands/explain.h>
 #include <access/gin.h>
 
+#if PG_VERSION_NUM >= 180000
+#include <commands/explain_state.h>
+#include <commands/explain_format.h>
+#endif
+
 #include "api_hooks.h"
 #include "planner/mongo_query_operator.h"
 #include "opclass/bson_gin_index_mgmt.h"
@@ -475,8 +480,8 @@ CompositeIndexSupportsOrderByPushdown(IndexPath *indexPath, List *sortDetails,
 		int32_t sortBtreeStrategy = sortDirection < 0 ? BTGreaterStrategyNumber :
 									BTLessStrategyNumber;
 
-		bool currentPathKeyIsReverseSort = sortDetailsInput->sortPathKey->pk_strategy !=
-										   sortBtreeStrategy;
+		bool currentPathKeyIsReverseSort = (int32_t) SortPathKeyStrategy(
+			sortDetailsInput->sortPathKey) != sortBtreeStrategy;
 		if (currentPathKeyIsReverseSort)
 		{
 			if (!indexSupportsOrderByDesc)

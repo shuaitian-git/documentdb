@@ -1429,12 +1429,12 @@ GetCollectionOrViewCore(PG_FUNCTION_ARGS, bool allowViews)
 			{
 				resultIsNulls[i - 1] = false;
 				resultValues[i - 1] = SPI_datumTransfer(resultDatum,
-														SPI_tuptable->tupdesc->attrs[i -
-																					 1].
-														attbyval,
-														SPI_tuptable->tupdesc->attrs[i -
-																					 1].
-														attlen);
+														TupleDescAttr(
+															SPI_tuptable->tupdesc, i -
+															1)->attbyval,
+														TupleDescAttr(
+															SPI_tuptable->tupdesc, i -
+															1)->attlen);
 			}
 		}
 

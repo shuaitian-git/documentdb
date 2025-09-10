@@ -7,24 +7,33 @@ set -e
 
 # declare all the versions of dependencies
 LIBBSON_VERSION=1.28.0
-# This maps to REL_17_4:f8554dee417ffc4540c94cf357f7bf7d4b6e5d80
-POSTGRES_17_REF="REL_17_4"
-# This maps to REL_16_8:71eb35c0b18de96537bd3876ec9bf8075bfd484f
-POSTGRES_16_REF="REL_16_8"
-# This maps to REL15_12:50d3d22baba63613d1f1406b2ed460dc9b03c3fc
-POSTGRES_15_REF="REL_15_12"
-# This is commit f3cb3d99eed7dd3db82104ab2a4a13b1233d0023
-CITUS_VERSION=v12.1.7
-# This is commit d28a5eae6c78935313824d319480632783d48d10
-CITUS_13_VERSION=v13.0.1
+
+# This maps to REL_18_RC1:6200622301310b1e47a2d5b7e25d098f0a38c551
+POSTGRES_18_REF="REL_18_RC1"
+
+# This maps to REL_17_6:7885b94dd81b98bbab9ed878680d156df7bf857f
+POSTGRES_17_REF="REL_17_6"
+
+# This maps to REL_16_10:c13dd7d50f21268dc64b4b3edbce31993985ab12
+POSTGRES_16_REF="REL_16_10"
+
+# This maps to REL_15_14:0ab43b548237b3791261480d6a023f6b95b53942
+POSTGRES_15_REF="REL_15_14"
+
+# this is commit 32225367ec184609d383716f2c9be7f8f2f4817a
+CITUS_VERSION=v12.1.8
+# This is commit ad266a2c0a3c9bdab1426ed33d1bc2d9a7d74f45
+CITUS_13_VERSION=v13.1.0
+# For pg18 use an unstable main version for now
+CITUS_PG18_VERSION=b7bfe42f1a4d22db4b1ecc2636cdf83adf27c106
 # This is commit 6a065fd8dfb280680304991aa30d7f72787fdb04
 RUM_VERSION=1.3.14
-# This is commit 9d0576c64edd90fb3d8ac30763296a8106315638
-PG_CRON_VERSION=v1.6.3
-# This is commit 2627c5ff775ae6d7aef0c430121ccf857842d2f2
-PGVECTOR_VERSION=v0.8.0
+# This is commit 465b38c737f584d520229f5a1d69d1d44649e4e5
+PG_CRON_VERSION=v1.6.7
+# This is commit 778dacf20c07caf904557a88705142631818d8cb
+PGVECTOR_VERSION=v0.8.1
 
-POSTGIS_VERSION=3.5.2
+POSTGIS_VERSION=3.6.0
 INTEL_DECIMAL_MATH_LIB_VERSION=applied/2.0u3-1
 PCRE2_VERSION=10.40
 UNCRUSTIFY_VERSION=uncrustify-0.68.1
@@ -32,7 +41,9 @@ UNCRUSTIFY_VERSION=uncrustify-0.68.1
 function GetPostgresSourceRef()
 {
   local pgVersion=$1
-  if [ "$pgVersion" == "17" ]; then
+  if [ "$pgVersion" == "18" ]; then
+    echo $POSTGRES_18_REF
+  elif [ "$pgVersion" == "17" ]; then
     echo $POSTGRES_17_REF
   elif [ "$pgVersion" == "16" ]; then
     echo $POSTGRES_16_REF
@@ -47,7 +58,9 @@ function GetPostgresSourceRef()
 function GetCitusVersion()
 {
   local citusVersion=$1
-  if [ "$PGVERSION" == "17" ]; then
+  if [ "$PGVERSION" == "18" ]; then
+    echo $CITUS_PG18_VERSION
+  elif [ "$PGVERSION" == "17" ]; then
     echo $CITUS_13_VERSION
   elif [ "$citusVersion" == "13" ] || [ "$citusVersion" == "v13.0" ] || [ "$citusVersion" == "$CITUS_13_VERSION" ]; then
     echo $CITUS_13_VERSION

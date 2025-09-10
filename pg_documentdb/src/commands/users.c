@@ -1132,7 +1132,7 @@ PrehashPassword(const char *password)
 {
 	char *prep_password;
 	pg_saslprep_rc rc;
-	char saltbuf[SCRAM_MAX_SALT_LEN];
+	char_uint8_compat saltbuf[SCRAM_MAX_SALT_LEN];
 	char *result;
 	const char *errstr = NULL;
 
