@@ -3814,24 +3814,26 @@ TryUseAlternateIndexForPrimaryKeyLookup(PlannerInfo *root, RelOptInfo *rel,
 		List *orderbyCols = NIL;
 		List *pathKeys = NIL;
 		bool indexOnly = false;
-		Relids outerRelids = context->objectId.restrictInfo->outer_relids;
-		if (context->shardKeyQualExpr->outer_relids)
+		Relids outerRelids = bms_copy(rel->lateral_relids);
+
+		outerRelids = bms_add_members(outerRelids,
+									  context->objectId.restrictInfo->clause_relids);
+		if (context->shardKeyQualExpr->clause_relids)
 		{
-			outerRelids = bms_union(outerRelids,
-									context->shardKeyQualExpr->outer_relids);
+			outerRelids = bms_add_members(outerRelids,
+										  context->shardKeyQualExpr->clause_relids);
 		}
 
-		if (outerRelids && bms_is_member(rel->relid, outerRelids))
-		{
-			outerRelids = bms_copy(outerRelids);
-			outerRelids = bms_del_member(outerRelids, rel->relid);
+		outerRelids = bms_del_member(outerRelids, rel->relid);
 
-			/* Enforce convention that outerRelids is exactly NULL if empty */
-			if (bms_is_empty(outerRelids))
-			{
-				outerRelids = NULL;
-			}
+#if PG_VERSION_NUM < 160000
+
+		/* Enforce convention that outerRelids is exactly NULL if empty */
+		if (bms_is_empty(outerRelids))
+		{
+			outerRelids = NULL;
 		}
+#endif
 
 		double loopCount = 1;
 		bool partialPath = false;
