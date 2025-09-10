@@ -1088,11 +1088,13 @@ bytea *
 rumoptions(Datum reloptions, bool validate)
 {
 #if PG_VERSION_NUM >= 180000
+	static const int offsetIfDefault = -1;
 	static const relopt_parse_elt tab[] = {
-		{ "attach", RELOPT_TYPE_STRING, offsetof(RumOptions, attachColumn), -1 },
-		{ "to", RELOPT_TYPE_STRING, offsetof(RumOptions, addToColumn), -1 },
+		{ "attach", RELOPT_TYPE_STRING, offsetof(RumOptions, attachColumn),
+		  offsetIfDefault },
+		{ "to", RELOPT_TYPE_STRING, offsetof(RumOptions, addToColumn), offsetIfDefault },
 		{ "order_by_attach", RELOPT_TYPE_BOOL, offsetof(RumOptions, useAlternativeOrder),
-		  -1 }
+		  offsetIfDefault }
 	};
 #else
 	static const relopt_parse_elt tab[] = {
