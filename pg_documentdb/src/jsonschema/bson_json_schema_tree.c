@@ -8,11 +8,14 @@
  */
 
 #include <postgres.h>
+#include "utils/hsearch.h"
 #include "io/bson_core.h"
 #include "query/bson_compare.h"
 #include "types/decimal128.h"
 #include "jsonschema/bson_json_schema_tree.h"
 #include "utils/documentdb_errors.h"
+#include "utils/hashset_utils.h"
+#include "utils/string_view.h"
 #include "commands/parse_error.h"
 
 /* --------------------------------------------------------- */
@@ -29,6 +32,7 @@ static void AllocateValidators(SchemaNode *node);
 static void FreeUnusedValidators(SchemaNode *node);
 
 static void ParseProperties(const bson_value_t *value, SchemaNode *node);
+static void ParseRequired(const bson_value_t *value, SchemaNode *node);
 
 static void ParseJsonType(const bson_value_t *value, SchemaNode *node);
 static void ParseBsonType(const bson_value_t *value, SchemaNode *node);
@@ -151,6 +155,10 @@ BuildSchemaTreeCoreOnNode(bson_iter_t *schemaIter, SchemaNode *node)
 		if (strcmp(key, "properties") == 0)
 		{
 			ParseProperties(value, node);
+		}
+		else if (strcmp(key, "required") == 0)
+		{
+			ParseRequired(value, node);
 		}
 
 		/* TODO: Add other Object Validators here */
@@ -426,6 +434,78 @@ ParseProperties(const bson_value_t *value, SchemaNode *node)
 		BuildSchemaTreeCoreOnNode(&innerIter, (SchemaNode *) fieldNode);
 	}
 	node->validationFlags.object |= ObjectValidationTypes_Properties;
+}
+
+
+/*
+ * This function reads the schema value for "required" keyword.
+ * And stores it in the parent Node's Object validations section.
+ */
+static void
+ParseRequired(const bson_value_t *value, SchemaNode *node)
+{
+	if (value->value_type != BSON_TYPE_ARRAY)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_TYPEMISMATCH),
+						errmsg(
+							"Expected an array for 'required' in $jsonSchema, but got %s",
+							BsonTypeName(value->value_type))));
+	}
+	pgbson_writer writer;
+	PgbsonWriterInit(&writer);
+	pgbson_array_writer arrayWriter;
+	PgbsonWriterStartArray(&writer, "", 0, &arrayWriter);
+	bson_iter_t iter;
+	BsonValueInitIterator(value, &iter);
+
+	/* Hash table to track seen field names for efficient duplicate detection */
+	HTAB *seenFieldsHash = CreateStringViewHashSet();
+
+	while (bson_iter_next(&iter))
+	{
+		if (!BSON_ITER_HOLDS_UTF8(&iter))
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_TYPEMISMATCH),
+							errmsg(
+								"All elements in 'required' array must be strings, but encountered %s",
+								BsonIterTypeName(&iter))));
+		}
+		const char *field = bson_iter_utf8(&iter, NULL);
+
+		/* TODO: Add support for dot notation paths */
+		if (strchr(field, '.') != NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_FAILEDTOPARSE),
+							errmsg("Dot notation paths are currently not supported: %s",
+								   field)));
+		}
+
+		/* Check for duplicate field names using hash table */
+		StringView fieldView = CreateStringViewFromString(field);
+		bool found;
+		hash_search(seenFieldsHash, &fieldView, HASH_ENTER, &found);
+
+		if (found)
+		{
+			hash_destroy(seenFieldsHash);
+			PgbsonWriterFree(&writer);
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_FAILEDTOPARSE),
+							errmsg(
+								"Duplicate field name in $jsonSchema 'required' array")));
+		}
+
+		PgbsonArrayWriterWriteUtf8(&arrayWriter, field);
+	}
+
+	/* Clean up hash table */
+	hash_destroy(seenFieldsHash);
+	PgbsonWriterEndArray(&writer, &arrayWriter);
+	node->validations.object->required = (bson_value_t *) palloc0(
+		sizeof(bson_value_t));
+	PgbsonArrayWriterCopyDataToBsonValue(&arrayWriter,
+										 node->validations.object->required);
+	PgbsonWriterFree(&writer);
+	node->validationFlags.object |= ObjectValidationTypes_Required;
 }
 
 

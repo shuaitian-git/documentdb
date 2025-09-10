@@ -21,6 +21,76 @@ SELECT bson_dollar_json_schema('{ "name":"pazu" }','{ "$jsonSchema": { "properti
  t
 (1 row)
 
+------------------------ required ---------------------------------------------
+-- Must be an array
+SELECT bson_dollar_json_schema('{ "name":"pazu" }','{ "$jsonSchema": { "required": "name" } }');
+ERROR:  Expected an array for 'required' in $jsonSchema, but got string
+-- duplicated fields
+SELECT bson_dollar_json_schema('{ "name":"pazu", "name":"tst" }','{ "$jsonSchema": { "required": ["name", "age" ] } }');
+ bson_dollar_json_schema 
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- Must be unique
+SELECT bson_dollar_json_schema('{ "name":"pazu" }','{ "$jsonSchema": { "required": [ "name", "name" ] } }');
+ERROR:  Duplicate field name in $jsonSchema 'required' array
+-- Each element must be a string
+SELECT bson_dollar_json_schema('{ "name":"pazu" }','{ "$jsonSchema": { "required": [ 1 ] } }');
+ERROR:  All elements in 'required' array must be strings, but encountered int
+SELECT bson_dollar_json_schema('{ "name":"pazu", "age":10 }','{ "$jsonSchema": { "required": [ "name",1,"age" ] } }');
+ERROR:  All elements in 'required' array must be strings, but encountered int
+SELECT bson_dollar_json_schema('{ "name":"pazu" }','{ "$jsonSchema": { "required": ["name", ["a","b","c"], "age" ] } }');
+ERROR:  All elements in 'required' array must be strings, but encountered array
+-- Valid Schema
+SELECT bson_dollar_json_schema('{ "name":"pazu" }','{ "$jsonSchema": { "required": [ "name" ] } }');
+ bson_dollar_json_schema 
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bson_dollar_json_schema('{ "name":"pazu", "age":10 }','{ "$jsonSchema": { "required": [ "name" ] } }');
+ bson_dollar_json_schema 
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bson_dollar_json_schema('{ "name":"pazu" }','{ "$jsonSchema": { "required": [ "name","age" ] } }');
+ bson_dollar_json_schema 
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT bson_dollar_json_schema('{ "name":"pazu", "age":10 }','{ "$jsonSchema": { "required": [ "name","age" ] } }');
+ bson_dollar_json_schema 
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bson_dollar_json_schema('{ "":1 }','{ "$jsonSchema": { "required": [ "" ] } }');
+ bson_dollar_json_schema 
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bson_dollar_json_schema('{ "a":1 }','{ "$jsonSchema": { "required": [ "" ] } }');
+ bson_dollar_json_schema 
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT bson_dollar_json_schema('{ "":1, "name":"pazu","age":10 }','{ "$jsonSchema": { "required": [ "","name","age" ] } }');
+ bson_dollar_json_schema 
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bson_dollar_json_schema('{ "":1, "age":10 }','{ "$jsonSchema": { "required": [ "","name","age" ] } }');
+ bson_dollar_json_schema 
+---------------------------------------------------------------------
+ f
+(1 row)
+
 ---------------------------------------------------------------------
 --                          Common Validators                                --
 ---------------------------------------------------------------------
