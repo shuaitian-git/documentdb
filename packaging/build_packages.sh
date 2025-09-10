@@ -190,7 +190,7 @@ if [[ $TEST_CLEAN_INSTALL == true ]]; then
         echo "Debian package path: $deb_package_rel_path"
 
         # Build the Docker image while showing the output to the console
-        docker build -t documentdb-test-packages:latest -f packaging/test_packages/Dockerfile_test_install_deb_packages \
+        docker build -t documentdb-test-packages:latest -f packaging/test_packages/deb/Dockerfile \
             --build-arg BASE_IMAGE="$DOCKER_IMAGE" \
             --build-arg POSTGRES_VERSION="$PG" \
             --build-arg DEB_PACKAGE_REL_PATH="$deb_package_rel_path" .
