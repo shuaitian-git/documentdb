@@ -208,12 +208,19 @@ if [[ $TEST_CLEAN_INSTALL == true ]]; then
         
         echo "RPM package path for testing: $package_rel_path"
         
-        # Build the Docker image while showing the output to the console
-        docker build -t documentdb-test-rpm-packages:latest -f packaging/test_packages/Dockerfile_test_install_rpm_packages \
+        # Select the correct test Dockerfile for RHEL 8 or RHEL 9
+        if [[ "$OS" == "rhel8" ]]; then
+            TEST_DOCKERFILE="packaging/test_packages/rhel-8/Dockerfile"
+        elif [[ "$OS" == "rhel9" ]]; then
+            TEST_DOCKERFILE="packaging/test_packages/rhel-9/Dockerfile"
+        else
+            echo "Error: Unknown RPM OS for test Dockerfile: $OS"
+            exit 1
+        fi
+        docker build -t documentdb-test-rpm-packages:latest -f "$TEST_DOCKERFILE" \
             --build-arg BASE_IMAGE="$DOCKER_IMAGE" \
             --build-arg POSTGRES_VERSION="$PG" \
-            --build-arg RPM_PACKAGE_REL_PATH="$package_rel_path" \
-            --build-arg OS_VERSION_ARG="$OS_VERSION_NUMBER" .
+            --build-arg RPM_PACKAGE_REL_PATH="$package_rel_path" .
             
         # Run the Docker container to test the packages
         docker run --rm --env POSTGRES_VERSION="$PG" documentdb-test-rpm-packages:latest
