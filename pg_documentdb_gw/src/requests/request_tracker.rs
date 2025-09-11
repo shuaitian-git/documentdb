@@ -6,24 +6,21 @@
  *-------------------------------------------------------------------------
  */
 
-use std::time::Instant;
+use tokio::time::Instant;
 
 #[derive(Debug)]
 pub enum RequestIntervalKind {
     /// Interval kind for reading stream from request body. BufferRead + HandleRequest is the full duration of a request spent in the Gateway.
     BufferRead,
 
-    /// Interval kind for the overall request processing duration, which includes FormatRequest, HandleResponse, and ProcessRequest via backend.
+    /// Interval kind for the overall request processing duration, which includes FormatRequest, FormatResponse, and ProcessRequest via backend.
     HandleRequest,
 
     /// Time spent formatting and parsing the incoming request.
     FormatRequest,
 
     /// Time spent processing the response before sending it back to the client.
-    HandleResponse,
-
-    /// Upon formatting individual request, send them to interop and SDK.
-    InteropAndSdk,
+    FormatResponse,
 
     /// Time spent in network transport and Postgres processing.
     ProcessRequest,
