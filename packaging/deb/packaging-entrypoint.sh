@@ -17,6 +17,7 @@ if [[ -n "$DOCUMENTDB_VERSION" ]]; then
    /bin/bash /build/packaging/update_spec_changelog.sh "$DOCUMENTDB_VERSION"
 else
    echo "WARNING: Could not determine documentdb version; skipping changelog update"
+   exit 1
 fi
 
 # Keep the internal directory out of the Debian package
