@@ -10,6 +10,8 @@
 ### documentdb v0.107-0 (Unreleased) ###
 * Support sort by _id against the _id index using the enableIndexOrderbyPushdown flag *[Feature]*.
 * Improvements to explain for various scan types *[Feature]*.
+* Support schema enforcement with CSFLE integration *[Preview]*
+* Validate $jsonSchema syntax during rule creation or modification(schema validation) *[Preview]*
 
 ### documentdb v0.106-0 (August 29, 2025) ###
 * Add internal extension that provides extensions to the `rum` index. *[Feature]*
