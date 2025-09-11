@@ -17,6 +17,7 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::{
     io::BufStream,
     net::{TcpListener, TcpStream},
+    time::Instant,
 };
 use tokio_openssl::SslStream;
 use tokio_util::sync::CancellationToken;
@@ -379,8 +380,6 @@ async fn get_response<T>(
 where
     T: PgDataClient,
 {
-    let interop_and_sdk_start = request_context.tracker.start_timer();
-
     if !connection_context.auth_state.authorized
         || request_context.payload.request_type().handle_with_auth()
     {
@@ -398,10 +397,6 @@ where
     let response =
         processor::process_request(request_context, connection_context, data_client).await?;
 
-    request_context
-        .tracker
-        .record_duration(RequestIntervalKind::InteropAndSdk, interop_and_sdk_start);
-
     Ok(response)
 }
 
@@ -417,23 +412,26 @@ where
     // Read the request message off the stream
     let mut request_tracker = RequestTracker::new();
 
+    let handle_request_start = request_tracker.start_timer();
     let buffer_read_start = request_tracker.start_timer();
     let message = protocol::reader::read_request(header, stream).await?;
+
+    request_tracker.record_duration(RequestIntervalKind::BufferRead, buffer_read_start);
 
     if connection_context
         .dynamic_configuration()
         .send_shutdown_responses()
         .await
     {
+        // Log duration before returning
+        log_verbose_latency(connection_context, &request_tracker, activity_id).await;
+
         return Err(DocumentDBError::documentdb_error(
             ErrorCode::ShutdownInProgress,
             "Graceful shutdown requested".to_string(),
         ));
     }
 
-    request_tracker.record_duration(RequestIntervalKind::BufferRead, buffer_read_start);
-
-    let handle_request_start = request_tracker.start_timer();
     let format_request_start = request_tracker.start_timer();
     let request =
         protocol::reader::parse_request(&message, &mut connection_context.requires_response)
@@ -455,32 +453,11 @@ where
         &mut request_context,
         stream,
         &mut collection,
+        handle_request_start,
     )
     .await;
 
-    request_context
-        .tracker
-        .record_duration(RequestIntervalKind::HandleRequest, handle_request_start);
-
-    if connection_context
-        .dynamic_configuration()
-        .enable_verbose_logging_in_gateway()
-        .await
-    {
-        log::info!(
-            activity_id = activity_id;
-            "Latency for Mongo Request with ActivityId: {}, BufferRead={}ms, HandleRequest={}ms, FormatRequest={}ms, ProcessRequest={}ms, PostgresBeginTransaction={}ms, PostgresSetStatementTimeout={}ms, PostgresTransactionCommit={}ms, HandleResponse={}ms",
-            activity_id,
-            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::BufferRead),
-            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::HandleRequest),
-            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::FormatRequest),
-            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::ProcessRequest),
-            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresBeginTransaction),
-            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresSetStatementTimeout),
-            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresTransactionCommit),
-            request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::HandleResponse)
-        );
-    }
+    log_verbose_latency(connection_context, request_context.tracker, activity_id).await;
 
     // Errors in request handling are handled explicitly so that telemetry can have access to the request
     // Returns Ok afterwards so that higher level error telemetry is not invoked.
@@ -510,16 +487,33 @@ async fn handle_request<T>(
     request_context: &mut RequestContext<'_>,
     stream: &mut GwStream,
     collection: &mut String,
+    handle_request_start: Instant,
 ) -> Result<()>
 where
     T: PgDataClient,
 {
     *collection = request_context.info.collection().unwrap_or("").to_string();
 
-    // Process the response for the message
-    let response = get_response::<T>(request_context, connection_context).await?;
+    let format_response_start = request_context.tracker.start_timer();
 
-    let handle_response_start = request_context.tracker.start_timer();
+    // Process the response for the message
+    let response_result = get_response::<T>(request_context, connection_context).await;
+
+    // Always record durations, regardless of success or error
+    request_context
+        .tracker
+        .record_duration(RequestIntervalKind::FormatResponse, format_response_start);
+
+    request_context
+        .tracker
+        .record_duration(RequestIntervalKind::HandleRequest, handle_request_start);
+
+    let response = match response_result {
+        Ok(response) => response,
+        Err(e) => {
+            return Err(e);
+        }
+    };
 
     // Write the response back to the stream
     if connection_context.requires_response {
@@ -539,10 +533,6 @@ where
             )
             .await;
     }
-
-    request_context
-        .tracker
-        .record_duration(RequestIntervalKind::HandleResponse, handle_response_start);
 
     Ok(())
 }
@@ -580,4 +570,29 @@ async fn log_and_write_error(
     }
 
     Ok(())
+}
+
+async fn log_verbose_latency(
+    connection_context: &mut ConnectionContext,
+    request_tracker: &RequestTracker,
+    activity_id: &str,
+) {
+    if connection_context
+        .dynamic_configuration()
+        .enable_verbose_logging_in_gateway()
+        .await
+    {
+        log::info!(
+            activity_id = activity_id;
+            "Latency for Mongo Request. BufferRead={}ns, HandleRequest={}ns, FormatRequest={}ns, ProcessRequest={}ns, PostgresBeginTransaction={}ns, PostgresSetStatementTimeout={}ns, PostgresTransactionCommit={}ns, FormatResponse={}ns",
+            request_tracker.get_interval_elapsed_time(RequestIntervalKind::BufferRead),
+            request_tracker.get_interval_elapsed_time(RequestIntervalKind::HandleRequest),
+            request_tracker.get_interval_elapsed_time(RequestIntervalKind::FormatRequest),
+            request_tracker.get_interval_elapsed_time(RequestIntervalKind::ProcessRequest),
+            request_tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresBeginTransaction),
+            request_tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresSetStatementTimeout),
+            request_tracker.get_interval_elapsed_time(RequestIntervalKind::PostgresTransactionCommit),
+            request_tracker.get_interval_elapsed_time(RequestIntervalKind::FormatResponse)
+        );
+    }
 }
