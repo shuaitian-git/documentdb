@@ -908,8 +908,8 @@ CancelIndexBuildRequest(int indexId)
 		appendStringInfo(cmdStr,
 						 "SELECT iq.global_pid AS pid, iq.start_time AS timestamp");
 		appendStringInfo(cmdStr,
-						 " FROM %s iq WHERE index_id = %d AND cmd_type = '%c'",
-						 GetIndexQueueName(), indexId, CREATE_INDEX_COMMAND_TYPE);
+						 " FROM %s iq WHERE index_id = %d",
+						 GetIndexQueueName(), indexId);
 
 		cancelIndexBuildRequestQueryStr = cmdStr->data;
 	}

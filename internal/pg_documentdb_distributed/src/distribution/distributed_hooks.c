@@ -613,8 +613,8 @@ TryGetCancelIndexBuildQueryCore(int32_t indexId, char cmdType)
 	appendStringInfo(cmdStr,
 					 "SELECT citus_pid_for_gpid(iq.global_pid) AS pid, iq.start_time AS timestamp");
 	appendStringInfo(cmdStr,
-					 " FROM %s iq WHERE index_id = %d AND cmd_type = '%c'",
-					 GetIndexQueueName(), indexId, CREATE_INDEX_COMMAND_TYPE);
+					 " FROM %s iq WHERE index_id = %d",
+					 GetIndexQueueName(), indexId);
 
 	return cmdStr->data;
 }

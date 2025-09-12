@@ -952,3 +952,24 @@ SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'background
  t                     |                1
 (2 rows)
 
+-- now queue some reindex jobs and test index builds
+SELECT * FROM documentdb_api_internal.reindex_index_background('db', '{ "collection": "backgroundcoll1", "indexes": [ 32044, 32045 ] }');
+                                                                                                                retval                                                                                                                | ok |                                                   requests                                                   
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----+--------------------------------------------------------------------------------------------------------------
+ { "raw" : { "defaultShard" : { "numIndexesBefore" : { "$numberInt" : "0" }, "numIndexesAfter" : { "$numberInt" : "2" }, "createdCollectionAutomatically" : false, "ok" : { "$numberInt" : "1" } } }, "ok" : { "$numberInt" : "1" } } | t  | { "indexRequest" : { "cmdType" : "R", "ids" : [ { "$numberInt" : "32044" }, { "$numberInt" : "32045" } ] } }
+(1 row)
+
+SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue;
+                              index_cmd                               | cmd_type | index_id | index_cmd_status | collection_id 
+----------------------------------------------------------------------+----------+----------+------------------+---------------
+ REINDEX INDEX CONCURRENTLY documentdb_data.documents_rum_index_32044 | R        |    32044 |                1 |         32007
+ REINDEX INDEX CONCURRENTLY documentdb_data.documents_rum_index_32045 | R        |    32045 |                1 |         32007
+(2 rows)
+
+CALL documentdb_api_internal.build_index_concurrently(1);
+--all indexes should be built and queue should be empty.
+SELECT * FROM documentdb_api_catalog.documentdb_index_queue;
+ index_cmd | cmd_type | index_id | index_cmd_status | global_pid | start_time | collection_id | comment | attempt | update_time | user_oid 
+-----------+----------+----------+------------------+------------+------------+---------------+---------+---------+-------------+----------
+(0 rows)
+
