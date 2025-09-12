@@ -1070,6 +1070,13 @@ WriteCommandAndGetQueryType(const char *query, SingleWorkerActivity *activity,
 		activity->processedBuildIndexStatProgress = true;
 		return "workerCommand";
 	}
+	else if (strstr(query, "REINDEX") != NULL)
+	{
+		PgbsonWriterAppendUtf8(commandWriter, "reIndex", 7,
+							   activity->processedMongoCollection);
+		activity->processedBuildIndexStatProgress = true;
+		return "workerCommand";
+	}
 	else
 	{
 		return "command";
