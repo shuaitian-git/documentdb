@@ -1408,7 +1408,7 @@ GetAllUsersInfo(void)
 		") "
 		"SELECT ARRAY_AGG(%s.row_get_bson(r) ORDER BY r.child_role, r.parent_role) "
 		"FROM r;",
-		ApiRootReplaceRole, ApiRootRole,
+		ApiRootInternalRole, ApiRootRole,
 		ApiAdminRole, ApiAdminRoleV2, CoreSchemaName);
 
 	bool readOnly = true;
@@ -1450,7 +1450,7 @@ GetSingleUserInfo(const char *userName, bool returnDocuments)
 			") "
 			"SELECT ARRAY_AGG(%s.row_get_bson(r) ORDER BY r.parent_role) "
 			"FROM r;",
-			ApiRootReplaceRole, ApiRootRole, CoreSchemaName);
+			ApiRootInternalRole, ApiRootRole, CoreSchemaName);
 	}
 	else
 	{
@@ -1466,7 +1466,7 @@ GetSingleUserInfo(const char *userName, bool returnDocuments)
 			"  AND child.rolname = $1 "
 			"ORDER BY parent.rolname "
 			"LIMIT 1;",
-			ApiRootReplaceRole, ApiRootRole);
+			ApiRootInternalRole, ApiRootRole);
 	}
 
 	int argCount = 1;

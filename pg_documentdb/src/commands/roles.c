@@ -8,6 +8,7 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+#include "access/transam.h"
 #include "utils/documentdb_errors.h"
 #include "utils/query_utils.h"
 #include "commands/commands_common.h"
@@ -32,12 +33,18 @@ PG_FUNCTION_INFO_V1(command_roles_info);
 PG_FUNCTION_INFO_V1(command_update_role);
 
 static void ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec);
+static void ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec);
 static void ParseRolesInfoSpec(pgbson *rolesInfoBson, RolesInfoSpec *rolesInfoSpec);
-
 static void ParseRoleDefinition(bson_iter_t *iter, RolesInfoSpec *rolesInfoSpec);
 static void ParseRoleDocument(bson_iter_t *rolesArrayIter, RolesInfoSpec *rolesInfoSpec);
-static void ParseRoleDefinition(bson_iter_t *iter, RolesInfoSpec *rolesInfoSpec);
-static void ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec);
+static void ProcessAllRoles(pgbson_array_writer *rolesArrayWriter, RolesInfoSpec
+							rolesInfoSpec);
+static void ProcessSpecificRoles(pgbson_array_writer *rolesArrayWriter, RolesInfoSpec
+								 rolesInfoSpec);
+static void WriteRoleResponse(const char *roleName,
+							  pgbson_array_writer *rolesArrayWriter,
+							  RolesInfoSpec rolesInfoSpec);
+static List * FetchDirectParentRoleNames(const char *roleName);
 
 /*
  * Parses a createRole spec, executes the createRole command, and returns the result.
@@ -216,7 +223,7 @@ ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec)
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 								errmsg(
-									"Cannot create system built-in role '%s'.",
+									"Role name '%s' is reserved and can't be used as a custom role name.",
 									createRoleSpec->roleName)));
 			}
 		}
@@ -433,7 +440,12 @@ roles_info(pgbson *rolesInfoBson)
 		return PointerGetDatum(PgbsonWriterGetPgbson(&finalWriter));
 	}
 
-	RolesInfoSpec rolesInfoSpec = { NIL, false, false, false };
+	RolesInfoSpec rolesInfoSpec = {
+		.roleNames = NIL,
+		.showAllRoles = false,
+		.showBuiltInRoles = false,
+		.showPrivileges = false
+	};
 	ParseRolesInfoSpec(rolesInfoBson, &rolesInfoSpec);
 
 	pgbson_writer finalWriter;
@@ -441,6 +453,21 @@ roles_info(pgbson *rolesInfoBson)
 
 	pgbson_array_writer rolesArrayWriter;
 	PgbsonWriterStartArray(&finalWriter, "roles", 5, &rolesArrayWriter);
+
+	if (rolesInfoSpec.showAllRoles)
+	{
+		ProcessAllRoles(&rolesArrayWriter, rolesInfoSpec);
+	}
+	else
+	{
+		ProcessSpecificRoles(&rolesArrayWriter, rolesInfoSpec);
+	}
+
+	/* This array is populated in ParseRolesInfoSpec, and freed here */
+	if (rolesInfoSpec.roleNames != NIL)
+	{
+		list_free_deep(rolesInfoSpec.roleNames);
+	}
 
 	PgbsonWriterEndArray(&finalWriter, &rolesArrayWriter);
 	PgbsonWriterAppendInt32(&finalWriter, "ok", 2, 1);
@@ -640,4 +667,236 @@ ParseRoleDefinition(bson_iter_t *iter, RolesInfoSpec *rolesInfoSpec)
 						errmsg(
 							"'rolesInfo' must be 1, a string, a document, or an array.")));
 	}
+}
+
+
+/*
+ * ProcessAllRoles handles the case when showAllRoles is true
+ */
+static void
+ProcessAllRoles(pgbson_array_writer *rolesArrayWriter, RolesInfoSpec rolesInfoSpec)
+{
+	/*
+	 * Postgres reserves system objects which have OID less than FirstNormalObjectId.
+	 * Also in Postgres, user is stored as a role in the pg_roles table, which is basically a role that can also login, so they are excluded.
+	 * Lastly, DocumentDB sets certain pre-defined role(s) with login privilege for the background jobs, so we cannot exclude them.
+	 */
+	const char *cmdStr = FormatSqlQuery(
+		"SELECT ARRAY_AGG(CASE WHEN rolname = '%s' THEN '%s' ELSE rolname::text END ORDER BY rolname) "
+		"FROM pg_roles "
+		"WHERE oid >= %d AND (NOT rolcanlogin OR rolname = '%s');",
+		ApiRootInternalRole, ApiRootRole,
+		FirstNormalObjectId, ApiAdminRole);
+
+	bool readOnly = true;
+	bool isNull = false;
+	Datum allRoleNamesDatum = ExtensionExecuteQueryViaSPI(cmdStr, readOnly, SPI_OK_SELECT,
+														  &isNull);
+
+	if (isNull)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
+						errmsg("Failed to retrieve roles from pg_roles table.")));
+	}
+
+	ArrayType *roleNameArray = DatumGetArrayTypeP(allRoleNamesDatum);
+	Oid arrayElementType = ARR_ELEMTYPE(roleNameArray);
+	int elementLength = -1;
+	bool arrayByVal = false;
+
+	Datum *roleNameDatums;
+	bool *roleNameIsNullMarker;
+	int roleCount;
+
+	deconstruct_array(roleNameArray, arrayElementType, elementLength, arrayByVal,
+					  TYPALIGN_INT,
+					  &roleNameDatums, &roleNameIsNullMarker, &roleCount);
+
+	for (int i = 0; i < roleCount; i++)
+	{
+		if (roleNameIsNullMarker[i])
+		{
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg(
+								"Encountered NULL roleDatum while processing role documents array.")));
+		}
+
+		text *roleText = DatumGetTextP(roleNameDatums[i]);
+		if (roleText == NULL || VARSIZE_ANY_EXHDR(roleText) == 0)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg(
+								"Encountered NULL or empty roleText while processing role documents array.")));
+		}
+
+		const char *roleName = text_to_cstring(roleText);
+
+		if (roleName == NULL || strlen(roleName) == 0)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg(
+								"roleName extracted from pg_roles is NULL or empty.")));
+		}
+
+		/* Exclude built-in roles if the request doesn't demand them */
+		if (IS_SYSTEM_ROLE(roleName) ||
+			(IS_BUILTIN_ROLE(roleName) && !rolesInfoSpec.showBuiltInRoles))
+		{
+			continue;
+		}
+
+		WriteRoleResponse(roleName, rolesArrayWriter,
+						  rolesInfoSpec);
+	}
+}
+
+
+/*
+ * ProcessSpecificRoles handles the case when specific role names are requested
+ */
+static void
+ProcessSpecificRoles(pgbson_array_writer *rolesArrayWriter, RolesInfoSpec rolesInfoSpec)
+{
+	ListCell *currentRoleName;
+	foreach(currentRoleName, rolesInfoSpec.roleNames)
+	{
+		const char *requestedRoleName = (const char *) lfirst(currentRoleName);
+
+		if (strcmp(requestedRoleName, ApiRootRole) == 0)
+		{
+			requestedRoleName = ApiRootInternalRole;
+		}
+
+		const char *cmdStr = FormatSqlQuery(
+			"SELECT rolname "
+			"FROM pg_roles "
+			"WHERE oid >= %d AND (NOT rolcanlogin OR rolname = '%s') AND rolname = '%s';",
+			FirstNormalObjectId, ApiAdminRole, requestedRoleName);
+
+		bool readOnly = true;
+		bool isNull = false;
+		ExtensionExecuteQueryViaSPI(cmdStr, readOnly, SPI_OK_SELECT, &isNull);
+
+		/* If the role is not found, do not fail the request */
+		if (!isNull)
+		{
+			WriteRoleResponse(requestedRoleName, rolesArrayWriter,
+							  rolesInfoSpec);
+		}
+	}
+}
+
+
+/*
+ * Primitive type properties include _id, role, db, isBuiltin.
+ * privileges: supported privilege actions of this role if defined.
+ * roles property: 1st level directly inherited roles if defined.
+ * inheritedRoles: all recursively inherited roles if defined (not yet supported).
+ * inheritedPrivileges: consolidated privileges of current role and all recursively inherited roles if defined (not yet supported).
+ */
+static void
+WriteRoleResponse(const char *roleName,
+				  pgbson_array_writer *rolesArrayWriter,
+				  RolesInfoSpec rolesInfoSpec)
+{
+	pgbson_writer roleDocumentWriter;
+	PgbsonArrayWriterStartDocument(rolesArrayWriter, &roleDocumentWriter);
+
+	char *roleId = psprintf("admin.%s", roleName);
+	PgbsonWriterAppendUtf8(&roleDocumentWriter, "_id", 3, roleId);
+	pfree(roleId);
+
+	PgbsonWriterAppendUtf8(&roleDocumentWriter, "role", 4, roleName);
+	PgbsonWriterAppendUtf8(&roleDocumentWriter, "db", 2, "admin");
+	PgbsonWriterAppendBool(&roleDocumentWriter, "isBuiltIn", 9,
+						   IS_BUILTIN_ROLE(roleName));
+
+	/* Write privileges */
+	if (rolesInfoSpec.showPrivileges)
+	{
+		pgbson_array_writer privilegesArrayWriter;
+		PgbsonWriterStartArray(&roleDocumentWriter, "privileges", 10,
+							   &privilegesArrayWriter);
+		WriteSingleRolePrivileges(roleName, &privilegesArrayWriter);
+		PgbsonWriterEndArray(&roleDocumentWriter, &privilegesArrayWriter);
+	}
+
+	/* Write roles */
+	List *parentRoles = FetchDirectParentRoleNames(roleName);
+	pgbson_array_writer parentRolesArrayWriter;
+	PgbsonWriterStartArray(&roleDocumentWriter, "roles", 5, &parentRolesArrayWriter);
+	ListCell *roleCell;
+	foreach(roleCell, parentRoles)
+	{
+		const char *parentRoleName = (const char *) lfirst(roleCell);
+		pgbson_writer parentRoleDocWriter;
+		PgbsonArrayWriterStartDocument(&parentRolesArrayWriter,
+									   &parentRoleDocWriter);
+		PgbsonWriterAppendUtf8(&parentRoleDocWriter, "role", 4, parentRoleName);
+		PgbsonWriterAppendUtf8(&parentRoleDocWriter, "db", 2, "admin");
+		PgbsonArrayWriterEndDocument(&parentRolesArrayWriter, &parentRoleDocWriter);
+	}
+	PgbsonWriterEndArray(&roleDocumentWriter, &parentRolesArrayWriter);
+	PgbsonArrayWriterEndDocument(rolesArrayWriter, &roleDocumentWriter);
+
+	if (parentRoles != NIL)
+	{
+		list_free_deep(parentRoles);
+	}
+}
+
+
+static List *
+FetchDirectParentRoleNames(const char *roleName)
+{
+	const char *requestedRoleName = roleName;
+	if (strcmp(roleName, ApiRootRole) == 0)
+	{
+		requestedRoleName = ApiRootInternalRole;
+	}
+
+	/*
+	 * Even if the user has given us the role name, we still want to prevent customers fetching roles that are not allowed to be fetched.
+	 * As such, we add the same filtering condition as the above PG queries.
+	 */
+	const char *cmdStr = FormatSqlQuery(
+		"WITH parent AS ("
+		"  SELECT DISTINCT parent.rolname::text AS parent_role "
+		"  FROM pg_roles child "
+		"  JOIN pg_auth_members am ON child.oid = am.member "
+		"  JOIN pg_roles parent ON am.roleid = parent.oid "
+		"  WHERE child.oid >= %d AND (NOT child.rolcanlogin OR child.rolname = '%s') AND child.rolname = '%s' "
+		") "
+		"SELECT ARRAY_AGG(parent_role ORDER BY parent_role) "
+		"FROM parent;",
+		FirstNormalObjectId, ApiAdminRole, requestedRoleName);
+
+	bool readOnly = true;
+	bool isNull = false;
+	Datum parentRolesDatum = ExtensionExecuteQueryViaSPI(cmdStr, readOnly,
+														 SPI_OK_SELECT, &isNull);
+
+	List *parentRolesList = NIL;
+
+	if (!isNull)
+	{
+		ArrayType *parentRolesArray = DatumGetArrayTypeP(parentRolesDatum);
+		Datum *parentRolesDatums;
+		bool *parentRolesIsNullMarker;
+		int parentRolesCount;
+
+		bool arrayByVal = false;
+		int elementLength = -1;
+		Oid arrayElementType = ARR_ELEMTYPE(parentRolesArray);
+		deconstruct_array(parentRolesArray,
+						  arrayElementType, elementLength, arrayByVal,
+						  TYPALIGN_INT, &parentRolesDatums,
+						  &parentRolesIsNullMarker,
+						  &parentRolesCount);
+
+		parentRolesList = ConvertUserOrRoleNamesDatumToList(parentRolesDatums,
+															parentRolesCount);
+	}
+
+	return parentRolesList;
 }
