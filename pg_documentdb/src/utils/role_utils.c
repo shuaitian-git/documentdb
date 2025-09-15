@@ -57,13 +57,13 @@ static void ConsolidatePrivileges(List **consolidatedPrivileges,
 								  size_t sourcePrivilegeCount);
 static void ConsolidatePrivilege(List **consolidatedPrivileges,
 								 const Privilege *sourcePrivilege);
-static void ConsolidatePrivilegesForRole(const char *roleName,
-										 List **consolidatedPrivileges);
 static bool ComparePrivileges(const ConsolidatedPrivilege *privilege1,
 							  const Privilege *privilege2);
-static void DeepFreePrivileges(List *consolidatedPrivileges);
+static void ConsolidatePrivilegesForRole(const char *roleName,
+										 List **consolidatedPrivileges);
 static void WritePrivilegeListToArray(List *consolidatedPrivileges,
 									  pgbson_array_writer *privilegesArrayWriter);
+static void DeepFreePrivileges(List *consolidatedPrivileges);
 
 /*
  * Static definitions for user privileges and roles
@@ -312,7 +312,8 @@ WriteSingleRolePrivileges(const char *roleName,
  * The rolesTable should contain StringView entries representing role names.
  */
 void
-WriteMultipleRolePrivileges(HTAB *rolesTable, pgbson_array_writer *privilegesArrayWriter)
+WriteMultipleRolePrivileges(HTAB *rolesTable,
+							pgbson_array_writer *privilegesArrayWriter)
 {
 	if (rolesTable == NULL)
 	{
@@ -693,4 +694,31 @@ DeepFreePrivileges(List *consolidatedPrivileges)
 	}
 
 	list_free_deep(consolidatedPrivileges);
+}
+
+
+List *
+ConvertUserOrRoleNamesDatumToList(Datum *nameDatums, int namesCount)
+{
+	List *namesList = NIL;
+
+	for (int i = 0; i < namesCount; i++)
+	{
+		text *nameText = DatumGetTextP(nameDatums[i]);
+		const char *currentName = text_to_cstring(nameText);
+
+		if (currentName != NULL && strlen(currentName) > 0)
+		{
+			namesList = lappend(namesList,
+								pstrdup(currentName));
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg(
+								"Name array datum is NULL or empty.")));
+		}
+	}
+
+	return namesList;
 }

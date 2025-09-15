@@ -2,6 +2,7 @@
 * Top-level `let` variables and `$$NOW` supported by default.
 * Fix collation support on find and aggregation when variableSpec is not available *[Bugfix]*.
 * Support `dropRole` command *[Feature]*
+* Support `rolesInfo` command *[Feature]*
 * Fix concurrent upsert behavior, update the documents in case of conflicts during insert *[Bugfix]* (#295).
 * Support collation with `$sortArray` aggregation operator *[Feature]*
 * Add support for keyword `required` in `$jsonSchema`

@@ -142,6 +142,12 @@ DROP ROLE IF EXISTS "ignoredFieldsRole";
 -- Clean up test user
 SELECT documentdb_api.drop_user('{"dropUser":"testRoleUser"}');
 
+-- Test createRole with blocked role names, should fail
+SET documentdb.blockedRolePrefixList TO 'block,test';
+SELECT documentdb_api.create_role('{"createRole":"block", "roles":["documentdb_readonly_role"]}');
+SELECT documentdb_api.create_role('{"createRole":"test_block_user", "roles":["documentdb_readonly_role"]}');
+RESET documentdb.blockedRolePrefixList;
+
 -- Reset settings
 RESET documentdb.enableRoleCrud;
 RESET documentdb.blockedRolePrefixList;

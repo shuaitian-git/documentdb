@@ -8,7 +8,7 @@
 #define IS_SYSTEM_ROLE(roleName) \
 	(strcmp((roleName), ApiBgWorkerRole) == 0)
 
-/* Macro to check if a role is a supported built-in role */
+/* Macro to check if a role is a customer facing built-in role */
 #define IS_BUILTIN_ROLE(roleName) \
 	(strcmp((roleName), ApiAdminRoleV2) == 0 || \
 	 strcmp((roleName), ApiReadOnlyRole) == 0 || \
@@ -43,11 +43,14 @@ typedef struct
 void WriteSingleRolePrivileges(const char *roleName,
 							   pgbson_array_writer *privilegesArrayWriter);
 
-/* Function to write multiple roles' privileges to a BSON array writer*/
+/* Function to write multiple roles' privileges from an HTAB to a BSON array writer*/
 void WriteMultipleRolePrivileges(HTAB *rolesTable,
 								 pgbson_array_writer *privilegesArrayWriter);
 
 /* Function to check if a given role name contains any reserved pg role name prefixes. */
 bool ContainsReservedPgRoleNamePrefix(const char *name);
+
+/* Function to build a List of parent role names from an array of Datums */
+List * ConvertUserOrRoleNamesDatumToList(Datum *parentRolesDatums, int parentRolesCount);
 
 #endif

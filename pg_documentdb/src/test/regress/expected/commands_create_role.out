@@ -84,7 +84,7 @@ SELECT documentdb_api.create_role('{"roles":["documentdb_readonly_role"]}');
 ERROR:  'createRole' is a required field.
 -- Test createRole with a built-in role, should fail
 SELECT documentdb_api.create_role('{"createRole": "documentdb_admin_role"}');
-ERROR:  Cannot create system built-in role 'documentdb_admin_role'.
+ERROR:  Role name 'documentdb_admin_role' is reserved and can't be used as a custom role name.
 -- Test createRole with unsupported field, should fail
 SELECT documentdb_api.create_role('{"createRole":"unsupportedFieldRole", "roles":["documentdb_readonly_role"], "unsupportedField":"value"}');
 ERROR:  The specified field 'unsupportedField' is not supported.
@@ -233,6 +233,13 @@ SELECT documentdb_api.drop_user('{"dropUser":"testRoleUser"}');
  { "ok" : { "$numberInt" : "1" } }
 (1 row)
 
+-- Test createRole with blocked role names, should fail
+SET documentdb.blockedRolePrefixList TO 'block,test';
+SELECT documentdb_api.create_role('{"createRole":"block", "roles":["documentdb_readonly_role"]}');
+ERROR:  Role name 'block' is reserved and can't be used as a custom role name.
+SELECT documentdb_api.create_role('{"createRole":"test_block_user", "roles":["documentdb_readonly_role"]}');
+ERROR:  Role name 'test_block_user' is reserved and can't be used as a custom role name.
+RESET documentdb.blockedRolePrefixList;
 -- Reset settings
 RESET documentdb.enableRoleCrud;
 RESET documentdb.blockedRolePrefixList;
