@@ -5,6 +5,7 @@
 * Fix concurrent upsert behavior, update the documents in case of conflicts during insert *[Bugfix]* (#295).
 * Support collation with `$sortArray` aggregation operator *[Feature]*
 * Add support for keyword `required` in `$jsonSchema`
+* Fix a segmentation fault when using ordered aggregate such as `$last` with `$setWindowFields` aggregation stage. *[Bugfix]*
 * Add basic support for compiling with pg18 *[Feature]*
 
 ### documentdb v0.107-0 (Unreleased) ###
