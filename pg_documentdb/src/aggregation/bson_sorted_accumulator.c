@@ -40,11 +40,18 @@ static void ParseInputExpressionAndPersistValue(AggregationExpressionData *expre
  * Converts a BsonOrderAggState into a serialized form to allow the internal type to be bytea
  * Resulting bytes look like:
  * | Varlena Header | numAggValues | numSortKeys | BsonOrderAggValue * numAggValues | sortDirections | inputExpression (pgbson)
+ *
+ * The function uses the CurrentMemoryContext (ecxt_per_tuple_memory context) to allocate the new set bytea for result, because we want
+ * this to be free'd as soon as possible, without leaking memory for entire duration of aggregate.
+ * Postgres makes sure to copy it into aggregate context if needed.
+ *
+ * For more info look at these places in PG where the state pointer is tracked and cleaned up:
+ * nodeAgg.c: https://github.com/postgres/postgres/blob/9c24111c4dad850bc2625c2113bb3d2dfd592efc/src/backend/executor/nodeAgg.c#L779
+ * nodeWindowAgg.c: https://github.com/postgres/postgres/blob/9c24111c4dad850bc2625c2113bb3d2dfd592efc/src/backend/executor/nodeWindowAgg.c#L367
+ *
  */
 bytea *
-SerializeOrderState(MemoryContext aggregateContext,
-					BsonOrderAggState *state,
-					bytea *byteArray)
+SerializeOrderState(BsonOrderAggState *state)
 {
 	int valueSize = 0;
 	for (int i = 0; i < state->currentCount; i++)
@@ -103,24 +110,14 @@ SerializeOrderState(MemoryContext aggregateContext,
 						   valueSize + /* BsonOrderAggValues */
 						   state->numSortKeys * sizeof(bool) + /* sortDirections */
 						   inputExpressionValueSize; /* inputExpression (pgbson) + null flag */
-	char *bytes;
-	int existingByteSize = (byteArray == NULL) ? 0 : VARSIZE(byteArray);
 
-	if (state->numAggValues == 1 && existingByteSize >= requiredByteSize)
-	{
-		/* Reuse existing bytes */
-		bytes = (char *) byteArray;
-	}
-	else
-	{
-		/* Otherwise get more
-		 * We don't need to do anything with the old memory (free/repalloc) since Postgres will free it as
-		 * it will track that the memory block changed in the transition function.
-		 * If we intent to free or repalloc the old memory, when Postgres tries to free it would crash as the old memory would be invalid.
-		 */
-		bytes = (char *) MemoryContextAlloc(aggregateContext, requiredByteSize);
-		SET_VARSIZE(bytes, requiredByteSize);
-	}
+	/* We should always allocate a new block of memory as the old one is still being used in the state that is referred later here.
+	 * We don't need to do anything with the old memory (free/repalloc) since Postgres will free it as
+	 * it will track that the memory block changed in the transition function.
+	 * If we intent to free or repalloc the old memory, when Postgres tries to free it would crash as the old memory would be invalid.
+	 */
+	char *bytes = (char *) MemoryContextAlloc(CurrentMemoryContext, requiredByteSize);
+	SET_VARSIZE(bytes, requiredByteSize);
 
 
 	/* Copy into the current value variable */
@@ -541,11 +538,7 @@ BsonOrderTransition(PG_FUNCTION_ARGS, bool invertSort, bool isSingle, bool
 		{
 			inputAggregateState.currentCount += 1;
 		}
-		result = SerializeOrderState(aggregateContext,
-									 &inputAggregateState,
-									 PG_ARGISNULL(0) ?
-									 NULL :
-									 PG_GETARG_BYTEA_P(0));
+		result = SerializeOrderState(&inputAggregateState);
 	}
 	else
 	{
@@ -944,9 +937,7 @@ BsonOrderCombine(PG_FUNCTION_ARGS, bool invertSort)
 
 	if (updatedLeft)
 	{
-		result = SerializeOrderState(aggregateContext, &leftState, PG_ARGISNULL(0) ?
-									 NULL :
-									 PG_GETARG_BYTEA_P(0));
+		result = SerializeOrderState(&leftState);
 	}
 	else
 	{

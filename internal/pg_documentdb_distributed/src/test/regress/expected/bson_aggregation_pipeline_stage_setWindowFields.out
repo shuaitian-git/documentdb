@@ -8049,3 +8049,39 @@ SELECT document FROM documentdb_api_catalog.bson_aggregation_pipeline('db',
  { "_id" : { "$numberInt" : "12" }, "a" : "ghi", "cost" : { "$numberInt" : "4" }, "quantity" : { "$numberInt" : "512" }, "date" : { "$date" : { "$numberLong" : "1718842600000" } }, "totalInGroup" : { "$numberInt" : "512" } }
 (13 rows)
 
+-- Tests for $last
+SELECT documentdb_api.insert_one('db','lastSetWindowFields','{ "_id": 1, "storeId": 1, "area": "Delhi", "company": "ABC Cares", "lastUpdated": { "$date" : { "$numberLong" : "1756720800000" } }, "status": "open" }', NULL);
+NOTICE:  creating collection
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db','lastSetWindowFields','{ "_id": 2, "storeId": 2, "area": "Mumbai", "company": "ABC Cares", "lastUpdated": { "$date" : { "$numberLong" : "1756902000000" } }, "status": "closed" }', NULL);
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db','lastSetWindowFields','{ "_id": 3, "storeId": 3, "area": "Kolkata", "company": "ABC Cares", "lastUpdated": { "$date" : { "$numberLong" : "1757086200000" } }, "status": "open" }', NULL);
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db','lastSetWindowFields','{ "_id": 4, "storeId": 4, "area": "Chennai", "company": "ABC Cares", "lastUpdated": { "$date" : { "$numberLong" : "1757235600000" } }, "status": "open" }', NULL);
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT document FROM documentdb_api_catalog.bson_aggregation_pipeline('db',
+    '{ "aggregate": "lastSetWindowFields", "pipeline":[{"$match":{"company":{"$in":["ABC Cares"]}}}, {"$setWindowFields": {"partitionBy":"$company","sortBy": {"lastUpdated": {"$numberInt" : "1" } }, "output" : { "lastUpdatedDateForStore" : { "$last" : "$lastUpdated", "window" : { "documents" : [ "current", "unbounded" ] } } } } } ]}');
+                                                                                                                                         document                                                                                                                                          
+---------------------------------------------------------------------
+ { "_id" : { "$numberInt" : "1" }, "storeId" : { "$numberInt" : "1" }, "area" : "Delhi", "company" : "ABC Cares", "lastUpdated" : { "$date" : { "$numberLong" : "1756720800000" } }, "status" : "open", "lastUpdatedDateForStore" : { "$date" : { "$numberLong" : "1757235600000" } } }
+ { "_id" : { "$numberInt" : "2" }, "storeId" : { "$numberInt" : "2" }, "area" : "Mumbai", "company" : "ABC Cares", "lastUpdated" : { "$date" : { "$numberLong" : "1756902000000" } }, "status" : "closed", "lastUpdatedDateForStore" : { "$date" : { "$numberLong" : "1757235600000" } } }
+ { "_id" : { "$numberInt" : "3" }, "storeId" : { "$numberInt" : "3" }, "area" : "Kolkata", "company" : "ABC Cares", "lastUpdated" : { "$date" : { "$numberLong" : "1757086200000" } }, "status" : "open", "lastUpdatedDateForStore" : { "$date" : { "$numberLong" : "1757235600000" } } }
+ { "_id" : { "$numberInt" : "4" }, "storeId" : { "$numberInt" : "4" }, "area" : "Chennai", "company" : "ABC Cares", "lastUpdated" : { "$date" : { "$numberLong" : "1757235600000" } }, "status" : "open", "lastUpdatedDateForStore" : { "$date" : { "$numberLong" : "1757235600000" } } }
+(4 rows)
+
