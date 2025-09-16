@@ -8,6 +8,7 @@
 * Add support for keyword `required` in `$jsonSchema`
 * Fix a segmentation fault when using ordered aggregate such as `$last` with `$setWindowFields` aggregation stage. *[Bugfix]*
 * Add basic support for compiling with pg18 *[Feature]*
+* Drop unused environment variable `ENFORCE_SSL` in dockerfile *[Bugfix]* (#313)
 
 ### documentdb v0.107-0 (Unreleased) ###
 * Support sort by _id against the _id index using the enableIndexOrderbyPushdown flag *[Feature]*.

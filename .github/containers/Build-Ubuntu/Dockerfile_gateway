@@ -51,8 +51,7 @@ RUN sudo apt-get update && \
 ENV LANGUAGE=en_US.UTF-8 \
     TERM=xterm-256color
 
-ENV ENFORCE_SSL="true" \
-    CERT_PATH="" \
+ENV CERT_PATH="" \
     KEY_FILE="" \
     DATA_PATH="/data" \
     DOCUMENTDB_PORT="10260" \
