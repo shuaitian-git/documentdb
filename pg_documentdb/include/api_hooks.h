@@ -219,5 +219,7 @@ char * TryGetCancelIndexBuildQuery(int32_t indexId, char cmdType);
 
 bool ShouldScheduleIndexBuildJobs(void);
 
+List * GetShardIndexOids(uint64_t collectionId, int indexId);
+
 
 #endif

@@ -66,6 +66,9 @@ TryGetIndexBuildJobOpIdQuery_HookType try_get_index_build_job_op_id_query_hook =
 TryGetCancelIndexBuildQuery_HookType try_get_cancel_index_build_query_hook =
 	NULL;
 ShouldScheduleIndexBuilds_HookType should_schedule_index_builds_hook = NULL;
+
+GettShardIndexOids_HookType get_shard_index_oids_hook = NULL;
+
 UserNameValidation_HookType
 	username_validation_hook = NULL;
 PasswordValidation_HookType
@@ -566,4 +569,16 @@ ShouldScheduleIndexBuildJobs(void)
 	}
 
 	return true;
+}
+
+
+List *
+GetShardIndexOids(uint64_t collectionId, int indexId)
+{
+	if (get_shard_index_oids_hook != NULL)
+	{
+		return get_shard_index_oids_hook(collectionId, indexId);
+	}
+
+	return NIL;
 }
