@@ -213,7 +213,11 @@ SELECT object_id from documentdb_api.collection('commands', 'collModTest');
 SELECT documentdb_api.coll_mod('commands', 'collModTest', '{"collMod": "collModTest", "index": {"name": "a_1", "expireAfterSeconds": 2000}}'); -- Not a TTL index to be modified
 ERROR:  no expireAfterSeconds field to update
 SELECT documentdb_api.coll_mod('commands', 'collModTest', '{"collMod": "collModTest", "index": {"name": "a_1", "hidden": true}}'); -- Hidden is not supported yet
-ERROR:  'collMod.index.hidden' is not supported yet.
+                                   coll_mod                                   
+---------------------------------------------------------------------
+ { "ok" : { "$numberInt" : "1" }, "hidden_old" : false, "hidden_new" : true }
+(1 row)
+
 SELECT documentdb_api.coll_mod('commands', 'collModTest',
                              '{"collMod": "collModTest", "index": {"name": "c_1", "expireAfterSeconds": 1000}}'); -- index not found
 ERROR:  cannot find index c_1 for ns commands.collModTest

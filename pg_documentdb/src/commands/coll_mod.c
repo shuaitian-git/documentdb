@@ -12,6 +12,7 @@
 #include <funcapi.h>
 #include <utils/builtins.h>
 #include <utils/snapmgr.h>
+#include <utils/lsyscache.h>
 
 #include "commands/parse_error.h"
 #include "commands/commands_common.h"
@@ -22,6 +23,7 @@
 #include "metadata/metadata_cache.h"
 #include "utils/guc_utils.h"
 #include "utils/query_utils.h"
+#include "utils/version_utils.h"
 #include "utils/feature_counter.h"
 
 
@@ -108,6 +110,9 @@ static void ModifyViewDefinition(Datum databaseDatum,
 								 const MongoCollection *collection,
 								 const ViewDefinition *viewDefinition,
 								 pgbson_writer *writer);
+static bool GetHiddenFlagFromOptions(pgbson *indexOptions);
+static pgbson * UpdateHiddenInIndexOptions(pgbson *indexOptions, bool hidden);
+static void UpdatePostgresIndex(uint64_t collectionId, int indexId, bool hidden);
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -412,11 +417,14 @@ ParseIndexSpecSetCollModOptions(bson_iter_t *indexSpecIter,
 		}
 		else if (strcmp(key, "hidden") == 0)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("'collMod.index.hidden' is not supported yet.")));
+			ReportFeatureUsage(FEATURE_COMMAND_COLLMOD_INDEX_HIDDEN);
+			EnsureTopLevelFieldIsBooleanLike("collMod.index.hidden", indexSpecIter);
+			collModIndexOptions->hidden = BsonValueAsBool(value);
+			*specFlags |= HAS_INDEX_OPTION_HIDDEN;
 		}
 		else if (strcmp(key, "expireAfterSeconds") == 0)
 		{
+			ReportFeatureUsage(FEATURE_COMMAND_COLLMOD_TTL_UPDATE);
 			if (!BsonValueIsNumber(value))
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_TYPEMISMATCH),
@@ -475,7 +483,7 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 	StringInfo cmdStr = makeStringInfo();
 	bool searchWithName = *specFlags & HAS_INDEX_OPTION_NAME;
 	appendStringInfo(cmdStr,
-					 "SELECT index_id, index_spec "
+					 "SELECT index_id, index_spec, index_is_valid "
 					 "FROM %s.collection_indexes "
 					 "WHERE collection_id = $2 AND (index_spec).%s = $1;",
 					 ApiCatalogSchemaName,
@@ -502,9 +510,9 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 	/* all args are non-null */
 	char *argNulls = NULL;
 	bool readOnly = true;
-	int numValues = 2;
-	bool isNull[2];
-	Datum results[2];
+	int numValues = 3;
+	bool isNull[3];
+	Datum results[3];
 	ExtensionExecuteMultiValueQueryWithArgsViaSPI(cmdStr->data, argCount, argTypes,
 												  argValues, argNulls, readOnly,
 												  SPI_OK_SELECT, results, isNull,
@@ -524,6 +532,8 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 	indexDetails.indexId = DatumGetInt32(results[0]);
 	indexDetails.indexSpec = *DatumGetIndexSpec(results[1]);
 	indexDetails.collectionId = collection->collectionId;
+
+	bool isIndexValid = DatumGetBool(results[2]);
 
 	BoolIndexOption oldHidden = BoolIndexOption_Undefined;
 	BoolIndexOption newHidden = BoolIndexOption_Undefined;
@@ -545,6 +555,52 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 		if (oldTTL != newTTL)
 		{
 			*(indexDetails.indexSpec.indexExpireAfterSeconds) = newTTL;
+			updateNeeded = true;
+		}
+	}
+
+	if ((*specFlags & HAS_INDEX_OPTION_HIDDEN) == HAS_INDEX_OPTION_HIDDEN)
+	{
+		if (!IsClusterVersionAtleast(DocDB_V0, 108, 0))
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
+							errmsg("hidden index option is not supported yet")));
+		}
+
+		if (!isIndexValid)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
+							errmsg("cannot modify hidden field of an invalid index")));
+		}
+
+		if (strcmp(indexDetails.indexSpec.indexName, "_id_") == 0)
+		{
+			/* Also ensure that _id index can't be hidden */
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
+							errmsg("cannot modify hidden field of the _id_ index")));
+		}
+
+		if (indexDetails.indexSpec.indexUnique == BoolIndexOption_True)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
+							errmsg("cannot modify hidden field of a unique index")));
+		}
+
+		bool currentHidden = GetHiddenFlagFromOptions(
+			indexDetails.indexSpec.indexOptions);
+		if (currentHidden != indexOption->hidden)
+		{
+			oldHidden = currentHidden ? BoolIndexOption_True : BoolIndexOption_False;
+			newHidden = indexOption->hidden ? BoolIndexOption_True :
+						BoolIndexOption_False;
+
+			/* Update the postgres index status */
+			UpdatePostgresIndex(collection->collectionId, indexDetails.indexId,
+								indexOption->hidden);
+
+			/* update the hidden field in indexOptions */
+			indexDetails.indexSpec.indexOptions = UpdateHiddenInIndexOptions(
+				indexDetails.indexSpec.indexOptions, indexOption->hidden);
 			updateNeeded = true;
 		}
 	}
@@ -646,4 +702,135 @@ ModifyViewDefinition(Datum databaseDatum,
 	bool isNullIgnore = false;
 	RunQueryWithCommutativeWrites(query->data, nargs, argsTypes, argValues, argNulls,
 								  SPI_OK_UPDATE, &isNullIgnore);
+}
+
+
+static bool
+GetHiddenFlagFromOptions(pgbson *indexOptions)
+{
+	if (indexOptions == NULL)
+	{
+		return false;
+	}
+
+	bson_iter_t iter;
+	PgbsonInitIterator(indexOptions, &iter);
+	while (bson_iter_next(&iter))
+	{
+		const char *key = bson_iter_key(&iter);
+		const bson_value_t *value = bson_iter_value(&iter);
+		if (strcmp(key, "hidden") == 0)
+		{
+			if (value->value_type != BSON_TYPE_BOOL)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_TYPEMISMATCH),
+								errmsg(
+									"BSON field 'hidden' is the wrong type '%s', expected type 'bool'",
+									BsonTypeName(value->value_type))));
+			}
+			return value->value.v_bool;
+		}
+	}
+
+	return false;
+}
+
+
+static pgbson *
+UpdateHiddenInIndexOptions(pgbson *indexOptions, bool hidden)
+{
+	pgbson_writer writer;
+	PgbsonWriterInit(&writer);
+
+	bool writtenHidden = false;
+
+	if (indexOptions != NULL)
+	{
+		bson_iter_t iter;
+		PgbsonInitIterator(indexOptions, &iter);
+		while (bson_iter_next(&iter))
+		{
+			const char *key = bson_iter_key(&iter);
+			const bson_value_t *value = bson_iter_value(&iter);
+			if (strcmp(key, "hidden") == 0)
+			{
+				writtenHidden = true;
+
+				if (hidden)
+				{
+					/* Only serialize for true */
+					PgbsonWriterAppendBool(&writer, "hidden", 6, hidden);
+				}
+			}
+			else
+			{
+				PgbsonWriterAppendValue(&writer, key, strlen(key), value);
+			}
+		}
+	}
+
+	if (hidden && !writtenHidden)
+	{
+		/* Only serialize for true */
+		PgbsonWriterAppendBool(&writer, "hidden", 6, hidden);
+	}
+
+	if (IsPgbsonWriterEmptyDocument(&writer))
+	{
+		/* No options */
+		return NULL;
+	}
+
+	return PgbsonWriterGetPgbson(&writer);
+}
+
+
+static void
+UpdatePostgresIndex(uint64_t collectionId, int indexId, bool hidden)
+{
+	/* First get the OID of the index */
+	char postgresIndexName[NAMEDATALEN] = { 0 };
+	pg_sprintf(postgresIndexName, DOCUMENT_DATA_TABLE_INDEX_NAME_FORMAT, indexId);
+	Oid indexOid = get_relname_relid(postgresIndexName, ApiDataNamespaceOid());
+
+	List *indexOidList = NIL;
+	indexOidList = lappend_oid(indexOidList, indexOid);
+
+	/* Add any additional shard OIDs needed for this */
+	indexOidList = list_concat(indexOidList,
+							   GetShardIndexOids(collectionId, indexId));
+
+	ListCell *cell;
+	int numUpdated = 0;
+	foreach(cell, indexOidList)
+	{
+		bool readOnly = false;
+		int numArgs = 2;
+		Datum args[2] = { BoolGetDatum(!hidden), ObjectIdGetDatum(lfirst_oid(cell)) };
+		Oid argTypes[2] = { BOOLOID, OIDOID };
+
+		/* all args are non-null */
+		char *argNulls = NULL;
+		bool resultIsNull;
+
+		/* Update pg_class to set the indisvalid which removes it from query but not writes */
+		ExtensionExecuteQueryWithArgsViaSPI(
+			"UPDATE pg_catalog.pg_index SET indisvalid = $1 WHERE indexrelid = $2 RETURNING indexrelid",
+			numArgs,
+			argTypes,
+			args,
+			argNulls,
+			readOnly,
+			SPI_OK_UPDATE_RETURNING,
+			&resultIsNull);
+		numUpdated += (resultIsNull ? 0 : 1);
+	}
+
+	/* If not all tables requested were updated - fail */
+	if (numUpdated != list_length(indexOidList))
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
+						errmsg("failed to update index status for index %s",
+							   postgresIndexName)));
+	}
 }

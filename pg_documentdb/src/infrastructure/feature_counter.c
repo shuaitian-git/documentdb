@@ -246,6 +246,8 @@ static char FeatureMapping[MAX_FEATURE_COUNT][MAX_FEATURE_NAME_LENGTH] = {
 	[FEATURE_COMMAND_COLLMOD_VIEW] = "collMod_view",
 	[FEATURE_COMMAND_COLLMOD_COLOCATION] = "collMod_colocation",
 	[FEATURE_COMMAND_COLLMOD_VALIDATION] = "collMod_validation",
+	[FEATURE_COMMAND_COLLMOD_TTL_UPDATE] = "collMod_ttl_update",
+	[FEATURE_COMMAND_COLLMOD_INDEX_HIDDEN] = "collMod_index_hidden",
 
 	/* Feature Connection Status */
 	[FEATURE_CONNECTION_STATUS] = "connection_status",
