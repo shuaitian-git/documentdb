@@ -48,6 +48,7 @@ extern int32_t MaxWorkerCursorSize;
 extern bool EnablePrimaryKeyCursorScan;
 extern bool UseFileBasedPersistedCursors;
 extern bool EnableDebugQueryText;
+extern bool EnableDelayedHoldPortal;
 
 static char LastOpenPortalName[NAMEDATALEN] = { 0 };
 
@@ -496,9 +497,13 @@ CreateAndDrainPersistedQuery(const char *cursorName, Query *query,
 		/* In order to use a portal & SPI in Merge Command we need to set it to true */
 		queryPlan->hasReturning = true;
 	}
-	else if (!closeCursor)
+	else if (!closeCursor && (!EnableDelayedHoldPortal || !isHoldCursor))
 	{
-		/* Since this could be holdable, copy the query plan to the portal context  */
+		/* Since this could be holdable, copy the query plan to the portal context
+		 * Note that this is cleared anyway when we call HoldPortal (portal->stmts is
+		 * NULLed out) so we don't need to copy this plan. Note that in transactions
+		 * we don't hold the cursor so we need to copy the plan.
+		 */
 		MemoryContextSwitchTo(queryPortal->portalContext);
 		queryPlan = copyObject(queryPlan);
 		MemoryContextSwitchTo(currentContext);
@@ -533,7 +538,7 @@ CreateAndDrainPersistedQuery(const char *cursorName, Query *query,
 		queryPortal->cleanup = CleanupPortalState;
 	}
 
-	if (!closeCursor && isHoldCursor)
+	if (!closeCursor && isHoldCursor && !EnableDelayedHoldPortal)
 	{
 		HoldPortal(queryPortal);
 	}
@@ -553,6 +558,14 @@ CreateAndDrainPersistedQuery(const char *cursorName, Query *query,
 																  &numRowsFetched,
 																  &currentAccumulatedSize,
 																  currentContext);
+
+	if (EnableDelayedHoldPortal && !closeCursor && isHoldCursor &&
+		reason != TerminationReason_CursorCompletion)
+	{
+		/* There's more to this cursor and needs continuation, hold the portal */
+		HoldPortal(queryPortal);
+	}
+
 	if (closeCursor || (reason == TerminationReason_CursorCompletion))
 	{
 		SPI_cursor_close(queryPortal);
@@ -944,10 +957,20 @@ HoldPortal(Portal portal)
 	/*
 	 * Note that PersistHoldablePortal() must release all resources used by
 	 * the portal that are local to the creating transaction.
-	 * Since we need backwards scan here, ensure we set SCROLL on the portal
+	 * Since we need backwards scan on the tuplestore here, ensure we set SCROLL on the portal
 	 */
 	portal->cursorOptions = portal->cursorOptions | CURSOR_OPT_SCROLL;
 	PortalCreateHoldStore(portal);
+
+	/* Since we only serialize any results we haven't already collected in the
+	 * first batch, we tell the Persist logic to not rewind and redo the entire
+	 * query results. The way this is done is by removing SCROLL.
+	 */
+	if (!EnableDelayedHoldPortal)
+	{
+		portal->cursorOptions = portal->cursorOptions & ~CURSOR_OPT_SCROLL;
+	}
+
 	PersistHoldablePortal(portal);
 
 	/* drop cached plan reference, if any */

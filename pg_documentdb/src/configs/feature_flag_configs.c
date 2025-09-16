@@ -147,6 +147,9 @@ bool EnableIndexHintSupport = DEFAULT_ENABLE_INDEX_HINT_SUPPORT;
 #define DEFAULT_USE_LEGACY_FORCE_PUSHDOWN_BEHAVIOR false
 bool UseLegacyForcePushdownBehavior = DEFAULT_USE_LEGACY_FORCE_PUSHDOWN_BEHAVIOR;
 
+#define DEFAULT_ENABLE_DELAYED_HOLD_PORTAL true
+bool EnableDelayedHoldPortal = DEFAULT_ENABLE_DELAYED_HOLD_PORTAL;
+
 
 /*
  * SECTION: Let support feature flags
@@ -575,5 +578,12 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether to use pg_stat_all_tables live tuples for count in collStats."),
 		NULL, &UsePgStatsLiveTuplesForCount,
 		DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableDelayedHoldPortal", newGucPrefix),
+		gettext_noop(
+			"Whether to delay holding the portal until we know there is more data to be fetched."),
+		NULL, &EnableDelayedHoldPortal, DEFAULT_ENABLE_DELAYED_HOLD_PORTAL,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }
