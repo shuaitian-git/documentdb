@@ -6,44 +6,6 @@
  *-------------------------------------------------------------------------
  */
 
-use either::Either::{Left, Right};
-use openssl::ssl::{
-    Ssl, SslAcceptor, SslAcceptorBuilder, SslMethod, SslOptions, SslSessionCacheMode,
-    SslVerifyMode, SslVersion,
-};
-use rand::Rng;
-use socket2::TcpKeepalive;
-use std::{pin::Pin, sync::Arc, time::Duration};
-use tokio::{
-    io::BufStream,
-    net::{TcpListener, TcpStream},
-    time::Instant,
-};
-use tokio_openssl::SslStream;
-use tokio_util::sync::CancellationToken;
-use uuid::Builder;
-
-use crate::{
-    configuration::CertificateProvider,
-    context::{ConnectionContext, RequestContext, ServiceContext},
-    error::{DocumentDBError, ErrorCode, Result},
-    postgres::PgDataClient,
-    protocol::header::Header,
-    requests::{request_tracker::RequestTracker, Request, RequestIntervalKind},
-    responses::{CommandError, Response},
-    telemetry::TelemetryProvider,
-};
-
-pub use crate::postgres::QueryCatalog;
-
-// TCP keepalive configuration constants
-const TCP_KEEPALIVE_TIME_SECS: u64 = 180;
-const TCP_KEEPALIVE_INTERVAL_SECS: u64 = 60;
-
-// Buffer configuration constants
-const STREAM_READ_BUFFER_SIZE: usize = 8 * 1024;
-const STREAM_WRITE_BUFFER_SIZE: usize = 8 * 1024;
-
 pub mod auth;
 pub mod bson;
 pub mod configuration;
@@ -55,9 +17,43 @@ pub mod processor;
 pub mod protocol;
 pub mod requests;
 pub mod responses;
+pub mod service;
 pub mod shutdown_controller;
 pub mod startup;
 pub mod telemetry;
+
+pub use crate::postgres::QueryCatalog;
+
+use either::Either::{Left, Right};
+use openssl::ssl::Ssl;
+use rand::Rng;
+use socket2::TcpKeepalive;
+use std::{pin::Pin, sync::Arc, time::Duration};
+use tokio::{
+    io::BufStream,
+    net::{TcpListener, TcpStream},
+};
+use tokio_openssl::SslStream;
+use tokio_util::sync::CancellationToken;
+use uuid::Builder;
+
+use crate::{
+    context::{ConnectionContext, RequestContext, ServiceContext},
+    error::{DocumentDBError, ErrorCode, Result},
+    postgres::PgDataClient,
+    protocol::header::Header,
+    requests::{request_tracker::RequestTracker, Request, RequestIntervalKind},
+    responses::{CommandError, Response},
+    telemetry::TelemetryProvider,
+};
+
+// TCP keepalive configuration constants
+const TCP_KEEPALIVE_TIME_SECS: u64 = 180;
+const TCP_KEEPALIVE_INTERVAL_SECS: u64 = 60;
+
+// Buffer configuration constants
+const STREAM_READ_BUFFER_SIZE: usize = 8 * 1024;
+const STREAM_WRITE_BUFFER_SIZE: usize = 8 * 1024;
 
 type GwStream = BufStream<SslStream<TcpStream>>;
 
@@ -72,7 +68,6 @@ type GwStream = BufStream<SslStream<TcpStream>>;
 /// * `service_context` - The service configuration and context
 /// * `telemetry` - Optional telemetry provider for metrics and logging
 /// * `token` - Cancellation token to gracefully shutdown the gateway
-/// * `cipher_map` - Optional function to map cipher names to numeric codes
 ///
 /// # Returns
 ///
@@ -89,7 +84,6 @@ pub async fn run_gateway<T>(
     service_context: ServiceContext,
     telemetry: Option<Box<dyn TelemetryProvider>>,
     token: CancellationToken,
-    cipher_map: Option<fn(Option<&str>) -> i32>,
 ) -> Result<()>
 where
     T: PgDataClient,
@@ -106,192 +100,111 @@ where
     ))
     .await?;
 
+    // Listen for new tcp connections until token is not cancelled
+    loop {
+        tokio::select! {
+            stream_and_address = tcp_listener.accept() => {
+                let conn_service_context = service_context.clone();
+                let conn_telemetry = telemetry.clone();
+                tokio::spawn(async move {
+                    let conn_res = handle_connection::<T>(
+                        stream_and_address,
+                        conn_service_context,
+                        conn_telemetry,
+                    )
+                    .await;
+
+                    if let Err(conn_err) = conn_res {
+                        log::error!("Failed to accept a connection: {conn_err:?}.");
+                    }
+                });
+            }
+            () = token.cancelled() => {
+                return Ok(())
+            }
+        }
+    }
+}
+
+/// Handles a single TCP connection by setting up TLS and processing the connection.
+///
+/// This function configures the TCP stream with appropriate settings (no delay, keepalive),
+/// establishes a TLS session using the service's SSL configuration, and then delegates
+/// to the stream handler for processing MongoDB protocol messages.
+///
+/// # Arguments
+///
+/// * `stream_and_address` - Result containing the TCP stream and peer address from accept()
+/// * `service_context` - Service configuration and shared state
+/// * `telemetry` - Optional telemetry provider for metrics collection
+///
+/// # Returns
+///
+/// Returns `Ok(())` on successful connection handling, or an error if connection
+/// setup or TLS handshake fails.
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// * TCP stream configuration fails (nodelay, keepalive)
+/// * SSL/TLS handshake fails
+/// * Connection context creation fails
+/// * Stream buffering setup fails
+async fn handle_connection<T>(
+    stream_and_address: std::result::Result<(TcpStream, std::net::SocketAddr), std::io::Error>,
+    service_context: ServiceContext,
+    telemetry: Option<Box<dyn TelemetryProvider>>,
+) -> Result<()>
+where
+    T: PgDataClient,
+{
+    let (tcp_stream, peer_address) = stream_and_address?;
+    log::info!("New TCP connection established.");
+
+    // Configure TCP stream
+    tcp_stream.set_nodelay(true)?;
     let tcp_keepalive = TcpKeepalive::new()
         .with_time(Duration::from_secs(TCP_KEEPALIVE_TIME_SECS))
         .with_interval(Duration::from_secs(TCP_KEEPALIVE_INTERVAL_SECS));
 
-    // Listen for new tcp connections until token is not cancelled
-    loop {
-        match handle_connection::<T>(
-            service_context.clone(),
-            telemetry.clone(),
-            (&tcp_listener, &tcp_keepalive),
-            // populate a child cancellation token so we can't shutdown gateway from the connection layer,
-            // instead we will close connections upon gateway shutdown
-            token.child_token(),
-            cipher_map,
-        )
-        .await
-        {
-            Err(e) => log::error!("[], Failed to accept a connection: {:?}", e),
-            Ok(true) => continue,
-            Ok(false) => break Ok(()),
-        }
-    }
-}
-
-/// Creates a secure SSL/TLS stream wrapper around an existing TCP stream.
-///
-/// This function takes an SSL context and a TCP stream, combining them to establish
-/// a secure communication channel. The resulting `SslStream` provides encrypted
-/// communication over the underlying TCP connection.
-///
-/// # Arguments
-///
-/// * `ssl_ctx` - The SSL context containing TLS configuration and certificates
-/// * `stream` - The underlying TCP stream to be wrapped with SSL/TLS encryption
-///
-/// # Returns
-///
-/// Returns a `Result` containing the configured `SslStream` on success, or an error
-/// if the SSL stream creation fails.
-///
-/// # Errors
-///
-/// This function will return an error if:
-/// * The SSL handshake fails
-/// * The underlying stream is in an invalid state
-/// * Certificate validation fails
-/// * Any other SSL/TLS configuration issues occur
-async fn convert_to_ssl_stream(
-    ssl_acceptor: Arc<SslAcceptor>,
-    stream: TcpStream,
-) -> Result<SslStream<TcpStream>> {
-    // for more context see https://github.com/tokio-rs/tokio-openssl/blob/master/src/test.rs
-    let ssl_session = Ssl::new(ssl_acceptor.context())?;
-    let mut ssl_stream = SslStream::new(ssl_session, stream)?;
-    Pin::new(&mut ssl_stream).accept().await?;
-
-    Ok(ssl_stream)
-}
-
-/// Creates an SSL acceptor builder configured for the DocumentDB gateway.
-///
-/// This function sets up an SSL acceptor with appropriate security settings
-/// for handling incoming TLS connections. It uses Mozilla's intermediate
-/// TLS configuration to balance security and compatibility.
-///
-/// # Arguments
-///
-/// * `cert_provider` - Provider containing the certificate bundle (certificate, CA chain, private key)
-///
-/// # Returns
-///
-/// Returns a configured `SslAcceptorBuilder` ready to build an SSL acceptor.
-///
-/// # Errors
-///
-/// This function will return an error if:
-/// * Certificate or private key loading fails
-/// * SSL context configuration fails
-/// * Certificate validation fails
-/// * TLS version configuration is invalid
-pub fn create_ssl_acceptor_builder(
-    cert_provider: &CertificateProvider,
-) -> Result<SslAcceptorBuilder> {
-    // we use intermediate and not modern acceptor because we support TLS 1.2 clients
-    // for more details on Mozilla's TLS recommendation see https://wiki.mozilla.org/Security/Server_Side_TLS
-    // TODO: use different SslAcceptor depending on conditional compiling flags as part of the build script
-    // currently we're forced by the host OS not to use v5 version
-    let mut ssl_acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls_server())?;
-
-    ssl_acceptor.set_private_key(cert_provider.bundle().private_key())?;
-    ssl_acceptor.set_certificate(&cert_provider.bundle().certificate())?;
-
-    for ca_cert in cert_provider.bundle().ca_chain() {
-        ssl_acceptor.cert_store_mut().add_cert(ca_cert.clone())?;
-    }
-
-    // SSL server settings
-    // we currently don't expect for all of the clients to have auth certs
-    ssl_acceptor.set_verify(SslVerifyMode::NONE);
-    ssl_acceptor.set_session_cache_mode(SslSessionCacheMode::SERVER);
-    ssl_acceptor.set_min_proto_version(Some(SslVersion::TLS1_2))?;
-    ssl_acceptor.set_max_proto_version(Some(SslVersion::TLS1_3))?;
-
-    // SSL server options
-    // we currently don't support session tickets for session resumption
-    ssl_acceptor.set_options(SslOptions::NO_TICKET);
-    ssl_acceptor.set_options(SslOptions::CIPHER_SERVER_PREFERENCE | SslOptions::PRIORITIZE_CHACHA);
-    // since mozilla intermediate removes the TLS 1.3 option we need to put it back, since we support TLS 1.3
-    // https://github.com/sfackler/rust-openssl/blob/3c2768548ff92e76e90fcb2b9c41a669046a6d5f/openssl/src/ssl/connector.rs#L282C1-L283C1
-    ssl_acceptor.clear_options(SslOptions::NO_TLSV1_3);
-
-    Ok(ssl_acceptor)
-}
-
-async fn handle_connection<T>(
-    service_context: ServiceContext,
-    telemetry: Option<Box<dyn TelemetryProvider>>,
-    tcp_bundle: (&TcpListener, &TcpKeepalive),
-    child_token: CancellationToken,
-    cipher_map: Option<fn(Option<&str>) -> i32>,
-) -> Result<bool>
-where
-    T: PgDataClient,
-{
-    let (tcp_listener, tcp_keepalive) = tcp_bundle;
+    socket2::SockRef::from(&tcp_stream).set_tcp_keepalive(&tcp_keepalive)?;
 
     // SSL configuration part
-    let cert_provider = service_context.get_certificate_provider();
-    let ssl_ctx_builder = create_ssl_acceptor_builder(cert_provider)?;
-    let ssl_acceptor = Arc::new(ssl_ctx_builder.build());
+    let tls_acceptor = service_context.tls_provider().tls_acceptor();
 
-    // Wait for either a new connection or cancellation
-    tokio::select! {
-        // Receive the connection and spawn a thread which handles it
-        stream_and_address = tcp_listener.accept() => {
-            let (tcp_stream, peer_address) = stream_and_address?;
-            log::info!("New TCP connection established.");
+    let ssl_session = Ssl::new(tls_acceptor.context())?;
+    let mut tls_stream = SslStream::new(ssl_session, tcp_stream)?;
 
-            // Configure TCP stream
-            tcp_stream.set_nodelay(true)?;
-            socket2::SockRef::from(&tcp_stream).set_tcp_keepalive(tcp_keepalive)?;
-
-            let acceptor = Arc::clone(&ssl_acceptor);
-            match convert_to_ssl_stream(acceptor, tcp_stream).await {
-                Ok(ssl_stream) => {
-                    // transition from service (gateway) level to the connection level
-                    tokio::spawn(async move {
-                        tokio::select! {
-                            mut conn_ctx = ConnectionContext::new(
-                                service_context,
-                                telemetry,
-                                peer_address.to_string(),
-                                ssl_stream.ssl().version_str().to_string()
-                            ) => {
-                                conn_ctx.cipher_type = match cipher_map {
-                                    Some(map) => map(ssl_stream.ssl().current_cipher().map(|cipher| cipher.name())),
-                                    None => 0,
-                                };
-
-                                handle_stream::<T>(ssl_stream, conn_ctx).await;
-                            }
-                            _ = child_token.cancelled() => {}
-                        }
-                    });
-                    Ok(true)
-                }
-                Err(e) => {
-                    log::error!("Failed to create TLS connection: {}", e);
-                    Err(DocumentDBError::internal_error(format!(
-                        "SSL handshake failed: {}",
-                        e
-                    )))
-                }
-            }
-        }
-        _ = child_token.cancelled() => {
-            Ok(false)
-        }
+    if let Err(ssl_error) = SslStream::accept(Pin::new(&mut tls_stream)).await {
+        log::error!("Failed to create TLS connection: {ssl_error:?}.");
+        return Err(DocumentDBError::internal_error(format!(
+            "SSL handshake failed: {ssl_error:?}."
+        )));
     }
+
+    let conn_ctx = ConnectionContext::new(
+        service_context,
+        telemetry,
+        peer_address.to_string(),
+        Some(tls_stream.ssl()),
+    );
+
+    let buffered_stream = BufStream::with_capacity(
+        STREAM_READ_BUFFER_SIZE,
+        STREAM_WRITE_BUFFER_SIZE,
+        tls_stream,
+    );
+
+    handle_stream::<T>(buffered_stream, conn_ctx).await;
+    Ok(())
 }
 
 /// Generates a unique activity ID for request tracking.
 ///
 /// Creates a UUID-based activity ID by combining random bytes with the request ID.
 /// The first 12 bytes are random, and the last 4 bytes contain the request ID
-/// in big-endian format.
+/// in big-endian format. This ensures that each activity ID is unique while still
+/// containing the original request ID for correlation purposes.
 ///
 /// # Arguments
 ///
@@ -300,6 +213,8 @@ where
 /// # Returns
 ///
 /// Returns a hyphenated UUID string suitable for request tracking and correlation.
+/// The UUID format is: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` where the last 4 bytes
+/// encode the request ID.
 pub fn get_activity_id(request_id: i32) -> String {
     let mut activity_id_bytes = [0u8; 16];
     let mut rng = rand::thread_rng();
@@ -309,32 +224,25 @@ pub fn get_activity_id(request_id: i32) -> String {
     activity_id.hyphenated().to_string()
 }
 
-async fn handle_stream<T>(stream: SslStream<TcpStream>, mut connection_context: ConnectionContext)
+async fn handle_stream<T>(mut stream: GwStream, mut connection_context: ConnectionContext)
 where
     T: PgDataClient,
 {
-    let mut buffered_stream =
-        BufStream::with_capacity(STREAM_READ_BUFFER_SIZE, STREAM_WRITE_BUFFER_SIZE, stream);
-
     loop {
-        match protocol::reader::read_header(&mut buffered_stream).await {
+        match protocol::reader::read_header(&mut stream).await {
             Ok(Some(header)) => {
                 let activity_id = get_activity_id(header.request_id);
 
-                if let Err(e) = handle_message::<T>(
-                    &mut connection_context,
-                    &header,
-                    &mut buffered_stream,
-                    &activity_id,
-                )
-                .await
+                if let Err(e) =
+                    handle_message::<T>(&mut connection_context, &header, &mut stream, &activity_id)
+                        .await
                 {
                     if let Err(e) = log_and_write_error(
                         &connection_context,
                         &header,
                         &e,
                         None,
-                        &mut buffered_stream,
+                        &mut stream,
                         None,
                         &mut RequestTracker::new(),
                         &activity_id,
@@ -357,7 +265,7 @@ where
                 if let Err(e) = responses::writer::write_error_without_header(
                     &connection_context,
                     e,
-                    &mut buffered_stream,
+                    &mut stream,
                 )
                 .await
                 {
@@ -487,7 +395,7 @@ async fn handle_request<T>(
     request_context: &mut RequestContext<'_>,
     stream: &mut GwStream,
     collection: &mut String,
-    handle_request_start: Instant,
+    handle_request_start: tokio::time::Instant,
 ) -> Result<()>
 where
     T: PgDataClient,

@@ -16,14 +16,14 @@ use std::{
 
 use documentdb_gateway::{
     configuration::{
-        CertInputType, CertificateOptions, CertificateProvider, DocumentDBSetupConfiguration,
-        PgConfiguration, SetupConfiguration,
+        CertInputType, CertificateOptions, DocumentDBSetupConfiguration, PgConfiguration,
+        SetupConfiguration,
     },
     error::Result,
-    postgres::{create_query_catalog, ConnectionPool, DocumentDBDataClient},
+    postgres::{create_query_catalog, ConnectionPool, DocumentDBDataClient, QueryCatalog},
     run_gateway,
+    service::TlsProvider,
     startup::{get_service_context, AUTHENTICATION_MAX_CONNECTIONS},
-    QueryCatalog,
 };
 
 use mongodb::{
@@ -59,10 +59,13 @@ async fn initialize_full(config: DocumentDBSetupConfiguration) {
 
 #[tokio::main]
 async fn run(setup_config: DocumentDBSetupConfiguration) {
-    let certificate_provider =
-        CertificateProvider::new(SetupConfiguration::certificate_options(&setup_config))
-            .await
-            .expect("Failed to create certificate provider");
+    let tls_provider = TlsProvider::new(
+        SetupConfiguration::certificate_options(&setup_config),
+        None,
+        None,
+    )
+    .await
+    .expect("Failed to create TLS provider.");
 
     let query_catalog = create_query_catalog();
     let postgres_system_user = setup_config.postgres_system_user();
@@ -103,10 +106,10 @@ async fn run(setup_config: DocumentDBSetupConfiguration) {
         query_catalog,
         system_pool,
         authentication_pool,
-        certificate_provider,
+        tls_provider,
     );
 
-    run_gateway::<DocumentDBDataClient>(service_context, None, CancellationToken::new(), None)
+    run_gateway::<DocumentDBDataClient>(service_context, None, CancellationToken::new())
         .await
         .unwrap();
 }

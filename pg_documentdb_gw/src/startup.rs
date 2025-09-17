@@ -11,10 +11,11 @@ use std::{sync::Arc, time::Duration};
 use log::warn;
 
 use crate::{
-    configuration::{CertificateProvider, DynamicConfiguration, SetupConfiguration},
+    configuration::{DynamicConfiguration, SetupConfiguration},
     context::ServiceContext,
     error::Result,
     postgres::ConnectionPool,
+    service::TlsProvider,
     QueryCatalog,
 };
 
@@ -27,7 +28,7 @@ pub fn get_service_context(
     query_catalog: QueryCatalog,
     system_requests_pool: Arc<ConnectionPool>,
     authentication_pool: ConnectionPool,
-    certificate_provider: CertificateProvider,
+    tls_provider: TlsProvider,
 ) -> ServiceContext {
     let service_context = ServiceContext::new(
         setup_configuration.clone(),
@@ -35,7 +36,7 @@ pub fn get_service_context(
         query_catalog.clone(),
         Arc::clone(&system_requests_pool),
         authentication_pool,
-        certificate_provider,
+        tls_provider,
     );
 
     let service_context_clone = service_context.clone();

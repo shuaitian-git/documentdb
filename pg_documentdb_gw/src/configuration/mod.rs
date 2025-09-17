@@ -12,7 +12,7 @@ mod pg_configuration;
 mod setup;
 mod version;
 
-pub use certs::{CertInputType, CertificateBundle, CertificateOptions, CertificateProvider};
+pub use certs::{CertInputType, CertificateOptions};
 pub use dynamic::DynamicConfiguration;
 pub use pg_configuration::PgConfiguration;
 pub use setup::DocumentDBSetupConfiguration;

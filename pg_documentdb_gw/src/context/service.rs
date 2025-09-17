@@ -11,13 +11,12 @@ use std::{borrow::Cow, collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 
 use crate::{
-    configuration::{CertificateProvider, DynamicConfiguration, SetupConfiguration},
+    configuration::{DynamicConfiguration, SetupConfiguration},
+    context::{CursorStore, CursorStoreEntry, TransactionStore},
     error::{DocumentDBError, Result},
-    postgres::{Connection, ConnectionPool},
-    QueryCatalog,
+    postgres::{Connection, ConnectionPool, QueryCatalog},
+    service::TlsProvider,
 };
-
-use super::{CursorStore, CursorStoreEntry, TransactionStore};
 
 type ClientKey = (Cow<'static, str>, Cow<'static, str>, usize);
 
@@ -37,7 +36,7 @@ pub struct ServiceContextInner {
     pub cursor_store: CursorStore,
     pub transaction_store: TransactionStore,
     pub query_catalog: QueryCatalog,
-    pub certificate_provider: CertificateProvider,
+    pub tls_provider: TlsProvider,
 }
 
 #[derive(Clone)]
@@ -50,7 +49,7 @@ impl ServiceContext {
         query_catalog: QueryCatalog,
         system_requests_pool: Arc<ConnectionPool>,
         system_auth_pool: ConnectionPool,
-        certificate_provider: CertificateProvider,
+        tls_provider: TlsProvider,
     ) -> Self {
         log::info!("Initial dynamic configuration: {:?}", dynamic_configuration);
 
@@ -65,16 +64,24 @@ impl ServiceContext {
             cursor_store: CursorStore::new(setup_configuration.as_ref(), true),
             transaction_store: TransactionStore::new(Duration::from_secs(timeout_secs)),
             query_catalog,
-            certificate_provider,
+            tls_provider,
         };
         ServiceContext(Arc::new(inner))
     }
 
-    pub async fn get_data_pool(&self, user: &str, pass: &str) -> Result<Arc<ConnectionPool>> {
+    pub async fn get_data_pool(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<Arc<ConnectionPool>> {
         let max_connections = self.dynamic_configuration().max_connections().await;
         let read_lock = self.0.user_data_pools.read().await;
 
-        match read_lock.get(&(Cow::Borrowed(user), Cow::Borrowed(pass), max_connections)) {
+        match read_lock.get(&(
+            Cow::Borrowed(username),
+            Cow::Borrowed(password),
+            max_connections,
+        )) {
             None => Err(DocumentDBError::internal_error(
                 "Connection pool missing for user.".to_string(),
             )),
@@ -86,8 +93,11 @@ impl ServiceContext {
         self.0.cursor_store.add_cursor(key, entry).await
     }
 
-    pub async fn get_cursor(&self, id: i64, user: &str) -> Option<CursorStoreEntry> {
-        self.0.cursor_store.get_cursor((id, user.to_string())).await
+    pub async fn get_cursor(&self, id: i64, username: &str) -> Option<CursorStoreEntry> {
+        self.0
+            .cursor_store
+            .get_cursor((id, username.to_string()))
+            .await
     }
 
     pub async fn invalidate_cursors_by_collection(&self, db: &str, collection: &str) {
@@ -108,10 +118,10 @@ impl ServiceContext {
             .await
     }
 
-    pub async fn kill_cursors(&self, user: &str, cursors: &[i64]) -> (Vec<i64>, Vec<i64>) {
+    pub async fn kill_cursors(&self, username: &str, cursors: &[i64]) -> (Vec<i64>, Vec<i64>) {
         self.0
             .cursor_store
-            .kill_cursors(user.to_string(), cursors)
+            .kill_cursors(username.to_string(), cursors)
             .await
     }
 
@@ -145,12 +155,12 @@ impl ServiceContext {
         &self.0.query_catalog
     }
 
-    pub async fn allocate_data_pool(&self, user: &str, pass: &str) -> Result<()> {
+    pub async fn allocate_data_pool(&self, username: &str, password: &str) -> Result<()> {
         let max_connections = self.dynamic_configuration().max_connections().await;
 
         if self.0.user_data_pools.read().await.contains_key(&(
-            Cow::Borrowed(user),
-            Cow::Borrowed(pass),
+            Cow::Borrowed(username),
+            Cow::Borrowed(password),
             max_connections,
         )) {
             return Ok(());
@@ -159,15 +169,15 @@ impl ServiceContext {
         let mut write_lock = self.0.user_data_pools.write().await;
         let _ = write_lock.insert(
             (
-                Cow::Owned(user.to_owned()),
-                Cow::Owned(pass.to_owned()),
+                Cow::Owned(username.to_owned()),
+                Cow::Owned(password.to_owned()),
                 max_connections,
             ),
             Arc::new(ConnectionPool::new_with_user(
                 self.setup_configuration(),
                 self.query_catalog(),
-                user,
-                Some(pass),
+                username,
+                Some(password),
                 format!("{}-Data", self.setup_configuration().application_name()),
                 self.get_real_max_connections(max_connections).await,
             )?),
@@ -244,7 +254,7 @@ impl ServiceContext {
         }
     }
 
-    pub fn get_certificate_provider(&self) -> &CertificateProvider {
-        &self.0.certificate_provider
+    pub fn tls_provider(&self) -> &TlsProvider {
+        &self.0.tls_provider
     }
 }

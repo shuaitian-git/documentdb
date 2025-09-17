@@ -15,16 +15,16 @@ use std::{
 };
 
 use bson::RawDocumentBuf;
+use openssl::ssl::SslRef;
 
-use crate::telemetry::TelemetryProvider;
 use crate::{
     auth::AuthState,
     configuration::DynamicConfiguration,
+    context::{Cursor, CursorStoreEntry, ServiceContext},
     error::{DocumentDBError, Result},
     postgres::Connection,
+    telemetry::TelemetryProvider,
 };
-
-use super::{Cursor, CursorStoreEntry, ServiceContext};
 
 pub struct ConnectionContext {
     pub start_time: Instant,
@@ -43,30 +43,33 @@ pub struct ConnectionContext {
 static CONNECTION_ID: AtomicI64 = AtomicI64::new(0);
 
 impl ConnectionContext {
-    pub async fn get_cursor(&self, id: i64, user: &str) -> Option<CursorStoreEntry> {
+    pub async fn get_cursor(&self, id: i64, username: &str) -> Option<CursorStoreEntry> {
         // If there is a transaction, get the cursor to its store
         if let Some((session_id, _)) = self.transaction.as_ref() {
             let transaction_store = self.service_context.transaction_store();
             if let Some((_, transaction)) =
                 transaction_store.transactions.read().await.get(session_id)
             {
-                return transaction.cursors.get_cursor((id, user.to_string())).await;
+                return transaction
+                    .cursors
+                    .get_cursor((id, username.to_string()))
+                    .await;
             }
         }
 
-        self.service_context.get_cursor(id, user).await
+        self.service_context.get_cursor(id, username).await
     }
 
     pub async fn add_cursor(
         &self,
         conn: Option<Arc<Connection>>,
         cursor: Cursor,
-        user: &str,
+        username: &str,
         db: &str,
         collection: &str,
         session_id: Option<Vec<u8>>,
     ) {
-        let key = (cursor.cursor_id, user.to_string());
+        let key = (cursor.cursor_id, username.to_string());
         let value = CursorStoreEntry {
             conn,
             cursor,
@@ -91,31 +94,41 @@ impl ConnectionContext {
         self.service_context.add_cursor(key, value).await
     }
 
-    pub async fn new(
-        sc: ServiceContext,
+    pub fn new(
+        service_context: ServiceContext,
         telemetry_provider: Option<Box<dyn TelemetryProvider>>,
         ip_address: String,
-        ssl_protocol: String,
+        tls_config: Option<&SslRef>,
     ) -> Self {
         let connection_id = CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
+        let tls_provider = service_context.tls_provider();
+
+        let cipher_type = tls_config
+            .map(|tls| tls_provider.ciphersuite_to_i32(tls.current_cipher()))
+            .unwrap_or_default();
+
+        let ssl_protocol = tls_config
+            .map(|tls| tls.version_str().to_string())
+            .unwrap_or_default();
+
         ConnectionContext {
             start_time: Instant::now(),
             connection_id,
-            service_context: Arc::new(sc),
+            service_context: Arc::new(service_context),
             auth_state: AuthState::new(),
             requires_response: true,
             client_information: None,
             transaction: None,
             telemetry_provider,
             ip_address,
-            cipher_type: 0,
+            cipher_type,
             ssl_protocol,
         }
     }
 
     pub async fn allocate_data_pool(&self) -> Result<()> {
-        let user = self.auth_state.username()?;
-        let pass = self
+        let username = self.auth_state.username()?;
+        let password = self
             .auth_state
             .password
             .as_ref()
@@ -123,7 +136,9 @@ impl ConnectionContext {
                 "Password is missing on pg connection acquisition".to_string(),
             ))?;
 
-        self.service_context.allocate_data_pool(user, pass).await
+        self.service_context
+            .allocate_data_pool(username, password)
+            .await
     }
 
     pub fn dynamic_configuration(&self) -> Arc<dyn DynamicConfiguration> {
