@@ -10,11 +10,10 @@ use simple_logger::SimpleLogger;
 use std::{env, path::PathBuf, sync::Arc};
 
 use documentdb_gateway::{
-    configuration::{
-        CertificateProvider, DocumentDBSetupConfiguration, PgConfiguration, SetupConfiguration,
-    },
+    configuration::{DocumentDBSetupConfiguration, PgConfiguration, SetupConfiguration},
     postgres::{create_query_catalog, DocumentDBDataClient},
     run_gateway,
+    service::TlsProvider,
     shutdown_controller::SHUTDOWN_CONTROLLER,
     startup::{
         create_postgres_object, get_service_context, get_system_connection_pool,
@@ -51,11 +50,13 @@ async fn main() {
         setup_configuration
     );
 
-    let certificate_provider = CertificateProvider::new(SetupConfiguration::certificate_options(
-        &setup_configuration,
-    ))
+    let tls_provider = TlsProvider::new(
+        SetupConfiguration::certificate_options(&setup_configuration),
+        None,
+        None,
+    )
     .await
-    .expect("Failed to create certificate provider");
+    .expect("Failed to create TLS provider.");
 
     SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
@@ -105,10 +106,10 @@ async fn main() {
         query_catalog,
         system_requests_pool,
         authentication_pool,
-        certificate_provider,
+        tls_provider,
     );
 
-    run_gateway::<DocumentDBDataClient>(service_context, None, shutdown_token, None)
+    run_gateway::<DocumentDBDataClient>(service_context, None, shutdown_token)
         .await
         .unwrap();
 }
