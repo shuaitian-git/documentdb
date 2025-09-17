@@ -58,7 +58,6 @@ typedef enum IndexTermMetadata
 } IndexTermMetadata;
 
 extern int IndexTermCompressionThreshold;
-extern bool EnableDescendingCompositeIndex;
 
 /* --------------------------------------------------------- */
 /* Forward Declaration */

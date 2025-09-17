@@ -332,7 +332,6 @@ END;
 -- 21. TTL index with forced ordered scan via index hints
 
 set documentdb.enableExtendedExplainPlans to on;
-SET documentdb.enableNewCompositeIndexOpClass to on;
 set documentdb_rum.preferOrderedIndexScan to on;
 
 -- if documentdb_extended_rum exists, set alternate index handler
@@ -367,7 +366,6 @@ SELECT COUNT(documentdb_api.insert_one('db', 'ttlCompositeOrderedScan', FORMAT('
 
 --  Create TTL Index --
 SET documentdb.enableExtendedExplainPlans to on;
-SET documentdb.enableNewCompositeIndexOpClass to on;
 SET documentdb.enableIndexOrderbyPushdown to on;
 SELECT documentdb_api_internal.create_indexes_non_concurrently('db', '{"createIndexes": "ttlCompositeOrderedScan", "indexes": [{"key": {"ttl": 1}, "enableCompositeTerm": true, "name": "ttl_index", "v" : 1, "expireAfterSeconds": 5, "sparse": true}]}', true);
 
@@ -408,7 +406,6 @@ SELECT count(*) from ( SELECT shard_key_value, object_id, document  from documen
 --  TTL indexes behaves like normal indexes that are used in queries (cx can provide .hint() to force)
 BEGIN;
 SET LOCAL documentdb.enableIndexOrderbyPushdown to on;
-SET LOCAL documentdb.enableNewCompositeIndexOpClass to on;
 EXPLAIN(costs off) SELECT object_id FROM documentdb_data.documents_20006
 		WHERE bson_dollar_eq(document, '{ "ttl" : { "$date" : { "$numberLong" : "100" } } }'::documentdb_core.bson)
         LIMIT 100;
@@ -418,7 +415,6 @@ END;
 
 BEGIN;
 SET LOCAL documentdb.enableIndexOrderbyPushdown to on;
-SET LOCAL documentdb.enableNewCompositeIndexOpClass to on;
 EXPLAIN(analyze on, verbose on, costs off, timing off, summary off) SELECT ctid FROM documentdb_data.documents_20006_2000105
                 WHERE bson_dollar_lt(document, '{ "ttl" : { "$date" : { "$numberLong" : "1754515365000" } } }'::documentdb_core.bson)
                 AND documentdb_api_internal.bson_dollar_index_hint(document, 'ttl_index'::text, '{"key": {"ttl": 1}}'::documentdb_core.bson, true)
@@ -438,7 +434,6 @@ SELECT count(*) from ( SELECT shard_key_value, object_id, document  from documen
 
 BEGIN;
 SET LOCAL documentdb.enableIndexOrderbyPushdown to on;
-SET LOCAL documentdb.enableNewCompositeIndexOpClass to on;
 EXPLAIN(analyze on, verbose on, costs off, timing off, summary off) SELECT ctid FROM documentdb_data.documents_20006_2000124
                 WHERE bson_dollar_lt(document, '{ "ttl" : { "$date" : { "$numberLong" : "1657900030775" } } }'::documentdb_core.bson)
                 AND documentdb_api_internal.bson_dollar_index_hint(document, 'ttl_index'::text, '{"key": {"ttl": 1}}'::documentdb_core.bson, true)
@@ -447,7 +442,6 @@ END;
 
 BEGIN;
 SET LOCAL documentdb.enableIndexOrderbyPushdown to on;
-SET LOCAL documentdb.enableNewCompositeIndexOpClass to on;
 SET client_min_messages TO INFO;
 EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT ctid FROM documentdb_data.documents_20006_2000122
                 WHERE bson_dollar_lt(document, '{ "ttl" : { "$date" : { "$numberLong" : "1657900030775" } } }'::documentdb_core.bson)
@@ -471,7 +465,6 @@ SELECT count(*) from ( SELECT shard_key_value, object_id, document  from documen
 
 BEGIN;
 SET LOCAL documentdb.enableIndexOrderbyPushdown to on;
-SET LOCAL documentdb.enableNewCompositeIndexOpClass to on;
 SET client_min_messages TO INFO;
 -- Check ORDER BY uses index 
 EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) 

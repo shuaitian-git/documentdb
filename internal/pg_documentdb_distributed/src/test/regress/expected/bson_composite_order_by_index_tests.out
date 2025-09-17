@@ -3,7 +3,6 @@ SET citus.next_shard_id TO 680000;
 SET documentdb.next_collection_id TO 68000;
 SET documentdb.next_collection_index_id TO 68000;
 set documentdb.enableExtendedExplainPlans to on;
-SET documentdb.enableNewCompositeIndexOpClass to on;
 -- if documentdb_extended_rum exists, set alternate index handler
 SELECT pg_catalog.set_config('documentdb.alternate_index_handler_name', 'extended_rum', false), extname FROM pg_extension WHERE extname = 'documentdb_extended_rum';
   set_config  |         extname         
@@ -1004,7 +1003,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF)
 ---------------------------------------------------------------------
  Sort (actual rows=100 loops=1)
    Sort Key: (bson_orderby(document, '{ "a" : { "$numberInt" : "1" } }'::bson)) NULLS FIRST, (bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::bson)) NULLS FIRST
-   Sort Method: quicksort  Memory: 33kB
+   Sort Method: quicksort  Memory: 36kB
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=100 loops=1)
          indexName: a_1_id_1
          isMultiKey: true
@@ -1244,7 +1243,6 @@ SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "cr
 BEGIN;
 set local documentdb.forceDisableSeqScan to on;
 set local documentdb.enableIndexOrderbyPushdown to on;
-set local documentdb.enableNewCompositeIndexOpClass to on;
 set local documentdb.enableExtendedExplainPlans to on;
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_pipeline('comp_db', '{ "aggregate": "sortcoll", "pipeline": [ { "$sort": { "a.b": 1 } } ] }');
                                                                            QUERY PLAN                                                                           
@@ -1273,7 +1271,6 @@ ROLLBACK;
 BEGIN;
 set local documentdb.forceDisableSeqScan to on;
 set local documentdb.enableIndexOrderbyPushdown to on;
-set local documentdb.enableNewCompositeIndexOpClass to on;
 SELECT document FROM bson_aggregation_pipeline('comp_db', '{ "aggregate": "sortcoll", "pipeline": [ { "$sort": { "a.b": 1 } } ] }');
                                                             document                                                             
 ---------------------------------------------------------------------
@@ -1329,7 +1326,6 @@ SELECT document FROM bson_aggregation_pipeline('comp_db', '{ "aggregate": "sortc
 ROLLBACK;
 set documentdb.forceDisableSeqScan to on;
 set documentdb.enableIndexOrderbyPushdown to on;
-set documentdb.enableNewCompositeIndexOpClass to on;
 set documentdb.enableExtendedExplainPlans to on;
 -- can't push this down (no equality prefix)
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_pipeline('comp_db', '{ "aggregate": "sortcoll", "pipeline": [ { "$sort": { "_id": 1 } } ] }');
@@ -1694,7 +1690,6 @@ SELECT document FROM bson_aggregation_pipeline('comp_db', '{ "aggregate": "large
 (3 rows)
 
 reset documentdb.forceDisableSeqScan;
-set documentdb.enableDescendingCompositeIndex to on;
 SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "createIndexes": "sortcoll3", "indexes": [ { "key": { "a.b.c": -1, "_id": -1 }, "enableCompositeTerm": true, "name": "a.b.c_-1" }] }', true);
                                                                                                    create_indexes_non_concurrently                                                                                                    
 ---------------------------------------------------------------------
@@ -1811,7 +1806,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT * FROM bson_aggr
  Incremental Sort (actual rows=21 loops=1)
    Sort Key: (bson_orderby(document, '{ "a.b" : { "$numberInt" : "-1" } }'::bson)) USING >>> NULLS LAST, (bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::bson)) NULLS FIRST
    Presorted Key: (bson_orderby(document, '{ "a.b" : { "$numberInt" : "-1" } }'::bson))
-   Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 26kB  Peak Memory: 26kB
+   Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 27kB  Peak Memory: 27kB
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=21 loops=1)
          indexName: a.b_-1
          isMultiKey: true
@@ -1827,7 +1822,6 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT * FROM bson_aggr
 
 -- mixed asc/desc indexes
 reset documentdb.forceDisableSeqScan;
-set documentdb.enableDescendingCompositeIndex to on;
 CALL documentdb_api.drop_indexes('comp_db', '{ "dropIndexes": "sortcoll3", "index": "a.b.c_-1" }');
                           retval                          
 ---------------------------------------------------------------------

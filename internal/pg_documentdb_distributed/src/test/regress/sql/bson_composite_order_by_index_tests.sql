@@ -5,7 +5,6 @@ SET documentdb.next_collection_id TO 68000;
 SET documentdb.next_collection_index_id TO 68000;
 
 set documentdb.enableExtendedExplainPlans to on;
-SET documentdb.enableNewCompositeIndexOpClass to on;
 
 -- if documentdb_extended_rum exists, set alternate index handler
 SELECT pg_catalog.set_config('documentdb.alternate_index_handler_name', 'extended_rum', false), extname FROM pg_extension WHERE extname = 'documentdb_extended_rum';
@@ -293,7 +292,6 @@ SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "cr
 BEGIN;
 set local documentdb.forceDisableSeqScan to on;
 set local documentdb.enableIndexOrderbyPushdown to on;
-set local documentdb.enableNewCompositeIndexOpClass to on;
 set local documentdb.enableExtendedExplainPlans to on;
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_pipeline('comp_db', '{ "aggregate": "sortcoll", "pipeline": [ { "$sort": { "a.b": 1 } } ] }');
 ROLLBACK;
@@ -302,14 +300,12 @@ ROLLBACK;
 BEGIN;
 set local documentdb.forceDisableSeqScan to on;
 set local documentdb.enableIndexOrderbyPushdown to on;
-set local documentdb.enableNewCompositeIndexOpClass to on;
 SELECT document FROM bson_aggregation_pipeline('comp_db', '{ "aggregate": "sortcoll", "pipeline": [ { "$sort": { "a.b": 1 } } ] }');
 SELECT document FROM bson_aggregation_pipeline('comp_db', '{ "aggregate": "sortcoll", "pipeline": [ { "$sort": { "a.b": -1 } } ] }');
 ROLLBACK;
 
 set documentdb.forceDisableSeqScan to on;
 set documentdb.enableIndexOrderbyPushdown to on;
-set documentdb.enableNewCompositeIndexOpClass to on;
 set documentdb.enableExtendedExplainPlans to on;
 
 -- can't push this down (no equality prefix)
@@ -392,7 +388,6 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM bs
 SELECT document FROM bson_aggregation_pipeline('comp_db', '{ "aggregate": "large_keys", "pipeline": [ { "$match": { "a": { "$regex": ".+b$" } } }, { "$sort": { "a": 1 } }, { "$project": { "_id": 1 } } ] }');
 
 reset documentdb.forceDisableSeqScan;
-set documentdb.enableDescendingCompositeIndex to on;
 SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "createIndexes": "sortcoll3", "indexes": [ { "key": { "a.b.c": -1, "_id": -1 }, "enableCompositeTerm": true, "name": "a.b.c_-1" }] }', true);
 SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "createIndexes": "sortcoll", "indexes": [ { "key": { "a.b": -1, "_id": -1 }, "enableCompositeTerm": true, "name": "a.b_-1" }] }', true);
 
@@ -409,7 +404,6 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT * FROM bson_aggr
 
 -- mixed asc/desc indexes
 reset documentdb.forceDisableSeqScan;
-set documentdb.enableDescendingCompositeIndex to on;
 CALL documentdb_api.drop_indexes('comp_db', '{ "dropIndexes": "sortcoll3", "index": "a.b.c_-1" }');
 CALL documentdb_api.drop_indexes('comp_db', '{ "dropIndexes": "sortcoll", "index": "a.b_-1" }');
 

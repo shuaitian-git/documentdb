@@ -62,7 +62,6 @@ PG_FUNCTION_INFO_V1(gin_bson_composite_ordering_transform);
 PG_FUNCTION_INFO_V1(gin_bson_composite_index_term_transform);
 
 extern bool EnableCollation;
-extern bool EnableNewCompositeIndexOpclass;
 extern bool RumHasMultiKeyPaths;
 
 static void ValidateCompositePathSpec(const char *prefix);
@@ -1333,11 +1332,6 @@ GetCompositePathIndexTraverseOption(BsonIndexStrategy strategy, void *contextOpt
 									const bson_value_t *bsonValue,
 									int32_t *compositeIndexCol)
 {
-	if (!EnableNewCompositeIndexOpclass)
-	{
-		return IndexTraverse_Invalid;
-	}
-
 	if (bsonValue->value_type == BSON_TYPE_ARRAY)
 	{
 		/*
