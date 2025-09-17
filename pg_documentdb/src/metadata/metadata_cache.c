@@ -666,9 +666,6 @@ typedef struct DocumentDBApiOidCacheData
 	/* OID of the websearch_to_tsquery function with regconfig option. */
 	Oid WebSearchToTsQueryWithRegConfigFunctionId;
 
-	/* OID of the rum_extract_tsvector function */
-	Oid RumExtractTsVectorFunctionId;
-
 	/* OID of the operator class for BSON Text operations with {ExtensionObjectPrefix}_rum */
 	Oid BsonRumTextPathOperatorFamily;
 
@@ -6452,31 +6449,6 @@ WebSearchToTsQueryWithRegConfigFunctionId(void)
 	}
 
 	return Cache.WebSearchToTsQueryWithRegConfigFunctionId;
-}
-
-
-/*
- * Returns the OID of the extract_tsvector function that the RUM extension
- * has for the default TSVector operator class
- */
-Oid
-RumExtractTsVectorFunctionId(void)
-{
-	InitializeDocumentDBApiExtensionCache();
-
-	if (Cache.RumExtractTsVectorFunctionId == InvalidOid)
-	{
-		List *functionNameList = list_make2(makeString(RUM_EXTENSION_SCHEMA),
-											makeString("rum_extract_tsvector"));
-		Oid paramOids[5] = {
-			TSVECTOROID, INTERNALOID, INTERNALOID, INTERNALOID, INTERNALOID
-		};
-		bool missingOK = false;
-		Cache.RumExtractTsVectorFunctionId =
-			LookupFuncName(functionNameList, 5, paramOids, missingOK);
-	}
-
-	return Cache.RumExtractTsVectorFunctionId;
 }
 
 

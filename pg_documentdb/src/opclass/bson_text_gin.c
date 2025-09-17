@@ -34,6 +34,7 @@
 
 
 extern QueryTextIndexData *QueryTextData;
+extern Datum documentdb_rum_extract_tsvector(PG_FUNCTION_ARGS);
 
 /* --------------------------------------------------------- */
 /* Forward declaration */
@@ -167,12 +168,12 @@ rum_bson_single_path_extract_tsvector(PG_FUNCTION_ARGS)
 	}
 
 	/* Call RUM extract tsvector with the given tsvector. */
-	Datum result = OidFunctionCall5(RumExtractTsVectorFunctionId(),
-									TSVectorGetDatum(vector),
-									PG_GETARG_DATUM(1),
-									PG_GETARG_DATUM(2),
-									PG_GETARG_DATUM(3),
-									PG_GETARG_DATUM(4));
+	Datum result = DirectFunctionCall5(documentdb_rum_extract_tsvector,
+									   TSVectorGetDatum(vector),
+									   PG_GETARG_DATUM(1),
+									   PG_GETARG_DATUM(2),
+									   PG_GETARG_DATUM(3),
+									   PG_GETARG_DATUM(4));
 
 	PG_FREE_IF_COPY(bson, 0);
 	PG_RETURN_DATUM(result);

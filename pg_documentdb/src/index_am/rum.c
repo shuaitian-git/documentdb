@@ -120,8 +120,15 @@ static bool extension_ruminsert(Relation indexRelation,
 								struct IndexInfo *indexInfo);
 
 static bool RumScanOrderedFalse(IndexScanDesc scan);
-
 static CanOrderInIndexScan rum_index_scan_ordered = RumScanOrderedFalse;
+
+static Datum (*rum_extract_tsquery_func)(PG_FUNCTION_ARGS) = NULL;
+static Datum (*rum_tsquery_consistent_func)(PG_FUNCTION_ARGS) = NULL;
+static Datum (*rum_tsvector_config_func)(PG_FUNCTION_ARGS) = NULL;
+static Datum (*rum_tsquery_pre_consistent_func)(PG_FUNCTION_ARGS) = NULL;
+static Datum (*rum_tsquery_distance_func)(PG_FUNCTION_ARGS) = NULL;
+static Datum (*rum_ts_join_pos_func)(PG_FUNCTION_ARGS) = NULL;
+static Datum (*rum_extract_tsvector_func)(PG_FUNCTION_ARGS) = NULL;
 
 inline static void
 EnsureRumLibLoaded(void)
@@ -138,6 +145,14 @@ EnsureRumLibLoaded(void)
 /* Top level exports */
 /* --------------------------------------------------------- */
 PG_FUNCTION_INFO_V1(extensionrumhandler);
+PG_FUNCTION_INFO_V1(documentdb_rum_extract_tsquery);
+PG_FUNCTION_INFO_V1(documentdb_rum_tsquery_consistent);
+PG_FUNCTION_INFO_V1(documentdb_rum_tsvector_config);
+PG_FUNCTION_INFO_V1(documentdb_rum_tsquery_pre_consistent);
+PG_FUNCTION_INFO_V1(documentdb_rum_tsquery_distance);
+PG_FUNCTION_INFO_V1(documentdb_rum_ts_join_pos);
+PG_FUNCTION_INFO_V1(documentdb_rum_extract_tsvector);
+
 
 /*
  * Register the access method for RUM as a custom index handler.
@@ -152,6 +167,62 @@ extensionrumhandler(PG_FUNCTION_ARGS)
 {
 	IndexAmRoutine *indexRoutine = GetRumIndexHandler(fcinfo);
 	PG_RETURN_POINTER(indexRoutine);
+}
+
+
+Datum
+documentdb_rum_extract_tsquery(PG_FUNCTION_ARGS)
+{
+	EnsureRumLibLoaded();
+	return rum_extract_tsquery_func(fcinfo);
+}
+
+
+Datum
+documentdb_rum_tsquery_consistent(PG_FUNCTION_ARGS)
+{
+	EnsureRumLibLoaded();
+	return rum_tsquery_consistent_func(fcinfo);
+}
+
+
+Datum
+documentdb_rum_tsvector_config(PG_FUNCTION_ARGS)
+{
+	EnsureRumLibLoaded();
+	return rum_tsvector_config_func(fcinfo);
+}
+
+
+Datum
+documentdb_rum_tsquery_pre_consistent(PG_FUNCTION_ARGS)
+{
+	EnsureRumLibLoaded();
+	return rum_tsquery_pre_consistent_func(fcinfo);
+}
+
+
+Datum
+documentdb_rum_tsquery_distance(PG_FUNCTION_ARGS)
+{
+	EnsureRumLibLoaded();
+	return rum_tsquery_distance_func(fcinfo);
+}
+
+
+Datum
+documentdb_rum_ts_join_pos(PG_FUNCTION_ARGS)
+{
+	EnsureRumLibLoaded();
+	return rum_ts_join_pos_func(fcinfo);
+}
+
+
+Datum
+documentdb_rum_extract_tsvector(PG_FUNCTION_ARGS)
+{
+	EnsureRumLibLoaded();
+	return rum_extract_tsvector_func(fcinfo);
 }
 
 
@@ -293,6 +364,29 @@ LoadRumRoutine(void)
 	Datum rumHandlerDatum = rumhandler(fcinfo);
 	IndexAmRoutine *indexRoutine = (IndexAmRoutine *) DatumGetPointer(rumHandlerDatum);
 	rum_index_routine = *indexRoutine;
+
+	/* Load required C functions */
+	rum_extract_tsquery_func =
+		load_external_function(rumLibPath, "rum_extract_tsquery", !missingOk,
+							   ignoreLibFileHandle);
+	rum_tsquery_consistent_func =
+		load_external_function(rumLibPath, "rum_tsquery_consistent", !missingOk,
+							   ignoreLibFileHandle);
+	rum_tsvector_config_func =
+		load_external_function(rumLibPath, "rum_tsvector_config", !missingOk,
+							   ignoreLibFileHandle);
+	rum_tsquery_pre_consistent_func =
+		load_external_function(rumLibPath, "rum_tsquery_pre_consistent", !missingOk,
+							   ignoreLibFileHandle);
+	rum_tsquery_distance_func =
+		load_external_function(rumLibPath, "rum_tsquery_distance", !missingOk,
+							   ignoreLibFileHandle);
+	rum_ts_join_pos_func =
+		load_external_function(rumLibPath, "rum_ts_join_pos", !missingOk,
+							   ignoreLibFileHandle);
+	rum_extract_tsvector_func =
+		load_external_function(rumLibPath, "rum_extract_tsvector", !missingOk,
+							   ignoreLibFileHandle);
 
 	/* Load optional explain function */
 	missingOk = true;
