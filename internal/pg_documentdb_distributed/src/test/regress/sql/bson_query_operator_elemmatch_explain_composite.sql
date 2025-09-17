@@ -3,8 +3,6 @@ SET citus.next_shard_id TO 1064000;
 SET documentdb.next_collection_id TO 10640;
 SET documentdb.next_collection_index_id TO 10640;
 
-SET documentdb.enableNewCompositeIndexOpClass to on;
-
 set enable_seqscan TO on;
 set documentdb.forceUseIndexIfAvailable to on;
 set documentdb.forceDisableSeqScan to off;

@@ -160,11 +160,8 @@ extern int IndexTruncationLimitOverride;
 extern int MaxWildcardIndexKeySize;
 extern bool DefaultEnableLargeUniqueIndexKeys;
 extern bool SkipFailOnCollation;
-extern bool EnableNewCompositeIndexOpclass;
 extern bool ForceWildcardReducedTerm;
 extern bool DefaultUseCompositeOpClass;
-extern bool EnableDescendingCompositeIndex;
-extern bool EnableCompositeUniqueIndex;
 
 extern char *AlternateIndexHandler;
 
@@ -1442,9 +1439,8 @@ ParseCustomIndexDefOption(const char *indexDefDocKey, bson_iter_t *indexDefDocIt
 		return true;
 	}
 
-	if (EnableNewCompositeIndexOpclass &&
-		(strcmp(indexDefDocKey, "enableCompositeTerm") == 0 || strcmp(
-			 indexDefDocKey, "enableOrderedIndex") == 0))
+	if (strcmp(indexDefDocKey, "enableCompositeTerm") == 0 || strcmp(
+			indexDefDocKey, "enableOrderedIndex") == 0)
 	{
 		EnsureTopLevelFieldIsBooleanLike(indexDefDocKey, indexDefDocIter);
 		const bson_value_t *value = bson_iter_value(indexDefDocIter);
@@ -2009,7 +2005,7 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 
 	if (indexDef->enableCompositeTerm == BoolIndexOption_True ||
 		(indexDef->enableCompositeTerm == BoolIndexOption_Undefined &&
-		 EnableNewCompositeIndexOpclass && DefaultUseCompositeOpClass))
+		 DefaultUseCompositeOpClass))
 	{
 		bool shouldError = indexDef->enableCompositeTerm == BoolIndexOption_True;
 
@@ -2026,18 +2022,6 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
 								errmsg(
 									"enableCompositeTerm is not supported with wildcard indexes.")));
-			}
-		}
-
-		if (indexDef->unique == BoolIndexOption_True && !EnableCompositeUniqueIndex)
-		{
-			indexDef->key->canSupportCompositeTerm = false;
-
-			if (shouldError)
-			{
-				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
-								errmsg(
-									"enableCompositeTerm is not supported with unique indexes.")));
 			}
 		}
 
@@ -2066,18 +2050,6 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 					ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
 									errmsg(
 										"enableCompositeTerm is not supported with wildcard indexes.")));
-				}
-			}
-
-			if (keyPath->sortDirection != 1 && !EnableDescendingCompositeIndex)
-			{
-				indexDef->key->canSupportCompositeTerm = false;
-
-				if (shouldError)
-				{
-					ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
-									errmsg(
-										"enableCompositeTerm is only supported with ascending sort direction.")));
 				}
 			}
 		}
@@ -4777,8 +4749,7 @@ CreatePostgresIndexCreationCmd(uint64 collectionId, IndexDef *indexDef, int inde
 			enableLargeIndexKeys = true;
 		}
 
-		bool enableNewIndexOpClass = EnableNewCompositeIndexOpclass &&
-									 DefaultUseCompositeOpClass;
+		bool enableNewIndexOpClass = DefaultUseCompositeOpClass;
 		if (indexDef->enableCompositeTerm != BoolIndexOption_Undefined)
 		{
 			enableNewIndexOpClass = indexDef->enableCompositeTerm == BoolIndexOption_True;
@@ -4919,8 +4890,7 @@ CreatePostgresIndexCreationCmd(uint64 collectionId, IndexDef *indexDef, int inde
 								   BoolIndexOption_False;
 		}
 
-		bool enableNewIndexOpClass = EnableNewCompositeIndexOpclass &&
-									 DefaultUseCompositeOpClass;
+		bool enableNewIndexOpClass = DefaultUseCompositeOpClass;
 		if (indexDef->enableCompositeTerm != BoolIndexOption_Undefined)
 		{
 			enableNewIndexOpClass = indexDef->enableCompositeTerm == BoolIndexOption_True;
@@ -5323,8 +5293,7 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 	char indexTermSizeLimitArg[22] = { 0 };
 	bool enableTruncation = enableLargeIndexKeys || ForceIndexTermTruncation;
 
-	bool isUsingCompositeOpClass = EnableNewCompositeIndexOpclass &&
-								   enableCompositeOpClass &&
+	bool isUsingCompositeOpClass = enableCompositeOpClass &&
 								   indexDefKey->canSupportCompositeTerm;
 	bool usingNewUniqueIndexOpClass = unique && (enableLargeIndexKeys ||
 												 isUsingCompositeOpClass);

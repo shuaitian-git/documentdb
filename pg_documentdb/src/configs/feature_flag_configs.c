@@ -71,9 +71,6 @@ bool EnableVectorCalculateDefaultSearchParameter =
  * SECTION: Indexing feature flags
  */
 
-#define DEFAULT_ENABLE_NEW_COMPOSITE_INDEX_OPCLASS true
-bool EnableNewCompositeIndexOpclass = DEFAULT_ENABLE_NEW_COMPOSITE_INDEX_OPCLASS;
-
 #define DEFAULT_USE_NEW_COMPOSITE_INDEX_OPCLASS false
 bool DefaultUseCompositeOpClass = DEFAULT_USE_NEW_COMPOSITE_INDEX_OPCLASS;
 
@@ -83,11 +80,11 @@ bool EnableIndexOrderbyPushdown = DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN;
 #define DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN_LEGACY false
 bool EnableIndexOrderbyPushdownLegacy = DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN_LEGACY;
 
-#define DEFAULT_ENABLE_DESCENDING_COMPOSITE_INDEX true
-bool EnableDescendingCompositeIndex = DEFAULT_ENABLE_DESCENDING_COMPOSITE_INDEX;
+#define DEFAULT_ENABLE_INDEX_ONLY_SCAN false
+bool EnableIndexOnlyScan = DEFAULT_ENABLE_INDEX_ONLY_SCAN;
 
-#define DEFAULT_ENABLE_COMPOSITE_UNIQUE_INDEX true
-bool EnableCompositeUniqueIndex = DEFAULT_ENABLE_COMPOSITE_UNIQUE_INDEX;
+#define DEFAULT_ENABLE_RANGE_OPTIMIZATION_COMPOSITE false
+bool EnableRangeOptimizationForComposite = DEFAULT_ENABLE_RANGE_OPTIMIZATION_COMPOSITE;
 
 /*
  * SECTION: Planner feature flags
@@ -197,12 +194,6 @@ bool EnableCompact = DEFAULT_ENABLE_COMPACT_COMMAND;
 
 #define DEFAULT_ENABLE_SCHEMA_ENFORCEMENT_FOR_CSFLE true
 bool EnableSchemaEnforcementForCSFLE = DEFAULT_ENABLE_SCHEMA_ENFORCEMENT_FOR_CSFLE;
-
-#define DEFAULT_ENABLE_INDEX_ONLY_SCAN false
-bool EnableIndexOnlyScan = DEFAULT_ENABLE_INDEX_ONLY_SCAN;
-
-#define DEFAULT_ENABLE_RANGE_OPTIMIZATION_COMPOSITE false
-bool EnableRangeOptimizationForComposite = DEFAULT_ENABLE_RANGE_OPTIMIZATION_COMPOSITE;
 
 #define DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT true
 bool UsePgStatsLiveTuplesForCount = DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT;
@@ -479,13 +470,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.enableNewCompositeIndexOpClass", newGucPrefix),
-		gettext_noop(
-			"Whether to enable the new experimental composite index opclass"),
-		NULL, &EnableNewCompositeIndexOpclass, DEFAULT_ENABLE_NEW_COMPOSITE_INDEX_OPCLASS,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		psprintf("%s.defaultUseCompositeOpClass", newGucPrefix),
 		gettext_noop(
 			"Whether to enable the new experimental composite index opclass for default index creates"),
@@ -505,20 +489,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether to enable the prior index sort on the new experimental composite index opclass"),
 		NULL, &EnableIndexOrderbyPushdownLegacy,
 		DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN_LEGACY,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enableDescendingCompositeIndex", newGucPrefix),
-		gettext_noop(
-			"Whether to enable descending composite index support"),
-		NULL, &EnableDescendingCompositeIndex, DEFAULT_ENABLE_DESCENDING_COMPOSITE_INDEX,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enableCompositeUniqueIndex", newGucPrefix),
-		gettext_noop(
-			"Whether to enable composite unique index support"),
-		NULL, &EnableCompositeUniqueIndex, DEFAULT_ENABLE_COMPOSITE_UNIQUE_INDEX,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

@@ -37,7 +37,6 @@ extern char *ApiGucPrefix;
 extern int SingleTTLTaskTimeBudget;
 extern int TTLTaskMaxRunTimeInMS;
 extern bool EnableTtlJobsOnReadOnly;
-extern bool EnableNewCompositeIndexOpclass;
 extern bool ForceIndexScanForTTLTask;
 extern bool UseIndexHintsForTTLTask;
 extern bool EnableTTLDescSort;
@@ -672,12 +671,10 @@ DeleteExpiredRowsForIndexCore(char *tableName, TtlIndexEntry *indexEntry, int64
 
 	bool disableSeqAndBitmapScan = !IsClusterVersionAtleast(DocDB_V0, 106, 0) &&
 								   ForceIndexScanForTTLTask &&
-								   EnableNewCompositeIndexOpclass &&
 								   indexEntry->indexIsOrdered;
 
 	bool useIndexHintsForTTLQuery = IsClusterVersionAtleast(DocDB_V0, 106, 0) &&
 									UseIndexHintsForTTLTask &&
-									EnableNewCompositeIndexOpclass &&
 									indexEntry->indexIsOrdered;
 	if (useIndexHintsForTTLQuery)
 	{

@@ -39,9 +39,7 @@
 #include "utils/documentdb_errors.h"
 
 extern bool ForceUseIndexIfAvailable;
-extern bool EnableNewCompositeIndexOpclass;
 extern bool EnableIndexOrderbyPushdown;
-extern bool EnableDescendingCompositeIndex;
 extern bool EnableIndexOnlyScan;
 extern bool EnableIndexOrderbyPushdownLegacy;
 extern const RumIndexArrayStateFuncs RoaringStateFuncs;
@@ -509,12 +507,6 @@ CompositeIndexSupportsOrderByPushdown(IndexPath *indexPath, List *sortDetails,
 			hasForwardSortOrder = true;
 		}
 
-		if (sortBtreeStrategy == BTGreaterStrategyNumber &&
-			!EnableDescendingCompositeIndex)
-		{
-			break;
-		}
-
 		if (maxOrderbyColumn < 0)
 		{
 			minOrderbyColumn = orderbyColumnNumber;
@@ -869,11 +861,6 @@ static IndexScanDesc
 extension_rumbeginscan(Relation rel, int nkeys, int norderbys)
 {
 	EnsureRumLibLoaded();
-	if (!EnableNewCompositeIndexOpclass)
-	{
-		return rum_index_routine.ambeginscan(rel, nkeys, norderbys);
-	}
-
 	return extension_rumbeginscan_core(rel, nkeys, norderbys,
 									   &rum_index_routine);
 }
@@ -906,13 +893,6 @@ static void
 extension_rumendscan(IndexScanDesc scan)
 {
 	EnsureRumLibLoaded();
-
-	if (!EnableNewCompositeIndexOpclass)
-	{
-		rum_index_routine.amendscan(scan);
-		return;
-	}
-
 	extension_rumendscan_core(scan, &rum_index_routine);
 }
 
@@ -943,12 +923,6 @@ extension_rumrescan(IndexScanDesc scan, ScanKey scankey, int nscankeys,
 					ScanKey orderbys, int norderbys)
 {
 	EnsureRumLibLoaded();
-	if (!EnableNewCompositeIndexOpclass)
-	{
-		rum_index_routine.amrescan(scan, scankey, nscankeys, orderbys, norderbys);
-		return;
-	}
-
 	extension_rumrescan_core(scan, scankey, nscankeys,
 							 orderbys, norderbys, &rum_index_routine,
 							 RumGetMultikeyStatus, rum_index_scan_ordered);
@@ -1069,11 +1043,6 @@ static int64
 extension_amgetbitmap(IndexScanDesc scan, TIDBitmap *tbm)
 {
 	EnsureRumLibLoaded();
-	if (!EnableNewCompositeIndexOpclass)
-	{
-		return rum_index_routine.amgetbitmap(scan, tbm);
-	}
-
 	return extension_rumgetbitmap_core(scan, tbm, &rum_index_routine);
 }
 
@@ -1099,11 +1068,6 @@ static bool
 extension_amgettuple(IndexScanDesc scan, ScanDirection direction)
 {
 	EnsureRumLibLoaded();
-	if (!EnableNewCompositeIndexOpclass)
-	{
-		return rum_index_routine.amgettuple(scan, direction);
-	}
-
 	return extension_rumgettuple_core(scan, direction, &rum_index_routine);
 }
 
@@ -1194,11 +1158,6 @@ extension_rumbuild(Relation heapRelation,
 {
 	EnsureRumLibLoaded();
 
-	if (!EnableNewCompositeIndexOpclass)
-	{
-		return rum_index_routine.ambuild(heapRelation, indexRelation, indexInfo);
-	}
-
 	bool amCanBuildParallel = true;
 	return extension_rumbuild_core(heapRelation, indexRelation,
 								   indexInfo, &rum_index_routine,
@@ -1249,13 +1208,6 @@ extension_ruminsert(Relation indexRelation,
 					struct IndexInfo *indexInfo)
 {
 	EnsureRumLibLoaded();
-
-	if (!EnableNewCompositeIndexOpclass)
-	{
-		return rum_index_routine.aminsert(indexRelation, values, isnull,
-										  heap_tid, heapRelation, checkUnique,
-										  indexUnchanged, indexInfo);
-	}
 
 	return extension_ruminsert_core(indexRelation, values, isnull,
 									heap_tid, heapRelation, checkUnique,
