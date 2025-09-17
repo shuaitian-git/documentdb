@@ -310,7 +310,6 @@ Oid PostgisGeographyExpandFunctionId(void);
 /* Text search functions */
 Oid WebSearchToTsQueryFunctionId(void);
 Oid WebSearchToTsQueryWithRegConfigFunctionId(void);
-Oid RumExtractTsVectorFunctionId(void);
 Oid BsonTextSearchMetaQualFuncId(void);
 Oid TsRankFunctionId(void);
 Oid TsVectorConcatFunctionId(void);
