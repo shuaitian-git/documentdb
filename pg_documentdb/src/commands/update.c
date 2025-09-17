@@ -110,6 +110,7 @@ extern int NumBsonDocumentsUpdated;
 /* This guc is temporary and is used to handle whether the parameter “bypassDocumentValidation” could be set in the request command.*/
 extern bool EnableBypassDocumentValidation;
 extern bool EnableSchemaValidation;
+extern bool UseLegacyShardKeyFilterOnUpdate;
 
 /*
  * UpdateSpec describes a single update operation.
@@ -325,7 +326,7 @@ static void UpdateOneInternalWithRetryRecord(MongoCollection *collection, int64
 											 UpdateOneParams *updateOneParams,
 											 UpdateOneResult *result,
 											 ExprEvalState *stateForSchemaValidation);
-static bool SelectUpdateCandidate(uint64 collectionId, const char *shardTableName, int64
+static bool SelectUpdateCandidate(MongoCollection *collection, int64
 								  shardKeyHash, UpdateOneParams *updateOneParams,
 								  UpdateCandidate *updateCandidate,
 								  bool getOriginalDocument, bool *hasOnlyObjectIdFilter);
@@ -1668,12 +1669,17 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 {
 	const char *tableName = collection->tableName;
 	bool isLocalShardQuery = false;
+	bool setShardKeyValueFilter = false;
 	if (collection->shardTableName[0] != '\0')
 	{
 		/* If we can push down to the local shard, then prefer that. */
 		tableName = collection->shardTableName;
 		isLocalShardQuery = true;
 		NumBsonDocumentsUpdated = 0;
+	}
+	else if (!DefaultInlineWriteOperations)
+	{
+		setShardKeyValueFilter = true;
 	}
 
 	StringInfoData updateQuery;
@@ -1743,6 +1749,7 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 	int objectIdArgIndex = -1;
 	int validationLevelArgIndex = -1;
 
+	uint64 preparedQueryKey = 0;
 	if (EnableSchemaValidation && schemaValidationExprEvalState != NULL)
 	{
 		/*
@@ -1888,6 +1895,7 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 
 		if (applyVariablSpec)
 		{
+			preparedQueryKey = QUERY_UPDATE_MANY_WITH_QUERY_FILTER_FUNCTION;
 			appendStringInfo(&updateQuery,
 							 " FROM %s.bson_update_document(document, $1::%s, "
 							 "$2::%s, $3::%s, %s, $4::%s.bson)) "
@@ -1902,6 +1910,7 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 		}
 		else
 		{
+			preparedQueryKey = QUERY_UPDATE_MANY_WITH_QUERY_FILTER_OPERATOR;
 			appendStringInfo(&updateQuery,
 							 " FROM %s.bson_update_document(document, $1::%s, "
 							 "$2::%s, $3::%s, %s)) "
@@ -1915,24 +1924,39 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 			argCount += 3;
 		}
 
-		if (hasShardKeyValueFilter)
+		if (objectIdFilter != NULL && hasShardKeyValueFilter)
 		{
+			/* We align this query key to be 2 more than the base plan: Note that the combo will be 3 more
+			 * which needs to be defined in the header file.
+			 */
+			preparedQueryKey += QUERY_UPDATE_MANY_OBJECTID_QUERY_OFFSET;
+
 			appendStringInfo(&updateQuery, "AND shard_key_value = $%d ",
 							 nextSqlArgIndex);
 
 			shardKeyArgIndex = nextSqlArgIndex - 1;
 			nextSqlArgIndex++;
 			argCount++;
-		}
 
-		if (objectIdFilter != NULL)
-		{
 			appendStringInfo(&updateQuery, "AND object_id OPERATOR(%s.=) $%d::%s",
 							 CoreSchemaName,
 							 nextSqlArgIndex,
 							 FullBsonTypeName);
 
 			objectIdArgIndex = nextSqlArgIndex - 1;
+			nextSqlArgIndex++;
+			argCount++;
+		}
+		else if (hasShardKeyValueFilter &&
+				 (UseLegacyShardKeyFilterOnUpdate || collection->shardKey != NULL ||
+				  setShardKeyValueFilter))
+		{
+			/* We align this query key to be 1 more than the base plan */
+			preparedQueryKey += QUERY_UPDATE_MANY_SHARD_KEY_QUERY_OFFSET;
+			appendStringInfo(&updateQuery, "AND shard_key_value = $%d ",
+							 nextSqlArgIndex);
+
+			shardKeyArgIndex = nextSqlArgIndex - 1;
 			nextSqlArgIndex++;
 			argCount++;
 		}
@@ -2012,8 +2036,22 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 	bool readOnly = false;
 	long maxTupleCount = 0;
 
-	SPI_execute_with_args(updateQuery.data, argCount, argTypes, argValues, argNulls,
-						  readOnly, maxTupleCount);
+	if (preparedQueryKey != 0)
+	{
+		SPIPlanPtr plan = isLocalShardQuery ?
+						  GetSPIQueryPlanWithLocalShard(collection->collectionId,
+														tableName, preparedQueryKey,
+														updateQuery.data, argTypes,
+														argCount)
+						  : GetSPIQueryPlan(collection->collectionId, preparedQueryKey,
+											updateQuery.data, argTypes, argCount);
+		SPI_execute_plan(plan, argValues, argNulls, readOnly, maxTupleCount);
+	}
+	else
+	{
+		SPI_execute_with_args(updateQuery.data, argCount, argTypes, argValues, argNulls,
+							  readOnly, maxTupleCount);
+	}
 
 	if (SPI_processed > 0)
 	{
@@ -3070,8 +3108,7 @@ UpdateOneInternal(MongoCollection *collection, UpdateOneParams *updateOneParams,
 						  NeedExistingDocForValidation(stateForSchemaValidation,
 													   collection);
 	bool hasOnlyObjectIdFilter = false;
-	bool foundDocument = SelectUpdateCandidate(collection->collectionId,
-											   collection->shardTableName,
+	bool foundDocument = SelectUpdateCandidate(collection,
 											   shardKeyHash,
 											   updateOneParams,
 											   &updateCandidate,
@@ -3237,7 +3274,7 @@ UpdateOneInternal(MongoCollection *collection, UpdateOneParams *updateOneParams,
  * and returns whether a document was found.
  */
 static bool
-SelectUpdateCandidate(uint64 collectionId, const char *shardTableName, int64 shardKeyHash,
+SelectUpdateCandidate(MongoCollection *collection, int64 shardKeyHash,
 					  UpdateOneParams *updateOneParams, UpdateCandidate *updateCandidate,
 					  bool getOriginalDocument, bool *hasOnlyObjectIdFilter)
 {
@@ -3248,7 +3285,6 @@ SelectUpdateCandidate(uint64 collectionId, const char *shardTableName, int64 sha
 							   BsonValueDocumentDecomposeFields(updateOneParams->sort) :
 							   NIL;
 	int argCount = list_length(sortFieldDocuments);
-
 
 	bool queryHasNonIdFilters = false;
 	bool isIdFilterCollationAwareIgnore = false;
@@ -3266,19 +3302,18 @@ SelectUpdateCandidate(uint64 collectionId, const char *shardTableName, int64 sha
 
 	appendStringInfo(&updateQuery, "SELECT ctid, object_id, document FROM");
 
-	if (shardTableName != NULL && shardTableName[0] != '\0')
+	if (collection->shardTableName[0] != '\0')
 	{
-		appendStringInfo(&updateQuery, " %s.%s", ApiDataSchemaName, shardTableName);
+		appendStringInfo(&updateQuery, " %s.%s", ApiDataSchemaName,
+						 collection->shardTableName);
 	}
 	else
 	{
 		appendStringInfo(&updateQuery, " %s.documents_" UINT64_FORMAT, ApiDataSchemaName,
-						 collectionId);
+						 collection->collectionId);
 	}
 
-	appendStringInfo(&updateQuery, " WHERE shard_key_value = $1");
-	nextSqlArgIndex++;
-	argCount++;
+	appendStringInfo(&updateQuery, " WHERE ");
 
 	const bson_value_t *variableSpec = updateOneParams->variableSpec;
 	pgbson *variableSpecBson = NULL;
@@ -3290,25 +3325,28 @@ SelectUpdateCandidate(uint64 collectionId, const char *shardTableName, int64 sha
 	}
 
 	bool applyVariableSpec = variableSpecBson != NULL;
+	bool hasFilter = false;
 	if (queryHasNonIdFilters)
 	{
 		if (applyVariableSpec)
 		{
 			planId = QUERY_UPDATE_SELECT_UPDATE_CANDIDATE_NON_OBJECT_ID_LET_AND_COLLATION;
 			appendStringInfo(&updateQuery,
-							 " AND %s.bson_query_match(document, $2::%s.bson, $3::%s.bson, $4::text)",
+							 " %s.bson_query_match(document, $1::%s.bson, $2::%s.bson, $3::text)",
 							 DocumentDBApiInternalSchemaName, CoreSchemaName,
 							 CoreSchemaName);
 
+			hasFilter = true;
 			argCount += 3;
 			nextSqlArgIndex += 3;
 		}
 		else
 		{
 			planId = QUERY_UPDATE_SELECT_UPDATE_CANDIDATE_NON_OBJECT_ID;
-			appendStringInfo(&updateQuery, " AND document OPERATOR(%s.@@) $2::%s",
+			appendStringInfo(&updateQuery, " document OPERATOR(%s.@@) $1::%s",
 							 ApiCatalogSchemaName, FullBsonTypeName);
 
+			hasFilter = true;
 			nextSqlArgIndex++;
 			argCount++;
 		}
@@ -3321,6 +3359,9 @@ SelectUpdateCandidate(uint64 collectionId, const char *shardTableName, int64 sha
 	}
 
 	int objectIdArgIndex = -1;
+	int shardKeyArgIndex = -1;
+	bool setShardKeyValueFilter = collection->shardTableName[0] == '\0' &&
+								  !DefaultInlineWriteOperations;
 	if (objectIdFilter != NULL)
 	{
 		planId = applyVariableSpec ?
@@ -3329,11 +3370,32 @@ SelectUpdateCandidate(uint64 collectionId, const char *shardTableName, int64 sha
 				 QUERY_UPDATE_SELECT_UPDATE_CANDIDATE_BOTH_FILTER :
 				 QUERY_UPDATE_SELECT_UPDATE_CANDIDATE_ONLY_OBJECT_ID;
 
-		appendStringInfo(&updateQuery,
-						 " AND object_id OPERATOR(%s.=) $%d::%s", CoreSchemaName,
-						 nextSqlArgIndex, FullBsonTypeName);
-
+		/* We need to add the shard_key_value filter here */
+		int shardKeySqlArg = nextSqlArgIndex;
+		shardKeyArgIndex = nextSqlArgIndex - 1;
+		nextSqlArgIndex++;
+		argCount++;
+		int objectidSqlArg = nextSqlArgIndex;
 		objectIdArgIndex = nextSqlArgIndex - 1;
+		nextSqlArgIndex++;
+		argCount++;
+
+		appendStringInfo(&updateQuery,
+						 "%s shard_key_value = $%d"
+						 " AND object_id OPERATOR(%s.=) $%d::%s",
+						 hasFilter ? " AND " : "", shardKeySqlArg,
+						 CoreSchemaName,
+						 objectidSqlArg, FullBsonTypeName);
+	}
+	else if (!queryHasNonIdFilters || UseLegacyShardKeyFilterOnUpdate ||
+			 collection->shardKey != NULL || setShardKeyValueFilter)
+	{
+		/* query match handles adding shard_key_value filter in general so we add shard_key_value here only
+		 * if needed
+		 */
+		appendStringInfo(&updateQuery, "%s shard_key_value = $%d",
+						 hasFilter ? " AND " : "", nextSqlArgIndex);
+		shardKeyArgIndex = nextSqlArgIndex - 1;
 		nextSqlArgIndex++;
 		argCount++;
 	}
@@ -3342,29 +3404,24 @@ SelectUpdateCandidate(uint64 collectionId, const char *shardTableName, int64 sha
 	Datum *argValues = palloc(sizeof(Datum) * argCount);
 	char *argNulls = palloc(sizeof(char) * argCount);
 
-	/* set shard key value */
-	argTypes[0] = INT8OID;
-	argValues[0] = Int64GetDatum(shardKeyHash);
-	argNulls[0] = ' ';
-
 	Oid bsonTypeId = BsonTypeId();
 	pgbson *query = PgbsonInitFromDocumentBsonValue(updateOneParams->query);
 
 	/* set query value*/
-	argTypes[1] = bsonTypeId;
-	argValues[1] = PointerGetDatum(query);
-	argNulls[1] = ' ';
+	argTypes[0] = bsonTypeId;
+	argValues[0] = PointerGetDatum(query);
+	argNulls[0] = ' ';
 
 	/* set variableSpec and collationString, if applicable */
 	if (applyVariableSpec)
 	{
-		argTypes[2] = bsonTypeId;
-		argValues[2] = PointerGetDatum(variableSpecBson);
-		argNulls[2] = ' ';
+		argTypes[1] = bsonTypeId;
+		argValues[1] = PointerGetDatum(variableSpecBson);
+		argNulls[1] = ' ';
 
-		argTypes[3] = TEXTOID;
-		argValues[3] = CStringGetTextDatum("");
-		argNulls[3] = 'n';
+		argTypes[2] = TEXTOID;
+		argValues[2] = CStringGetTextDatum("");
+		argNulls[2] = 'n';
 	}
 
 	/* set id filter value */
@@ -3373,6 +3430,14 @@ SelectUpdateCandidate(uint64 collectionId, const char *shardTableName, int64 sha
 		argTypes[objectIdArgIndex] = BYTEAOID;
 		argValues[objectIdArgIndex] = PointerGetDatum(CastPgbsonToBytea(objectIdFilter));
 		argNulls[objectIdArgIndex] = ' ';
+	}
+
+	if (shardKeyArgIndex != -1)
+	{
+		/* set shard key value */
+		argTypes[shardKeyArgIndex] = INT8OID;
+		argValues[shardKeyArgIndex] = Int64GetDatum(shardKeyHash);
+		argNulls[shardKeyArgIndex] = ' ';
 	}
 
 	/* set sort value */
@@ -3414,8 +3479,8 @@ SelectUpdateCandidate(uint64 collectionId, const char *shardTableName, int64 sha
 	}
 	else
 	{
-		SPIPlanPtr plan = GetSPIQueryPlanWithLocalShard(collectionId,
-														shardTableName,
+		SPIPlanPtr plan = GetSPIQueryPlanWithLocalShard(collection->collectionId,
+														collection->shardTableName,
 														planId, updateQuery.data,
 														argTypes,
 														argCount);
