@@ -1,4 +1,6 @@
 SET search_path TO documentdb_api,documentdb_api_catalog,documentdb_core;
+SET documentdb.next_collection_id TO 6700;
+SET documentdb.next_collection_index_id TO 6700;
 
 SELECT documentdb_api.insert_one('db','agg_facet_group_exp','{ "_id": 1, "a": { "b": 1, "c": 1} }', NULL);
 SELECT documentdb_api.insert_one('db','agg_facet_group_exp','{ "_id": 2, "a": { "b": 1, "c": 2} }', NULL);

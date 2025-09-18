@@ -570,22 +570,22 @@ BEGIN;
 (4 rows)
 
   -- cannot use idx_1
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_3", "filter": { "b.d": { "$eq": 1 } }, "projection": { "a": 1 } }');
-                             QUERY PLAN                             
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_3", "filter": { "b.d": { "$eq": 1 } }, "projection": { "a": 1 } }') $cmd$);
+                        run_explain_and_trim                        
 --------------------------------------------------------------------
  Seq Scan on documents_6003 collection
    Filter: (document @= '{ "b.d" : { "$numberInt" : "1" } }'::bson)
 (2 rows)
 
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_3", "filter": { "b": { "$eq": {"d": 1} } }, "projection": { "a": 1 } }');
-                                 QUERY PLAN                                 
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_3", "filter": { "b": { "$eq": {"d": 1} } }, "projection": { "a": 1 } }') $cmd$);
+                            run_explain_and_trim                            
 ----------------------------------------------------------------------------
  Seq Scan on documents_6003 collection
    Filter: (document @= '{ "b" : { "d" : { "$numberInt" : "1" } } }'::bson)
 (2 rows)
 
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_3", "filter": { "e": { "$eq": 1 } }, "projection": { "a": 1 } }');
-                            QUERY PLAN                            
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_3", "filter": { "e": { "$eq": 1 } }, "projection": { "a": 1 } }') $cmd$);
+                       run_explain_and_trim                       
 ------------------------------------------------------------------
  Seq Scan on documents_6003 collection
    Filter: (document @= '{ "e" : { "$numberInt" : "1" } }'::bson)
@@ -625,37 +625,37 @@ SELECT documentdb_test_helpers.get_collection_indexes('wp_test','ok_test_4');
 BEGIN;
   set local enable_seqscan TO OFF;
   -- cannot use idx_1
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "a.b": { "$eq": 1 } }, "projection": { "a": 1 } }');
-                             QUERY PLAN                             
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "a.b": { "$eq": 1 } }, "projection": { "a": 1 } }') $cmd$);
+                        run_explain_and_trim                        
 --------------------------------------------------------------------
  Seq Scan on documents_6004 collection
    Filter: (document @= '{ "a.b" : { "$numberInt" : "1" } }'::bson)
 (2 rows)
 
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "a": { "$eq": 1 } }, "projection": { "a": 1 } }');
-                            QUERY PLAN                            
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "a": { "$eq": 1 } }, "projection": { "a": 1 } }') $cmd$);
+                       run_explain_and_trim                       
 ------------------------------------------------------------------
  Seq Scan on documents_6004 collection
    Filter: (document @= '{ "a" : { "$numberInt" : "1" } }'::bson)
 (2 rows)
 
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "a": { "$eq": {"b": 1} } }, "projection": { "a": 1 } }');
-                                 QUERY PLAN                                 
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "a": { "$eq": {"b": 1} } }, "projection": { "a": 1 } }') $cmd$);
+                            run_explain_and_trim                            
 ----------------------------------------------------------------------------
  Seq Scan on documents_6004 collection
    Filter: (document @= '{ "a" : { "b" : { "$numberInt" : "1" } } }'::bson)
 (2 rows)
 
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "a": { "_id": 1 } }, "projection": { "a": 1 } }');
-                                  QUERY PLAN                                  
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "a": { "_id": 1 } }, "projection": { "a": 1 } }') $cmd$);
+                             run_explain_and_trim                             
 ------------------------------------------------------------------------------
  Seq Scan on documents_6004 collection
    Filter: (document @= '{ "a" : { "_id" : { "$numberInt" : "1" } } }'::bson)
 (2 rows)
 
   -- can use idx_1
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "b.d": { "$eq": 1 } }, "projection": { "a": 1 } }');
-                                  QUERY PLAN                                  
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "b.d": { "$eq": 1 } }, "projection": { "a": 1 } }') $cmd$);
+                             run_explain_and_trim                             
 ------------------------------------------------------------------------------
  Bitmap Heap Scan on documents_6004 collection
    Recheck Cond: (document @= '{ "b.d" : { "$numberInt" : "1" } }'::bson)
@@ -663,8 +663,8 @@ BEGIN;
          Index Cond: (document @= '{ "b.d" : { "$numberInt" : "1" } }'::bson)
 (4 rows)
 
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "b": { "$eq": {"d": 1} } }, "projection": { "a": 1 } }');
-                                      QUERY PLAN                                      
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "b": { "$eq": {"d": 1} } }, "projection": { "a": 1 } }') $cmd$);
+                                 run_explain_and_trim                                 
 --------------------------------------------------------------------------------------
  Bitmap Heap Scan on documents_6004 collection
    Recheck Cond: (document @= '{ "b" : { "d" : { "$numberInt" : "1" } } }'::bson)
@@ -672,8 +672,8 @@ BEGIN;
          Index Cond: (document @= '{ "b" : { "d" : { "$numberInt" : "1" } } }'::bson)
 (4 rows)
 
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "e": { "$eq": 1 } }, "projection": { "a": 1 } }');
-                                 QUERY PLAN                                 
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "e": { "$eq": 1 } }, "projection": { "a": 1 } }') $cmd$);
+                            run_explain_and_trim                            
 ----------------------------------------------------------------------------
  Bitmap Heap Scan on documents_6004 collection
    Recheck Cond: (document @= '{ "e" : { "$numberInt" : "1" } }'::bson)
@@ -681,8 +681,8 @@ BEGIN;
          Index Cond: (document @= '{ "e" : { "$numberInt" : "1" } }'::bson)
 (4 rows)
 
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "f.g": { "$eq": 1 } }, "projection": { "a": 1 } }');
-                                  QUERY PLAN                                  
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": { "f.g": { "$eq": 1 } }, "projection": { "a": 1 } }') $cmd$);
+                             run_explain_and_trim                             
 ------------------------------------------------------------------------------
  Bitmap Heap Scan on documents_6004 collection
    Recheck Cond: (document @= '{ "f.g" : { "$numberInt" : "1" } }'::bson)
@@ -755,8 +755,8 @@ BEGIN;
 (4 rows)
 
   -- cannot use idx_1 due to filter on "a.z.r" in "$or"
-  EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": {"$or": [{"b.d": {"$eq": [1,2,3]}}, {"a.z": {"r": {"$gte": 5}}}]}, "projection": { "a": 1 } }');
-                                                                                                 QUERY PLAN                                                                                                  
+  SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('wp_test', '{ "find": "ok_test_4", "filter": {"$or": [{"b.d": {"$eq": [1,2,3]}}, {"a.z": {"r": {"$gte": 5}}}]}, "projection": { "a": 1 } }') $cmd$);
+                                                                                            run_explain_and_trim                                                                                             
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Seq Scan on documents_6004 collection
    Filter: ((document @= '{ "b.d" : [ { "$numberInt" : "1" }, { "$numberInt" : "2" }, { "$numberInt" : "3" } ] }'::bson) OR (document @= '{ "a.z" : { "r" : { "$gte" : { "$numberInt" : "5" } } } }'::bson))

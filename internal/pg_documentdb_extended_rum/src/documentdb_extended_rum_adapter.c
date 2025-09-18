@@ -207,8 +207,6 @@ DocumentDBExtendedRumIndexAmId(void)
 											  "documentdb_extended_rum"));
 		if (!HeapTupleIsValid(tuple))
 		{
-			ereport(WARNING,
-					(errmsg("Access method documentdb_extended_rum not loaded.")));
 			return InvalidOid;
 		}
 

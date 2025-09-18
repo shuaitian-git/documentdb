@@ -50,7 +50,7 @@ for validationFile in $(ls $scriptDir/expected/*.out); do
     # check if the base file is in the schedule
     findResult=$(grep $fileNameBase *schedule || true)
     if [ "$findResult" == "" ]; then
-        if [[ "$fileNameBase" =~ "pg15" ]] || [[ "$fileNameBase" =~ "pg16" ]] || [[ "$fileNameBase" =~ "pg17" ]]; then
+        if [[ "$fileNameBase" =~ "pg15" ]] || [[ "$fileNameBase" =~ "pg16" ]] || [[ "$fileNameBase" =~ "pg17" ]] || [[ "$fileNameBase" =~ "pg18" ]]; then
             echo "Skipping duplicate check for $fileNameBase"
         else
             echo "Test file '$validationFile' with name '$fileNameBase' is not in the schedule, please add it to the schedule";
@@ -71,9 +71,20 @@ for validationFile in $(ls $scriptDir/expected/*.out); do
     collectionIdOutput=${collectionIdOutput/SET documentdb.next_collection_id TO/};
     collectionIdOutput=${collectionIdOutput/[\s|;]/};
 
+    isSimpleIncludeTest=false
+    if [[ "$sqlFile" =~ _pg[0-9]+.sql ]]; then
+        lineCount=$(cat $scriptDir/sql/$sqlFile | wc -l)
+        if [ $lineCount -eq 0 ]; then
+            isSimpleIncludeTest="true"
+        fi
+    fi
+
     # If it matches something seen before - fail.
     if [[ "$sqlFile" =~ _pg[0-9]+.sql ]] && [[ ! "$sqlFile" =~ "_pg${pg_version}.sql" ]]; then
         echo "Skipping duplicate check for $sqlFile"
+        continue;
+    elif [ "$isSimpleIncludeTest" == "true" ]; then
+        echo "Skipping duplicate check for $sqlFile due to it being a simple include test"
         continue;
     elif [[ "$aggregateCollectionIdStr" =~ ":$collectionIdOutput:" ]]; then
         echo "Duplicate CollectionId used in '$sqlFile' - please use unique collection Ids across tests: $collectionIdOutput. Current max: $maxCollectionIdStr";
