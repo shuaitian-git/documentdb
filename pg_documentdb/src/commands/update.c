@@ -1689,8 +1689,6 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 
 	SPI_connect();
 
-	pgbson *queryDoc = PgbsonInitFromDocumentBsonValue(currentUpdate->query);
-
 	/* Here we need to create a document wrapper to preserve the type */
 	pgbson *updateDoc = BsonValueToDocumentPgbson(currentUpdate->update);
 	pgbson *arrayFilters = currentUpdate->arrayFilters == NULL ? NULL :
@@ -1702,10 +1700,10 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 	/* TODO: if the _id is collation-sensitive, we will avoid filtering by _id */
 	/* in the WHERE clause directly. */
 	bool isIdFilterCollationAwareIgnore = false;
-	pgbson *objectIdFilter = GetObjectIdFilterFromQueryDocument(queryDoc,
-																&queryHasNonIdFilters,
-																&
-																isIdFilterCollationAwareIgnore);
+	pgbson *objectIdFilter = GetObjectIdFilterFromQueryDocumentValue(currentUpdate->query,
+																	 &queryHasNonIdFilters,
+																	 &
+																	 isIdFilterCollationAwareIgnore);
 
 	*hasOnlyObjectIdFilter = objectIdFilter != NULL && !queryHasNonIdFilters;
 
@@ -1976,6 +1974,7 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 	argValues[0] = PointerGetDatum(CastPgbsonToBytea(updateDoc));
 	argNulls[0] = ' ';
 
+	pgbson *queryDoc = PgbsonInitFromDocumentBsonValue(currentUpdate->query);
 	argTypes[1] = bsonTypeId;
 	argValues[1] = PointerGetDatum(queryDoc);
 	argNulls[1] = ' ';

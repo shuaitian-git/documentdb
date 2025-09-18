@@ -736,15 +736,6 @@ ProcessDeletion(MongoCollection *collection, DeletionSpec *deletionSpec,
 	bson_iter_t queryDocIter;
 	PgbsonInitIterator(query, &queryDocIter);
 
-	bson_value_t idFromQueryDocument = { 0 };
-	bool errorOnConflict = false;
-	bool queryHasNonIdFilters = false;
-	bool isIdFilterCollationAware = false;
-	bool hasObjectIdFilter =
-		TraverseQueryDocumentAndGetId(&queryDocIter, &idFromQueryDocument,
-									  errorOnConflict, &queryHasNonIdFilters,
-									  &isIdFilterCollationAware);
-
 	uint64_t result = 0;
 	const char *collationString = deletionSpec->deleteOneParams.collationString;
 	bool applyCollationToShardKeyValue = IsCollationApplicable(collationString) &&
@@ -766,50 +757,59 @@ ProcessDeletion(MongoCollection *collection, DeletionSpec *deletionSpec,
 											deletionSpec->deleteOneParams.variableSpec,
 											collationString, hasShardKeyValueFilter,
 											shardKeyHash);
+		pfree(query);
+		return result;
+	}
+
+	bson_value_t idFromQueryDocument = { 0 };
+	bool errorOnConflict = false;
+	bool queryHasNonIdFilters = false;
+	bool isIdFilterCollationAware = false;
+	bool hasObjectIdFilter =
+		TraverseQueryDocumentAndGetId(&queryDocIter, &idFromQueryDocument,
+									  errorOnConflict, &queryHasNonIdFilters,
+									  &isIdFilterCollationAware);
+	DeleteOneResult deleteOneResult = { 0 };
+
+	/* With limit = 1, we currently target only one shard for the deletion. */
+	/* If the shard key value is collation-sensitive, we cannot target a single */
+	/* shard with it.*/
+	/* We then fall on any _id value filter. If none is provided, we fail. */
+	bool useShardKeyValueFilter = hasShardKeyValueFilter &&
+								  !applyCollationToShardKeyValue;
+	if (useShardKeyValueFilter)
+	{
+		/*
+		 * Delete at most 1 document that matches the query on a single shard.
+		 *
+		 * For unsharded collection, this is the shard that contains all the
+		 * data.
+		 */
+		CallDeleteOne(collection, &deletionSpec->deleteOneParams, shardKeyHash,
+					  transactionId, forceInlineWrites, &deleteOneResult);
+	}
+	else if (hasObjectIdFilter)
+	{
+		/*
+		 * Delete at most 1 document that matches an _id equality filter from
+		 * a sharded collection without specifying a a shard key filter.
+		 */
+		DeleteOneObjectId(collection, &deletionSpec->deleteOneParams,
+						  &idFromQueryDocument, isIdFilterCollationAware,
+						  queryHasNonIdFilters, forceInlineWrites,
+						  transactionId, &deleteOneResult);
 	}
 	else
 	{
-		DeleteOneResult deleteOneResult = { 0 };
-
-		/* With limit = 1, we currently target only one shard for the deletion. */
-		/* If the shard key value is collation-sensitive, we cannot target a single */
-		/* shard with it.*/
-		/* We then fall on any _id value filter. If none is provided, we fail. */
-		bool useShardKeyValueFilter = hasShardKeyValueFilter &&
-									  !applyCollationToShardKeyValue;
-		if (useShardKeyValueFilter)
-		{
-			/*
-			 * Delete at most 1 document that matches the query on a single shard.
-			 *
-			 * For unsharded collection, this is the shard that contains all the
-			 * data.
-			 */
-			CallDeleteOne(collection, &deletionSpec->deleteOneParams, shardKeyHash,
-						  transactionId, forceInlineWrites, &deleteOneResult);
-		}
-		else if (hasObjectIdFilter)
-		{
-			/*
-			 * Delete at most 1 document that matches an _id equality filter from
-			 * a sharded collection without specifying a a shard key filter.
-			 */
-			DeleteOneObjectId(collection, &deletionSpec->deleteOneParams,
-							  &idFromQueryDocument, isIdFilterCollationAware,
-							  queryHasNonIdFilters, forceInlineWrites,
-							  transactionId, &deleteOneResult);
-		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("delete query with limit 1 must include either "
-								   "_id or%s shard key filter",
-								   isShardKeyValueCollationAware ?
-								   " collation-insensitive" : "")));
-		}
-
-		result = deleteOneResult.isRowDeleted ? 1 : 0;
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("delete query with limit 1 must include either "
+							   "_id or%s shard key filter",
+							   isShardKeyValueCollationAware ?
+							   " collation-insensitive" : "")));
 	}
+
+	result = deleteOneResult.isRowDeleted ? 1 : 0;
+
 
 	pfree(query);
 	return result;
@@ -1242,12 +1242,12 @@ DeleteOneInternal(MongoCollection *collection, DeleteOneParams *deleteOneParams,
 
 	int argCount = sortFieldDocumentsLength;
 
-	pgbson *query = PgbsonInitFromDocumentBsonValue(deleteOneParams->query);
 	bool queryHasNonIdFilters = false;
 	bool isIdFilterCollationAware = false;
-	pgbson *objectIdFilter = GetObjectIdFilterFromQueryDocument(query,
-																&queryHasNonIdFilters,
-																&isIdFilterCollationAware);
+	pgbson *objectIdFilter =
+		GetObjectIdFilterFromQueryDocumentValue(deleteOneParams->query,
+												&queryHasNonIdFilters,
+												&isIdFilterCollationAware);
 
 	bool applyObjectIdFilter = objectIdFilter != NULL;
 	if (applyObjectIdFilter && applyCollation)
@@ -1359,6 +1359,7 @@ DeleteOneInternal(MongoCollection *collection, DeleteOneParams *deleteOneParams,
 	argNulls[0] = ' ';
 
 	/* assign query value*/
+	pgbson *query = PgbsonInitFromDocumentBsonValue(deleteOneParams->query);
 	Oid bsonTypeId = BsonTypeId();
 	argTypes[1] = bsonTypeId;
 	argValues[1] = PointerGetDatum(query);
