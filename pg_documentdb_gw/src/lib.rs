@@ -43,6 +43,7 @@ use crate::{
     protocol::header::Header,
     requests::{request_tracker::RequestTracker, Request, RequestIntervalKind},
     responses::{CommandError, Response},
+    telemetry::client_info::parse_client_info,
     telemetry::TelemetryProvider,
 };
 
@@ -418,6 +419,7 @@ where
                 collection.to_string(),
                 request_context.tracker,
                 request_context.activity_id,
+                &parse_client_info(connection_context.client_information.as_ref()),
             )
             .await;
     }
@@ -453,6 +455,7 @@ async fn log_and_write_error(
                 collection.unwrap_or_default(),
                 request_tracker,
                 activity_id,
+                &parse_client_info(connection_context.client_information.as_ref()),
             )
             .await;
     }
