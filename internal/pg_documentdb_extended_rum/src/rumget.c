@@ -283,7 +283,6 @@ compareCurRumItemScanDirection(RumState *rumstate, RumScanEntry entry,
 }
 
 
-#if 0
 inline static bool
 IsEntryInBounds(RumState *rumstate, RumScanEntry scanEntry,
 				RumItem *item, RumItemScanEntryBounds *scanEntryBounds,
@@ -306,9 +305,6 @@ IsEntryInBounds(RumState *rumstate, RumScanEntry scanEntry,
 
 	return true;
 }
-
-
-#endif
 
 
 /*
@@ -347,12 +343,29 @@ scanPostingTree(Relation index, RumScanEntry scanEntry,
 	{
 		OffsetNumber maxoff,
 					 i;
+		bool shouldScanPage = true;
 
 		page = BufferGetPage(buffer);
 		maxoff = RumPageGetOpaque(page)->maxoff;
 
-		if (RumPageIsNotDeleted(page) && maxoff >= FirstOffsetNumber)
+		if (scanEntryBounds != NULL &&
+			RumPageIsNotDeleted(page) &&
+			maxoff >= FirstOffsetNumber && !RumPageRightMost(page))
 		{
+			/* For page level checks, we only check the minimum. i.e.
+			 * is the Right-bound (max item in the page) less than the
+			 * min possible item pointer. We don't use max here as that is
+			 * left to the individual tuples.
+			 */
+			bool checkMaximum = false;
+			shouldScanPage = IsEntryInBounds(rumstate, scanEntry,
+											 RumDataPageGetRightBound(page),
+											 scanEntryBounds, checkMaximum);
+		}
+
+		if (shouldScanPage && RumPageIsNotDeleted(page) && maxoff >= FirstOffsetNumber)
+		{
+			bool checkMaximum = true;
 			RumScanItem item;
 			Pointer ptr;
 
@@ -364,6 +377,14 @@ scanPostingTree(Relation index, RumScanEntry scanEntry,
 			{
 				ptr = rumDataPageLeafRead(ptr, attnum, &item.item, false,
 										  rumstate);
+
+				if (scanEntryBounds != NULL &&
+					!IsEntryInBounds(rumstate, scanEntry, &item.item, scanEntryBounds,
+									 checkMaximum))
+				{
+					continue;
+				}
+
 				if (scanEntry->isMatchMinimalTuple)
 				{
 					rum_tuplesort_putrumitem_minimal(scanEntry->matchSortstate,
@@ -374,9 +395,9 @@ scanPostingTree(Relation index, RumScanEntry scanEntry,
 					SCAN_ITEM_PUT_KEY(scanEntry, item, idatum, icategory);
 					rum_tuplesort_putrumitem(scanEntry->matchSortstate, &item);
 				}
-			}
 
-			scanEntry->predictNumberResult += maxoff;
+				scanEntry->predictNumberResult++;
+			}
 		}
 
 		if (RumPageRightMost(page))
@@ -615,8 +636,16 @@ collectMatchBitmap(RumBtreeData *btree, RumBtreeStack *stack,
 			ItemPointerSetMin(&item.item.iptr);
 			for (i = 0; i < RumGetNPosting(itup); i++)
 			{
+				bool checkMaximum = true;
 				ptr = rumDataPageLeafRead(ptr, scanEntry->attnum, &item.item,
 										  true, rumstate);
+				if (scanEntryBounds != NULL &&
+					!IsEntryInBounds(rumstate, scanEntry, &item.item, scanEntryBounds,
+									 checkMaximum))
+				{
+					continue;
+				}
+
 				if (scanEntry->isMatchMinimalTuple)
 				{
 					rum_tuplesort_putrumitem_minimal(scanEntry->matchSortstate,
@@ -972,8 +1001,6 @@ scan_entry_cmp(const void *p1, const void *p2, void *arg)
 }
 
 
-#if 0
-
 /*
  * Given a query and set of keys, tries to get the min/max item that could theoretically
  * match that key in the index.
@@ -1120,9 +1147,6 @@ startScanEntryExtended(IndexScanDesc scan, RumState *rumstate, RumScanOpaque so)
 		}
 	}
 }
-
-
-#endif
 
 
 inline static int
@@ -1822,6 +1846,10 @@ startScan(IndexScanDesc scan)
 		scanType = RumOrderedScan;
 		startOrderedScanEntries(scan, rumstate, so);
 	}
+	else if (so->norderbys == 0 && !so->willSort && !rumstate->useAlternativeOrder)
+	{
+		startScanEntryExtended(scan, rumstate, so);
+	}
 	else
 	{
 		for (i = 0; i < so->totalentries; i++)
@@ -1852,10 +1880,37 @@ startScan(IndexScanDesc scan)
 		}
 
 		/* Else check keys for preConsistent method */
-		else if (scanType == RumFastScan &&
-				 !so->rumstate.canPreConsistent[key->attnum - 1])
+		else if (scanType == RumFastScan && !so->rumstate.canPreConsistent[key->attnum -
+																		   1])
 		{
 			scanType = RumRegularScan;
+		}
+		else if (scanType == RumFastScan &&
+				 so->rumstate.hasCanPreConsistentFn[key->attnum - 1])
+		{
+			bool canPreConsistent = DatumGetBool(FunctionCall6Coll(
+													 &rumstate->canPreConsistentFn[key->
+																				   attnum
+																				   -
+																				   1],
+													 rumstate->
+													 supportCollation[key->attnum - 1],
+													 UInt16GetDatum(
+														 key->strategy),
+													 key->query,
+													 UInt32GetDatum(
+														 key->nuserentries),
+													 PointerGetDatum(
+														 key->extra_data),
+													 PointerGetDatum(
+														 key->queryValues),
+													 PointerGetDatum(
+														 key->queryCategories)
+													 ));
+			if (!canPreConsistent)
+			{
+				scanType = RumRegularScan;
+			}
 		}
 	}
 

@@ -37,6 +37,7 @@
 #include "opclass/bson_gin_index_term.h"
 #include "opclass/bson_gin_private.h"
 #include "utils/documentdb_errors.h"
+#include "utils/error_utils.h"
 
 extern bool ForceUseIndexIfAvailable;
 extern bool EnableIndexOrderbyPushdown;
@@ -409,32 +410,16 @@ LoadRumRoutine(void)
 		rum_index_scan_ordered = scanOrderedFunc;
 	}
 
-	if (IndexArrayStateFuncs == NULL)
-	{
-		/* Try to see if the custom rum handler has support for multi-key indexes */
-		GetIndexArrayStateFuncsFunc get_index_array_state_funcs =
-			load_external_function(rumLibPath,
-								   "get_rum_index_array_state_funcs", !missingOk,
-								   ignoreLibFileHandle);
+	void (*setRumUnredactedLogEmitHookFunc)(format_log_hook hook) = NULL;
+	setRumUnredactedLogEmitHookFunc =
+		load_external_function(rumLibPath,
+							   "SetRumUnredactedLogEmitHook", !missingOk,
+							   ignoreLibFileHandle);
 
-		if (get_index_array_state_funcs != NULL)
-		{
-			ereport(LOG, (errmsg(
-							  "Loaded RUM index array state functions successfully via the rum library")));
-			RegisterIndexArrayStateFuncs(get_index_array_state_funcs());
-		}
-		else
-		{
-			ereport(LOG, (errmsg(
-							  "RUM index array state functions not found, skipping registration")));
-		}
-	}
-	else
+	if (setRumUnredactedLogEmitHookFunc != NULL)
 	{
-		ereport(LOG, (errmsg(
-						  "RUM index array state functions already registered, skipping registration")));
+		setRumUnredactedLogEmitHookFunc(unredacted_log_emit_hook);
 	}
-
 
 	loaded_rum_routine = true;
 	pfree(indexRoutine);

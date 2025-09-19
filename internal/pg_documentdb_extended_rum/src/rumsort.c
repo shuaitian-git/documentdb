@@ -354,7 +354,7 @@ rum_item_size(RumTuplesortstate *state)
 		return sizeof(RumScanItem);
 	}
 
-	elog(FATAL, "Unknow RUM state");
+	elog(FATAL, "Unknown RUM state");
 	return 0;   /* keep compiler quiet */
 }
 

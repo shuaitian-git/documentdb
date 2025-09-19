@@ -36,11 +36,14 @@ PG_MODULE_MAGIC;
 void _PG_init(void);
 
 PG_FUNCTION_INFO_V1(documentdb_rumhandler);
+PGDLLEXPORT void SetRumUnredactedLogEmitHook(rum_format_log_hook hook);
 
 static char * rumbuildphasename(int64 phasenum);
 
 /* Kind of relation optioms for rum index */
 static relopt_kind rum_relopt_kind;
+
+rum_format_log_hook rum_unredacted_log_emit_hook = NULL;
 
 bool RumThrowErrorOnInvalidDataPage = RUM_DEFAULT_THROW_ERROR_ON_INVALID_DATA_PAGE;
 bool RumUseNewItemPtrDecoding = RUM_DEFAULT_USE_NEW_ITEM_PTR_DECODING;
@@ -57,7 +60,7 @@ _PG_init(void)
 #define DOCUMENTDB_RUM_GUC_PREFIX "documentdb_rum"
 
 	/* Define custom GUC variables. */
-	DefineCustomIntVariable(RUM_GUC_PREFIX "rum_fuzzy_search_limit",
+	DefineCustomIntVariable(RUM_GUC_PREFIX ".rum_fuzzy_search_limit",
 							"Sets the maximum allowed result for exact search by RUM.",
 							NULL,
 							&RumFuzzySearchLimit,
@@ -178,8 +181,6 @@ _PG_init(void)
 		PGC_USERSET, 0,
 		NULL, NULL, NULL);
 
-	MarkGUCPrefixReserved(DOCUMENTDB_RUM_GUC_PREFIX);
-
 	DefineCustomBoolVariable(
 		DOCUMENTDB_RUM_GUC_PREFIX ".rum_use_new_item_ptr_decoding",
 		"Sets whether or not to use new item pointer decoding",
@@ -189,6 +190,7 @@ _PG_init(void)
 		PGC_USERSET, 0,
 		NULL, NULL, NULL);
 
+	MarkGUCPrefixReserved(DOCUMENTDB_RUM_GUC_PREFIX);
 	rum_relopt_kind = add_reloption_kind();
 
 	add_string_reloption(rum_relopt_kind, "attach",
@@ -270,6 +272,13 @@ documentdb_rumhandler(PG_FUNCTION_ARGS)
 	amroutine->amoptsprocnum = RUM_INDEX_CONFIG_PROC;
 
 	PG_RETURN_POINTER(amroutine);
+}
+
+
+PGDLLEXPORT void
+SetRumUnredactedLogEmitHook(rum_format_log_hook hook)
+{
+	rum_unredacted_log_emit_hook = hook;
 }
 
 
@@ -522,6 +531,18 @@ initRumState(RumState *state, Relation index)
 		else
 		{
 			state->canPreConsistent[i] = false;
+		}
+
+		if (index_getprocid(index, i + 1, RUM_CAN_PRE_CONSISTENT_PROC) != InvalidOid)
+		{
+			fmgr_info_copy(&(state->canPreConsistentFn[i]),
+						   index_getprocinfo(index, i + 1, RUM_CAN_PRE_CONSISTENT_PROC),
+						   CurrentMemoryContext);
+			state->hasCanPreConsistentFn[i] = true;
+		}
+		else
+		{
+			state->hasCanPreConsistentFn[i] = false;
 		}
 
 		/*

@@ -157,6 +157,14 @@ typedef struct RumMetaPageData
 #define RumPageSetHalfDead(page) (RumPageGetOpaque(page)->flags |= RUM_HALF_DEAD)
 #define RumPageSetNonHalfDead(page) (RumPageGetOpaque(page)->flags &= ~RUM_HALF_DEAD)
 
+/*
+ * Set the XMIN based of the half-dead page based on maxoff and freespace (these are only
+ * used in dataPage). When the XID horizon goes past this, we will mark the page as deleted.
+ * This is similar to what's done in GIN.
+ */
+#define RumPageGetDeleteXid(page) (((PageHeader) (page))->pd_prune_xid)
+#define RumPageSetDeleteXid(page, xid) (((PageHeader) (page))->pd_prune_xid = xid)
+
 #define RumPageRightMost(page) (RumPageGetOpaque(page)->rightlink == InvalidBlockNumber)
 #define RumPageLeftMost(page) (RumPageGetOpaque(page)->leftlink == InvalidBlockNumber)
 
@@ -458,6 +466,9 @@ typedef struct RumState
 	bool canOrdering[INDEX_MAX_KEYS];
 	bool canOuterOrdering[INDEX_MAX_KEYS];
 	bool canJoinAddInfo[INDEX_MAX_KEYS];
+
+	FmgrInfo canPreConsistentFn[INDEX_MAX_KEYS];
+	bool hasCanPreConsistentFn[INDEX_MAX_KEYS];
 
 	/* Collations to pass to the support functions */
 	Oid supportCollation[INDEX_MAX_KEYS];
@@ -971,6 +982,7 @@ extern RumItem * rumGetBAEntry(BuildAccumulator *accum,
 #define RUM_OUTER_ORDERING_PROC 9
 #define RUM_ADDINFO_JOIN 10
 #define RUM_INDEX_CONFIG_PROC 11
+#define RUM_CAN_PRE_CONSISTENT_PROC 12
 
 /* NProcs changes for documentdb from 10 to 12 */
 #define RUMNProcs 12
@@ -1541,10 +1553,18 @@ extern PGDLLEXPORT bool can_rum_index_scan_ordered(IndexScanDesc scan);
 void InitializeDocumentDBRum(void);
 
 #define UNREDACTED_RUM_LOG_CODE MAKE_SQLSTATE('R', 'Z', 'Z', 'Z', 'Z')
+typedef int (*rum_format_log_hook)(const char *fmt, ...) pg_attribute_printf (1, 2);
+extern rum_format_log_hook rum_unredacted_log_emit_hook;
+
+#define errmsg_unredacted(...) \
+	(rum_unredacted_log_emit_hook ? \
+	 (*rum_unredacted_log_emit_hook)(__VA_ARGS__) : \
+	 errmsg_internal(__VA_ARGS__))
+
 
 #define elog_rum_unredacted(...) \
 	ereport(LOG, (errcode(UNREDACTED_RUM_LOG_CODE), errhidecontext(true), \
-				  errhidestmt(true), errmsg( \
+				  errhidestmt(true), errmsg_unredacted( \
 					  __VA_ARGS__)))
 
 #endif   /* __RUM_H__ */
