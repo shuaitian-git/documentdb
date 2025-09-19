@@ -114,7 +114,7 @@ DOCKERFILE=""
 OS_VERSION_NUMBER=""
 
 if [[ "$PACKAGE_TYPE" == "deb" ]]; then
-    DOCKERFILE="packaging/Dockerfile_build_deb_packages"
+    DOCKERFILE="packaging/deb/Dockerfile"
     case $OS in
         deb11)
             DOCKER_IMAGE="debian:bullseye"
@@ -133,15 +133,14 @@ if [[ "$PACKAGE_TYPE" == "deb" ]]; then
             ;;
     esac
 elif [[ "$PACKAGE_TYPE" == "rpm" ]]; then
-    DOCKERFILE="packaging/Dockerfile_build_rpm_packages"
     case $OS in
         rhel8)
+            DOCKERFILE="packaging/rpm/rhel-8/Dockerfile"
             DOCKER_IMAGE="rockylinux:8"
-            OS_VERSION_NUMBER="8"
             ;;
         rhel9)
+            DOCKERFILE="packaging/rpm/rhel-9/Dockerfile"
             DOCKER_IMAGE="rockylinux:9"
-            OS_VERSION_NUMBER="9"
             ;;
         *)
             echo "Error: Invalid OS specified for RPM build: $OS"
@@ -169,15 +168,14 @@ if [[ "$PACKAGE_TYPE" == "deb" ]]; then
         --build-arg POSTGRES_VERSION="$PG" \
         --build-arg DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" .
     # Run the Docker container to build the packages
-    docker run --rm --env OS="$OS" -v "$abs_output_dir:/output" "$TAG"
+    docker run --rm --env OS="$OS" --env POSTGRES_VERSION="$PG" --env DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" -v "$abs_output_dir:/output" "$TAG"
 elif [[ "$PACKAGE_TYPE" == "rpm" ]]; then
     docker build -t "$TAG" -f "$DOCKERFILE" \
         --build-arg BASE_IMAGE="$DOCKER_IMAGE" \
         --build-arg POSTGRES_VERSION="$PG" \
-        --build-arg DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" \
-        --build-arg OS_VERSION_ARG="$OS_VERSION_NUMBER" .
+        --build-arg DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" .
     # Run the Docker container to build the packages
-    docker run --rm --env OS="$OS" --env POSTGRES_VERSION="$PG" -v "$abs_output_dir:/output" "$TAG"
+    docker run --rm --env OS="$OS" --env POSTGRES_VERSION="$PG" --env DOCUMENTDB_VERSION="$DOCUMENTDB_VERSION" -v "$abs_output_dir:/output" "$TAG"
 fi
 
 echo "Packages built successfully!!"
@@ -192,7 +190,7 @@ if [[ $TEST_CLEAN_INSTALL == true ]]; then
         echo "Debian package path: $deb_package_rel_path"
 
         # Build the Docker image while showing the output to the console
-        docker build -t documentdb-test-packages:latest -f packaging/test_packages/Dockerfile_test_install_deb_packages \
+        docker build -t documentdb-test-packages:latest -f packaging/test_packages/deb/Dockerfile \
             --build-arg BASE_IMAGE="$DOCKER_IMAGE" \
             --build-arg POSTGRES_VERSION="$PG" \
             --build-arg DEB_PACKAGE_REL_PATH="$deb_package_rel_path" .
@@ -210,12 +208,19 @@ if [[ $TEST_CLEAN_INSTALL == true ]]; then
         
         echo "RPM package path for testing: $package_rel_path"
         
-        # Build the Docker image while showing the output to the console
-        docker build -t documentdb-test-rpm-packages:latest -f packaging/test_packages/Dockerfile_test_install_rpm_packages \
+        # Select the correct test Dockerfile for RHEL 8 or RHEL 9
+        if [[ "$OS" == "rhel8" ]]; then
+            TEST_DOCKERFILE="packaging/test_packages/rhel-8/Dockerfile"
+        elif [[ "$OS" == "rhel9" ]]; then
+            TEST_DOCKERFILE="packaging/test_packages/rhel-9/Dockerfile"
+        else
+            echo "Error: Unknown RPM OS for test Dockerfile: $OS"
+            exit 1
+        fi
+        docker build -t documentdb-test-rpm-packages:latest -f "$TEST_DOCKERFILE" \
             --build-arg BASE_IMAGE="$DOCKER_IMAGE" \
             --build-arg POSTGRES_VERSION="$PG" \
-            --build-arg RPM_PACKAGE_REL_PATH="$package_rel_path" \
-            --build-arg OS_VERSION_ARG="$OS_VERSION_NUMBER" .
+            --build-arg RPM_PACKAGE_REL_PATH="$package_rel_path" .
             
         # Run the Docker container to test the packages
         docker run --rm --env POSTGRES_VERSION="$PG" documentdb-test-rpm-packages:latest

@@ -8,6 +8,20 @@ test -n "$POSTGRES_VERSION" || (echo "POSTGRES_VERSION not set" && false)
 # Change to the build directory
 cd /build
 
+# Update packaging changelogs from CHANGELOG.md (fail build if this fails)
+if [[ -n "${DOCUMENTDB_VERSION:-}" ]]; then
+    echo "DOCUMENTDB_VERSION provided via environment: ${DOCUMENTDB_VERSION}"
+else
+    DOCUMENTDB_VERSION=$(grep -E "^default_version" pg_documentdb_core/documentdb_core.control | sed -E "s/.*'([0-9]+\.[0-9]+-[0-9]+)'.*/\1/" || true)
+fi
+if [[ -n "$DOCUMENTDB_VERSION" ]]; then
+    echo "Running changelog update for version: $DOCUMENTDB_VERSION"
+    /bin/bash /build/packaging/update_spec_changelog.sh "$DOCUMENTDB_VERSION"
+else
+    echo "WARNING: Could not determine documentdb version; skipping changelog update"
+    exit 1
+fi
+
 # Remove 'internal' references from Makefile
 sed -i '/internal/d' Makefile
 
@@ -15,7 +29,7 @@ sed -i '/internal/d' Makefile
 mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 
 # Get the package version from the spec file
-PACKAGE_VERSION=$(grep "^Version:" rpm_files/documentdb.spec | awk '{print $2}')
+PACKAGE_VERSION=$(grep "^Version:" rpm/documentdb.spec | awk '{print $2}')
 
 # Construct the package name
 PACKAGE_NAME="postgresql${POSTGRES_VERSION}-documentdb"
@@ -29,7 +43,7 @@ echo "Package version: $PACKAGE_VERSION"
 echo "PostgreSQL version: $POSTGRES_VERSION"
 
 # Copy spec file to the SPECS directory
-cp rpm_files/documentdb.spec ~/rpmbuild/SPECS/
+cp rpm/documentdb.spec ~/rpmbuild/SPECS/
 
 # Prepare the source directory
 SOURCE_DIR="/tmp/${PACKAGE_NAME}-${PACKAGE_VERSION}"
