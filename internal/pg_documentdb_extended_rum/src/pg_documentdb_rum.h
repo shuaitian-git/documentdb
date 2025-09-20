@@ -997,7 +997,6 @@ typedef enum SimilarityType
 
 #define RUM_SIMILARITY_FUNCTION_DEFAULT SMT_COSINE
 #define RUM_SIMILARITY_THRESHOLD_DEFAULT 0.5
-#define RUM_USE_NEW_VACUUM_SCAN true
 #define RUM_DEFAULT_ALLOW_ORDER_BY_RAW_KEYS true
 #define RUM_DEFAULT_ENABLE_REFIND_LEAF_ON_ENTRY_NEXT_ITEM true
 #define RUM_DEFAULT_THROW_ERROR_ON_INVALID_DATA_PAGE false
@@ -1009,6 +1008,7 @@ typedef enum SimilarityType
 #define DEFAULT_FORCE_RUM_ORDERED_INDEX_SCAN false
 #define RUM_DEFAULT_PREFER_ORDERED_INDEX_SCAN true
 #define RUM_DEFAULT_ENABLE_SKIP_INTERMEDIATE_ENTRY true
+#define RUM_DEFAULT_VACUUM_ENTRY_ITEMS true
 #define RUM_DEFAULT_USE_NEW_ITEM_PTR_DECODING true
 
 /* GUC parameters */
@@ -1026,6 +1026,7 @@ extern bool RumSkipRetryOnDeletePage;
 extern bool RumForceOrderedIndexScan;
 extern bool RumPreferOrderedIndexScan;
 extern bool RumEnableSkipIntermediateEntry;
+extern bool RumVacuumEntryItems;
 extern bool RumUseNewItemPtrDecoding;
 
 /*

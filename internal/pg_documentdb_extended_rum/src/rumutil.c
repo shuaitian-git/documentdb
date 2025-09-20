@@ -76,14 +76,6 @@ _PG_init(void)
 							PGC_USERSET, 0,
 							NULL, NULL, NULL);
 
-	DefineCustomBoolVariable(DOCUMENTDB_RUM_GUC_PREFIX ".rum_use_new_vacuum_scan",
-							 "Sets whether or not to use the new vacuum scan for posting trees",
-							 NULL,
-							 &RumUseNewVacuumScan,
-							 RUM_USE_NEW_VACUUM_SCAN,
-							 PGC_USERSET, 0,
-							 NULL, NULL, NULL);
-
 	DefineCustomBoolVariable(DOCUMENTDB_RUM_GUC_PREFIX ".rum_skip_retry_on_delete_page",
 							 "Sets whether or not to skip retrying on delete pages during vacuuming",
 							 NULL,
@@ -181,6 +173,14 @@ _PG_init(void)
 		PGC_USERSET, 0,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		DOCUMENTDB_RUM_GUC_PREFIX ".vacuum_cleanup_entries",
+		"Sets whether or not to clean up entries during vacuuming",
+		NULL,
+		&RumVacuumEntryItems,
+		RUM_DEFAULT_VACUUM_ENTRY_ITEMS,
+		PGC_USERSET, 0,
+		NULL, NULL, NULL);
 	DefineCustomBoolVariable(
 		DOCUMENTDB_RUM_GUC_PREFIX ".rum_use_new_item_ptr_decoding",
 		"Sets whether or not to use new item pointer decoding",
