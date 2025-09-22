@@ -125,7 +125,7 @@ pub fn configuration() -> DocumentDBSetupConfiguration {
             ..Default::default()
         },
         postgres_system_user: Some(
-            std::env::var("PostgresSystemUser").unwrap_or("cosmosdev".to_string()),
+            std::env::var("PostgresSystemUser").unwrap_or(whoami::username()),
         ),
         ..Default::default()
     }

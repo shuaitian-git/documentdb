@@ -11,6 +11,7 @@
 * Drop unused environment variable `ENFORCE_SSL` in dockerfile *[Bugfix]* (#313)
 * Remove the explicit dependency on the RUM extension (it's now implicit on the .so file). Flip to documentdb_extended_rum for PG18+ *[Feature]*
 * Use the appropriate GUC for the user_crud_commands.sql *[Bugfix]* (#319)
+* Provide Rust dev environment in devcontainer *[Feature]*
 
 ### documentdb v0.107-0 (Unreleased) ###
 * Support sort by _id against the _id index using the enableIndexOrderbyPushdown flag *[Feature]*.
