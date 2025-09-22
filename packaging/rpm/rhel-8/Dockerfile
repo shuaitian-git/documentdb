@@ -45,7 +45,7 @@ RUN echo "Detected architecture: ${TARGETARCH}"
 # PostgreSQL yum repo setup for RHEL 8
 RUN if [ -n "${TARGETARCH}" ] && ( [ "${TARGETARCH}" = "arm64" ] || [ "${TARGETARCH}" = "arm64v8" ] ); then ARCH=aarch64; else ARCH=x86_64; fi; \
     echo "Setting up PGDG repo for RHEL 8 (arch=${ARCH})" && \
-    dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm && \
+    dnf -y --disablerepo=* install https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm && \
     dnf -qy module disable postgresql && \
     dnf -y install postgresql${POSTGRES_VERSION} \
     postgresql${POSTGRES_VERSION}-devel \

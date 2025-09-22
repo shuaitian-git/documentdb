@@ -38,14 +38,16 @@ RUN dnf -y swap curl-minimal curl && \
         krb5-devel \
         python3 \
         tar && \
+    dnf update -y --refresh && \
     dnf clean all
 
 RUN echo "Detected architecture: ${TARGETARCH}"
 
-# PostgreSQL yum repo setup for RHEL 9
+# PostgreSQL repo setup for RHEL 9
+# Note: transient PGDG repodata signature outages were observed (repomd.xml GPG signature verification error). If happends again, consider temporarily using --nogpgcheck flag or check https://github.com/pgdg-packaging/pgdg-rpms/issues for fixing.
 RUN if [ -n "${TARGETARCH}" ] && ( [ "${TARGETARCH}" = "arm64" ] || [ "${TARGETARCH}" = "arm64v8" ] ); then ARCH=aarch64; else ARCH=x86_64; fi; \
     echo "Setting up PGDG repo for RHEL 9 (arch=${ARCH})" && \
-    dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm && \
+    dnf -y --disablerepo=* install https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm && \
     dnf -qy module disable postgresql && \
     dnf -y install postgresql${POSTGRES_VERSION} \
     postgresql${POSTGRES_VERSION}-devel \
