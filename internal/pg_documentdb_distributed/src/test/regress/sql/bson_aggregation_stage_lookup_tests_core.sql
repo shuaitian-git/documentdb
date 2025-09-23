@@ -724,3 +724,21 @@ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
     { "$unwind": { "path": "$source4_docs", "preserveNullAndEmptyArrays": true } }
   ]}');
 ROLLBACK;
+
+-- Test lookup query building works with aggregates
+EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_pipeline('db', 
+    '{ "aggregate": "abc", "pipeline": [
+      { "$lookup": 
+       { 
+        "from": "def", 
+        "as": "lookup_count", 
+        "let" : { "a" : "$A", "b" : "$B", "c" : "$C" }, 
+        "pipeline": [
+         { 
+          "$group": { 
+           "_id": "$groupId",
+           "total_score": { "$sum": "$Abc.score" }, 
+           "count": { "$sum": 1 } 
+          } 
+        }] 
+      }}]}');

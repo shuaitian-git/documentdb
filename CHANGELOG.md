@@ -7,6 +7,7 @@
 * Support collation with `$sortArray` aggregation operator *[Feature]*
 * Add support for keyword `required` in `$jsonSchema`
 * Fix a segmentation fault when using ordered aggregate such as `$last` with `$setWindowFields` aggregation stage. *[Bugfix]*
+* Fix crash when building lookup pipeline queries from nested pipelines and $group aggregates *[Bugfix]*
 * Add basic support for compiling with pg18 *[Feature]*
 * Drop unused environment variable `ENFORCE_SSL` in dockerfile *[Bugfix]* (#313)
 * Remove the explicit dependency on the RUM extension (it's now implicit on the .so file). Flip to documentdb_extended_rum for PG18+ *[Feature]*

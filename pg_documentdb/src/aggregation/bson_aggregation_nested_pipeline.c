@@ -47,6 +47,12 @@
 
 #include "aggregation/bson_aggregation_pipeline_private.h"
 
+/* We use this flag to determine if an specialized VAR in $lookup whether let or document VAR needs varlevelsup adjustment
+ * The last 2 bytes are reserved to store the nested pipeline level, since the
+ * maximum nested pipeline level is 20, we can use 2 bytes to store it.
+ */
+#define NESTED_PIPELINE_VAR_FLAG 0x0F000000
+
 const int MaximumLookupPipelineDepth = 20;
 extern bool EnableLookupIdJoinOptimizationOnCollation;
 extern bool EnableNowSystemVariable;
@@ -2699,8 +2705,15 @@ ProcessLookupCoreWithLet(Query *query, AggregationPipelineBuildContext *context,
 		TargetEntry *firstEntry = linitial(cteLookupQuery->targetList);
 		TargetEntry *secondEntry = lsecond(cteLookupQuery->targetList);
 		Var *secondVar = (Var *) copyObject(secondEntry->expr);
-		secondVar->varlevelsup = INT_MAX;
-		secondVar->location = context->nestedPipelineLevel;
+
+		/* varlevelsup is set to 0 and once the complete pipeline building is done, levelsup is adjusted again.
+		 * If it is set to anything as a positive value here then we will end up with wrong expectation of levelsup while
+		 * creating $group Aggregate queries within pipeline.
+		 * Refer: check_agglevels_and_constraints in parse_aggs.c
+		 * https://github.com/postgres/postgres/blob/2e66cae935c2e0f7ce9bab6b65ddeb7806f4de7c/src/backend/parser/parse_agg.c#L347C2-L349C27
+		 */
+		secondVar->varlevelsup = 0;
+		secondVar->location = NESTED_PIPELINE_VAR_FLAG | context->nestedPipelineLevel;
 
 		Expr *letExpr = NULL;
 		Var *letVar = NULL;
@@ -2709,8 +2722,8 @@ ProcessLookupCoreWithLet(Query *query, AggregationPipelineBuildContext *context,
 			letExpr = copyObject(lthird_node(TargetEntry,
 											 cteLookupQuery->targetList)->expr);
 			letVar = (Var *) letExpr;
-			letVar->varlevelsup = INT_MAX;
-			letVar->location = context->nestedPipelineLevel;
+			letVar->varlevelsup = 0;
+			letVar->location = NESTED_PIPELINE_VAR_FLAG | context->nestedPipelineLevel;
 		}
 		else
 		{
@@ -4070,15 +4083,16 @@ ReplaceVariablesWithLevelsUpMutator(Node *node, LevelsUpQueryTreeWalkerState *st
 	else if (IsA(node, Var))
 	{
 		Var *originalVar = (Var *) node;
-		if (originalVar->varlevelsup >= INT_MAX)
-		{
-			originalVar->varlevelsup = INT_MAX;
-		}
 
-		if (equal(node, state->originalVariable))
+		/*
+		 * If the location of the VAR >= NESTED_PIPELINE_VAR_FLAG, then this means this VAR needs varlevelsup adjustment
+		 */
+		if (originalVar->location >= NESTED_PIPELINE_VAR_FLAG &&
+			equal(node, state->originalVariable))
 		{
 			Var *copyVar = copyObject(originalVar);
 			copyVar->varlevelsup = state->numLevels;
+			copyVar->location = -1;
 			return (Node *) copyVar;
 		}
 	}
