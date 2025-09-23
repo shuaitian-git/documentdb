@@ -1204,11 +1204,16 @@ GetIndexSpecForShardedCreateIndexQuery(SingleWorkerActivity *activity)
 	IndexDetails *detail = IndexIdGetIndexDetails(indexId);
 
 	/* assign right value to rawMongoTable */
-	activity->rawMongoTable = (char *) palloc(NAMEDATALEN);
-	snprintf(activity->rawMongoTable, NAMEDATALEN, DOCUMENT_DATA_TABLE_NAME_FORMAT,
-			 detail->collectionId);
+	if (detail != NULL)
+	{
+		activity->rawMongoTable = (char *) palloc(NAMEDATALEN);
+		snprintf(activity->rawMongoTable, NAMEDATALEN, DOCUMENT_DATA_TABLE_NAME_FORMAT,
+				 detail->collectionId);
 
-	return &(detail->indexSpec);
+		return &(detail->indexSpec);
+	}
+
+	return NULL;
 }
 
 

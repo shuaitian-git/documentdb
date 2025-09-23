@@ -301,6 +301,7 @@ extern bool UseLegacyForcePushdownBehavior;
 extern bool LowSelectivityForLookup;
 extern bool EnableIndexOrderbyPushdown;
 extern bool EnableIndexOrderbyPushdownLegacy;
+extern bool EnableIndexOrderByReverse;
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -1965,7 +1966,14 @@ ConsiderIndexOrderByPushdownLegacy(PlannerInfo *root, RelOptInfo *rel, RangeTblE
 				continue;
 			}
 
-			if (isReverseOrder && !IsClusterVersionAtleast(DocDB_V0, 107, 0))
+			if (isReverseOrder && !EnableIndexOrderByReverse)
+			{
+				continue;
+			}
+
+			if (isReverseOrder &&
+				!(IsClusterVersionAtleast(DocDB_V0, 107, 0) ||
+				  IsClusterVersionAtLeastPatch(DocDB_V0, 106, 1)))
 			{
 				continue;
 			}
@@ -2130,7 +2138,14 @@ ProcessOrderByStatements(PlannerInfo *root,
 				break;
 			}
 
-			if (determinedSortOrder < 0 && !IsClusterVersionAtleast(DocDB_V0, 107, 0))
+			if (determinedSortOrder < 0 && !EnableIndexOrderByReverse)
+			{
+				continue;
+			}
+
+			if (determinedSortOrder < 0 &&
+				!(IsClusterVersionAtleast(DocDB_V0, 107, 0) ||
+				  IsClusterVersionAtLeastPatch(DocDB_V0, 106, 1)))
 			{
 				break;
 			}

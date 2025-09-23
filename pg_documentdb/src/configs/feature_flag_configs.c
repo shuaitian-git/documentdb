@@ -81,6 +81,9 @@ bool EnableIndexOrderbyPushdown = DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN;
 #define DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN_LEGACY false
 bool EnableIndexOrderbyPushdownLegacy = DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN_LEGACY;
 
+#define DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE true
+bool EnableIndexOrderByReverse = DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE;
+
 #define DEFAULT_ENABLE_INDEX_ONLY_SCAN false
 bool EnableIndexOnlyScan = DEFAULT_ENABLE_INDEX_ONLY_SCAN;
 
@@ -501,6 +504,13 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether to enable the prior index sort on the new experimental composite index opclass"),
 		NULL, &EnableIndexOrderbyPushdownLegacy,
 		DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN_LEGACY,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableIndexOrderbyReverse", newGucPrefix),
+		gettext_noop("Whether or not to enable order by reverse index pushdown"),
+		NULL, &EnableIndexOrderByReverse,
+		DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
