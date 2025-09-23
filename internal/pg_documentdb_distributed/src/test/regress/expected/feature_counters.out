@@ -213,16 +213,16 @@ SELECT documentdb_api.validate('db', '{ "validate" : "validatecoll", "repair" : 
 ERROR:  Running the validate command with { repair: true } is not supported yet.
 -- Print without resetting the counters
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(false);
-                                                                                                                                                                                                                                                            get_feature_counter_pretty                                                                                                                                                                                                                                                            
+                                                                                                                                                                                                                                                                                                    get_feature_counter_pretty                                                                                                                                                                                                                                                                                                     
 ---------------------------------------------------------------------
- {"Feature_usage":[{"agg_operator_eq" : 1}, {"agg_operator_mod" : 5}, {"agg_operator_toint" : 5}, {"collation" : 2}, {"validate_repair" : 1}, {"create_index_ttl" : 1}, {"add_fields" : 5}, {"count" : 1}, {"group" : 5}, {"firstN_acc" : 2}, {"firstN_acc_GT10" : 1}, {"lastN_acc" : 2}, {"lastN_acc_GT10" : 1}, {"limit" : 3}, {"lookup" : 2}, {"match" : 6}, {"project" : 3}, {"replace_root" : 2}, {"replace_with" : 1}, {"skip" : 3}, {"sort" : 6}, {"sort_by_count" : 1}, {"sort_by_id" : 5}, {"unset" : 1}, {"vector_search_native" : 3}]}
+ {"Feature_usage":[{"agg_operator_eq" : 1}, {"agg_operator_mod" : 5}, {"agg_operator_toint" : 5}, {"collation" : 2}, {"validate_repair" : 1}, {"create_index_ttl" : 1}, {"query_operator_eq" : 4}, {"query_operator_gt" : 4}, {"query_operator_or" : 2}, {"add_fields" : 5}, {"count" : 1}, {"group" : 5}, {"firstN_acc" : 2}, {"firstN_acc_GT10" : 1}, {"lastN_acc" : 2}, {"lastN_acc_GT10" : 1}, {"limit" : 3}, {"lookup" : 2}, {"match" : 6}, {"project" : 3}, {"replace_root" : 2}, {"replace_with" : 1}, {"skip" : 3}, {"sort" : 6}, {"sort_by_count" : 1}, {"sort_by_id" : 5}, {"unset" : 1}, {"vector_search_native" : 3}]}
 (1 row)
 
 -- print and reset the counters
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
-                                                                                                                                                                                                                                                            get_feature_counter_pretty                                                                                                                                                                                                                                                            
+                                                                                                                                                                                                                                                                                                    get_feature_counter_pretty                                                                                                                                                                                                                                                                                                     
 ---------------------------------------------------------------------
- {"Feature_usage":[{"agg_operator_eq" : 1}, {"agg_operator_mod" : 5}, {"agg_operator_toint" : 5}, {"collation" : 2}, {"validate_repair" : 1}, {"create_index_ttl" : 1}, {"add_fields" : 5}, {"count" : 1}, {"group" : 5}, {"firstN_acc" : 2}, {"firstN_acc_GT10" : 1}, {"lastN_acc" : 2}, {"lastN_acc_GT10" : 1}, {"limit" : 3}, {"lookup" : 2}, {"match" : 6}, {"project" : 3}, {"replace_root" : 2}, {"replace_with" : 1}, {"skip" : 3}, {"sort" : 6}, {"sort_by_count" : 1}, {"sort_by_id" : 5}, {"unset" : 1}, {"vector_search_native" : 3}]}
+ {"Feature_usage":[{"agg_operator_eq" : 1}, {"agg_operator_mod" : 5}, {"agg_operator_toint" : 5}, {"collation" : 2}, {"validate_repair" : 1}, {"create_index_ttl" : 1}, {"query_operator_eq" : 4}, {"query_operator_gt" : 4}, {"query_operator_or" : 2}, {"add_fields" : 5}, {"count" : 1}, {"group" : 5}, {"firstN_acc" : 2}, {"firstN_acc_GT10" : 1}, {"lastN_acc" : 2}, {"lastN_acc_GT10" : 1}, {"limit" : 3}, {"lookup" : 2}, {"match" : 6}, {"project" : 3}, {"replace_root" : 2}, {"replace_with" : 1}, {"skip" : 3}, {"sort" : 6}, {"sort_by_count" : 1}, {"sort_by_id" : 5}, {"unset" : 1}, {"vector_search_native" : 3}]}
 (1 row)
 
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
@@ -368,9 +368,9 @@ SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "vectorInde
 
 ROLLBACK;
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
-                                                                                                                                                                                                                                                               get_feature_counter_pretty                                                                                                                                                                                                                                                               
+                                                                                                                                                                                                                                                                            get_feature_counter_pretty                                                                                                                                                                                                                                                                             
 ---------------------------------------------------------------------
- {"Feature_usage":[{"command_insert" : 2}, {"command_insert_one" : 2}, {"create_index_vector" : 4}, {"create_index_vector_cos" : 2}, {"create_index_vector_compression_half" : 2}, {"create_index_vector_l2" : 2}, {"create_index_vector_type_hnsw" : 2}, {"create_index_vector_type_ivfflat" : 2}, {"match" : 2}, {"search" : 6}, {"search_vector_compression_half" : 2}, {"search_vector_default_nprobes" : 1}, {"search_vector_default_efsearch" : 1}, {"search_vector_hnsw" : 3}, {"search_vector_ivfflat" : 3}, {"search_vector_pre_filter" : 2}]}
+ {"Feature_usage":[{"command_insert" : 2}, {"command_insert_one" : 2}, {"create_index_vector" : 4}, {"create_index_vector_cos" : 2}, {"create_index_vector_compression_half" : 2}, {"create_index_vector_l2" : 2}, {"create_index_vector_type_hnsw" : 2}, {"create_index_vector_type_ivfflat" : 2}, {"query_operator_gt" : 2}, {"match" : 2}, {"search" : 6}, {"search_vector_compression_half" : 2}, {"search_vector_default_nprobes" : 1}, {"search_vector_default_efsearch" : 1}, {"search_vector_hnsw" : 3}, {"search_vector_ivfflat" : 3}, {"search_vector_pre_filter" : 2}]}
 (1 row)
 
 -- aggregation operators counters
@@ -665,9 +665,9 @@ SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "feature_us
 (0 rows)
 
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
-                                                                        get_feature_counter_pretty                                                                         
+                                                                                      get_feature_counter_pretty                                                                                      
 ---------------------------------------------------------------------
- {"Feature_usage":[{"add_fields" : 3}, {"_internalInhibitOptimization" : 3}, {"match" : 1}, {"replace_root" : 1}, {"replace_with" : 1}, {"sort" : 1}, {"sort_by_id" : 1}]}
+ {"Feature_usage":[{"query_operator_gt" : 1}, {"add_fields" : 3}, {"_internalInhibitOptimization" : 3}, {"match" : 1}, {"replace_root" : 1}, {"replace_with" : 1}, {"sort" : 1}, {"sort_by_id" : 1}]}
 (1 row)
 
 SELECT documentdb_api.insert('db', '{"insert":"writeFC", "documents":[
