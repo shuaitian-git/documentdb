@@ -1,3 +1,4 @@
+#include "udfs/commands_crud/bson_update_document--0.108-0.sql"
 #include "udfs/index_mgmt/create_index_background--0.108-0.sql"
 #include "udfs/rum/bson_rum_text_path_adapter_funcs--0.24-0.sql"
 
