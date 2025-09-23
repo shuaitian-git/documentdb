@@ -18,7 +18,8 @@
             ],
             "settings": {
                 "rust-analyzer.linkedProjects": [
-                    "pg_documentdb_gw/Cargo.toml"
+                    "pg_documentdb_gw/Cargo.toml",
+                    "pg_documentdb_gw_host/Cargo.toml"
                 ],
                 "rust-analyzer.testExplorer": true,
                 // Performance: use a separate Cargo target directory for rust-analyzer and ad-hoc commands.

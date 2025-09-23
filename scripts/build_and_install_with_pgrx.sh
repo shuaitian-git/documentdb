@@ -9,14 +9,23 @@ set -e
 PGVERSION=""
 SOURCEDIR=""
 INSTALL="False"
+help="false"
+PACKAGEDIR=""
+profile=""
 
-while getopts "d:v:i" opt; do
+while getopts "d:v:ihp:r:" opt; do
   case $opt in
     d) SOURCEDIR="$OPTARG"
     ;;
     v) PGVERSION="$OPTARG"
     ;;
     i) INSTALL="True"
+    ;;
+    h) help="true"
+    ;;
+    p) PACKAGEDIR="$OPTARG"
+    ;;
+    r) profile="$OPTARG"
     ;;
   esac
 
@@ -29,8 +38,23 @@ while getopts "d:v:i" opt; do
   esac
 done
 
+if [ "$help" == "true" ]; then
+    echo "Usage: $0 -d <source_directory> -v <postgres_version> [-i] [-h]"
+    echo "  -d <source_directory>   : Directory containing the source code to build and install (defaults to current dir)."
+    echo "  -v <postgres_version>   : Version of PostgreSQL to use (e.g., 12, 13, 14, 15)."
+    echo "  -i                      : Install the built extension into PostgreSQL."
+    echo "  -h                      : Display this help message."
+    echo "  -p <package_directory>  : Directory to store the built package (optional)."
+    echo "  -r <profile>            : Build profile to use (optional, e.g., release, debug)."
+    exit 0
+fi
+
 if [ "$SOURCEDIR" == "" ]; then
-    echo "Source directory not provided. Use -d to provide source directory."
+    SOURCEDIR=$(pwd)
+fi
+
+if [ "$PACKAGEDIR" != "" ] && [ "$INSTALL" == "True" ]; then
+    echo "Cannot specify both package directory and install option."
     exit 1
 fi
 
@@ -58,17 +82,39 @@ PATH=$pgBinDir:$PATH;
 pg_config_path=$pgBinDir/pg_config
 
 # Install cargo-pgrx
+pgrxInstallRequired="false"
+pgrxVersionRequired=$(grep -o 'pgrx = "[^"]*"' $SOURCEDIR/Cargo.toml | cut -d '"' -f 2 | sed 's/=//')
 if command -v cargo-pgrx > /dev/null; then
-    echo "cargo-pgrx is already installed."
+    pgrxVersionInstalled=$(cargo pgrx --version | awk '{print $2}')
+    if [ "$pgrxVersionInstalled" != "$pgrxVersionRequired" ]; then
+      pgrxInstallRequired="true"
+    else
+      echo "cargo-pgrx version $pgrxVersionInstalled is already installed."
+    fi
 else
+  pgrxInstallRequired="true"
+fi
+
+if [ "$pgrxInstallRequired" == "true" ]; then
     echo "Installing cargo-pgrx..."
-    cargo install --locked cargo-pgrx@$(grep -o 'pgrx = "[^"]*"' $SOURCEDIR/Cargo.toml | cut -d '"' -f 2 | sed 's/=//')
+    cargo install --locked cargo-pgrx@${pgrxVersionRequired}
 fi
 
 cargo pgrx init --pg$PGVERSION $pg_config_path
 
+profileArg=""
+if [ "$profile" != "" ]; then
+    profileArg="--profile $profile"
+else
+    profile="--profile release"
+fi
+
 if [ "$INSTALL" == "True" ]; then
     pushd $SOURCEDIR
-    cargo pgrx install --release --sudo --pg-config $pg_config_path
+    cargo pgrx install --sudo --pg-config $pg_config_path $profileArg
+    popd
+elif [ "$PACKAGEDIR" != "" ]; then
+    pushd $SOURCEDIR
+    cargo pgrx package --pg-config $pg_config_path --out-dir $PACKAGEDIR $profileArg --no-default-features
     popd
 fi
