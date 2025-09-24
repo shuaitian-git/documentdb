@@ -287,7 +287,8 @@ static void ResolveWPPathOpsFromTreeInternal(const BsonIntermediatePathNode *tre
 											 WildcardProjFieldInclusionMode *
 											 idFieldInclusion);
 static char * GenerateIndexExprStr(const char *indexAmSuffix,
-								   bool unique, bool sparse, bool enableCompositeOpClass,
+								   bool unique, bool buildAsUnique, bool sparse, bool
+								   enableCompositeOpClass,
 								   IndexDefKey *indexDefKey,
 								   const BsonIntermediatePathNode *
 								   indexDefWildcardProjTree,
@@ -397,6 +398,13 @@ inline static bool
 IsCompositePathIndex(IndexDef *indexDef)
 {
 	return indexDef->enableCompositeTerm == BoolIndexOption_True;
+}
+
+
+inline static bool
+IsUniqueOrBuildAsUniqueIndex(IndexDef *indexDef)
+{
+	return IsUniqueIndex(indexDef) || indexDef->buildAsUnique == BoolIndexOption_True;
 }
 
 
@@ -1456,6 +1464,22 @@ ParseCustomIndexDefOption(const char *indexDefDocKey, bson_iter_t *indexDefDocIt
 		return true;
 	}
 
+	if (strcmp(indexDefDocKey, "buildAsUnique") == 0)
+	{
+		EnsureTopLevelFieldIsBooleanLike(indexDefDocKey, indexDefDocIter);
+		const bson_value_t *value = bson_iter_value(indexDefDocIter);
+		if (BsonValueAsBool(value))
+		{
+			indexDef->buildAsUnique = BoolIndexOption_True;
+		}
+		else
+		{
+			indexDef->buildAsUnique = BoolIndexOption_False;
+		}
+
+		return true;
+	}
+
 	if (strcmp(indexDefDocKey, "enableReducedWildcardTerm") == 0)
 	{
 		const bson_value_t *value = bson_iter_value(indexDefDocIter);
@@ -2060,6 +2084,13 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 		}
 	}
 
+	if (indexDef->buildAsUnique && indexDef->enableCompositeTerm != BoolIndexOption_True)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
+						errmsg(
+							"enableOrderedIndex must be specified when preparing for a unique index.")));
+	}
+
 	if (indexDef->key->hasCosmosIndexes &&
 		indexDef->cosmosSearchOptions == NULL)
 	{
@@ -2085,27 +2116,27 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 							"The language_override option is permitted exclusively when using text indexes.")));
 	}
 
-	if (indexDef->unique == BoolIndexOption_True && indexDef->key->isWildcard)
+	if (IsUniqueOrBuildAsUniqueIndex(indexDef) && indexDef->key->isWildcard)
 	{
 		ereport(ERROR, errcode(ERRCODE_DOCUMENTDB_FAILEDTOPARSE),
 				errmsg("Index type 'wildcard' does not support the unique option"));
 	}
 
-	if (indexDef->unique == BoolIndexOption_True && indexDef->key->hasHashedIndexes)
+	if (IsUniqueOrBuildAsUniqueIndex(indexDef) && indexDef->key->hasHashedIndexes)
 	{
 		ereport(ERROR, errcode(ERRCODE_DOCUMENTDB_LOCATION16764),
 				errmsg(
 					"Index type 'hashed' does not support the unique option."));
 	}
 
-	if (indexDef->unique == BoolIndexOption_True && indexDef->key->hasTextIndexes)
+	if (IsUniqueOrBuildAsUniqueIndex(indexDef) && indexDef->key->hasTextIndexes)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg(
 							"Index type 'text' does not support the unique option")));
 	}
 
-	if (indexDef->unique == BoolIndexOption_True && indexDef->enableLargeIndexKeys ==
+	if (IsUniqueOrBuildAsUniqueIndex(indexDef) && indexDef->enableLargeIndexKeys ==
 		BoolIndexOption_True)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2115,7 +2146,7 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 
 	if (indexDef->key->hasCosmosIndexes)
 	{
-		if (indexDef->unique == BoolIndexOption_True)
+		if (IsUniqueOrBuildAsUniqueIndex(indexDef))
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
 							errmsg(
@@ -2132,7 +2163,7 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 
 	if (indexDef->key->has2dIndex)
 	{
-		if (indexDef->unique == BoolIndexOption_True)
+		if (IsUniqueOrBuildAsUniqueIndex(indexDef))
 		{
 			/*
 			 * TODO: Support unique indexes with GIST
@@ -2165,7 +2196,7 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 
 	if (indexDef->key->has2dsphereIndex)
 	{
-		if (indexDef->unique == BoolIndexOption_True)
+		if (IsUniqueOrBuildAsUniqueIndex(indexDef))
 		{
 			/*
 			 * TODO: Support unique indexes with GIST
@@ -2219,6 +2250,16 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDINDEXSPECIFICATIONOPTION),
 							errmsg(
 								"cannot mix \"partialFilterExpression\" and \"sparse\" options")));
+		}
+	}
+
+	if (indexDef->buildAsUnique == BoolIndexOption_True)
+	{
+		if (indexDef->unique == BoolIndexOption_True)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
+							errmsg(
+								"buildAsUnique can only be set when unique is false.")));
 		}
 	}
 
@@ -4678,6 +4719,11 @@ MakeIndexSpecForIndexDef(IndexDef *indexDef)
 		PgbsonWriterAppendInt32(&writer, "enableOrderedIndex", 18, 1);
 	}
 
+	if (indexDef->buildAsUnique == BoolIndexOption_True)
+	{
+		PgbsonWriterAppendInt32(&writer, "buildAsUnique", 13, 1);
+	}
+
 	if (!IsPgbsonWriterEmptyDocument(&writer))
 	{
 		indexSpec.indexOptions = PgbsonWriterGetPgbson(&writer);
@@ -4756,11 +4802,13 @@ CreatePostgresIndexCreationCmd(uint64 collectionId, IndexDef *indexDef, int inde
 		}
 
 		bool useReducedWildcardTermGeneration = false;
+		bool buildAsUnique = false;
 		appendStringInfo(cmdStr,
 						 " ADD CONSTRAINT " DOCUMENT_DATA_TABLE_INDEX_NAME_FORMAT
 						 " EXCLUDE USING %s_%s (%s) %s%s%s",
 						 indexId, ExtensionObjectPrefix, indexAm->am_name,
 						 GenerateIndexExprStr(indexAm->am_name, unique,
+											  buildAsUnique,
 											  sparse, enableNewIndexOpClass,
 											  indexDef->key,
 											  indexDef->wildcardProjectionTree,
@@ -4904,7 +4952,8 @@ CreatePostgresIndexCreationCmd(uint64 collectionId, IndexDef *indexDef, int inde
 						 ExtensionObjectPrefix,
 						 indexAm->am_name,
 						 GenerateIndexExprStr(indexAm->am_name,
-											  unique, sparse, enableNewIndexOpClass,
+											  unique, indexDef->buildAsUnique,
+											  sparse, enableNewIndexOpClass,
 											  indexDef->key,
 											  indexDef->wildcardProjectionTree,
 											  indexDef->name,
@@ -5237,18 +5286,23 @@ inline static void
 AppendUniqueColumnExpr(StringInfo indexExprStr, IndexDefKey *indexDefKey,
 					   bool sparse, const char *indexAmSuffix, const
 					   char *indexAmOpClassInternalCatalogSchema,
-					   bool firstColumnWritten)
+					   bool firstColumnWritten, bool buildAsUnique)
 {
 	appendStringInfo(indexExprStr,
-					 "%s%s.generate_unique_shard_document(document, shard_key_value, '%s'::%s.bson, %s) %s.bson_%s_unique_shard_path_ops WITH OPERATOR(%s.=#=)",
+					 "%s%s.generate_unique_shard_document(document, shard_key_value, '%s'::%s.bson, %s) %s.bson_%s_unique_shard_path_ops",
 					 !firstColumnWritten ? "" : ",",
 					 DocumentDBApiInternalSchemaName,
 					 GenerateUniqueProjectionSpec(indexDefKey),
 					 CoreSchemaName,
 					 sparse ? "true" : "false",
 					 indexAmOpClassInternalCatalogSchema,
-					 indexAmSuffix,
-					 DocumentDBApiInternalSchemaName);
+					 indexAmSuffix);
+
+	if (!buildAsUnique)
+	{
+		appendStringInfo(indexExprStr, "  WITH OPERATOR(%s.=#=)",
+						 DocumentDBApiInternalSchemaName);
+	}
 }
 
 
@@ -5262,7 +5316,8 @@ AppendUniqueColumnExpr(StringInfo indexExprStr, IndexDefKey *indexDefKey,
  */
 static char *
 GenerateIndexExprStr(const char *indexAmSuffix,
-					 bool unique, bool sparse, bool enableCompositeOpClass,
+					 bool unique, bool buildAsUnique, bool sparse, bool
+					 enableCompositeOpClass,
 					 IndexDefKey *indexDefKey,
 					 const BsonIntermediatePathNode *indexDefWildcardProjTree,
 					 const char *indexName, const char *defaultLanguage,
@@ -5295,8 +5350,9 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 
 	bool isUsingCompositeOpClass = enableCompositeOpClass &&
 								   indexDefKey->canSupportCompositeTerm;
-	bool usingNewUniqueIndexOpClass = unique && (enableLargeIndexKeys ||
-												 isUsingCompositeOpClass);
+	bool usingNewUniqueIndexOpClass = (unique || buildAsUnique) &&
+									  (enableLargeIndexKeys ||
+									   isUsingCompositeOpClass);
 
 	/* For unique with truncation, instead of creating a unique hash for every column, we simply create a single
 	 * value with a new operator that handles unique constraints. That way for a composite unique index, we support
@@ -5309,8 +5365,10 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 	 */
 	if (usingNewUniqueIndexOpClass && !isUsingCompositeOpClass)
 	{
+		bool buildAsUniqueOverride = false;
 		AppendUniqueColumnExpr(indexExprStr, indexDefKey, sparse, indexAmSuffix,
-							   indexAmOpClassInternalCatalogSchema, firstColumnWritten);
+							   indexAmOpClassInternalCatalogSchema, firstColumnWritten,
+							   buildAsUniqueOverride);
 		firstColumnWritten = true;
 	}
 
@@ -5711,7 +5769,8 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 	if (usingNewUniqueIndexOpClass && isUsingCompositeOpClass)
 	{
 		AppendUniqueColumnExpr(indexExprStr, indexDefKey, sparse, indexAmSuffix,
-							   indexAmOpClassInternalCatalogSchema, firstColumnWritten);
+							   indexAmOpClassInternalCatalogSchema, firstColumnWritten,
+							   buildAsUnique);
 	}
 
 	return indexExprStr->data;

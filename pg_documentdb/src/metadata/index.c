@@ -2471,32 +2471,48 @@ static bool
 AreIndexOptionsStillEquivalent(const char *path, const bson_value_t *left,
 							   const bson_value_t *right)
 {
+	bool areEquivalent = true;
 	if (IsOptionsKeyOrderedIndex(path))
 	{
-		if (left == NULL && right == NULL)
+		if (left != NULL || right != NULL)
 		{
-			return true;
-		}
+			bool enableCompositeTermLeft = false;
+			bool enableCompositeTermRight = false;
 
-		bool enableCompositeTermLeft = false;
-		bool enableCompositeTermRight = false;
+			if (left != NULL)
+			{
+				enableCompositeTermLeft = BsonValueAsBool(left);
+			}
+			if (right != NULL)
+			{
+				enableCompositeTermRight = BsonValueAsBool(right);
+			}
 
-		if (left != NULL)
-		{
-			enableCompositeTermLeft = BsonValueAsBool(left);
+			areEquivalent = enableCompositeTermLeft == enableCompositeTermRight;
 		}
-		if (right != NULL)
-		{
-			enableCompositeTermRight = BsonValueAsBool(right);
-		}
-
-		return enableCompositeTermLeft == enableCompositeTermRight;
 	}
-	else
+
+	if (areEquivalent && strcmp(path, "buildAsUnique") == 0)
 	{
-		/* Other fields do not change index equivalency */
-		return true;
+		if (left != NULL || right != NULL)
+		{
+			bool buildAsUniqueLeft = false;
+			bool buildAsUniqueRight = false;
+
+			if (left != NULL)
+			{
+				buildAsUniqueLeft = BsonValueAsBool(left);
+			}
+			if (right != NULL)
+			{
+				buildAsUniqueRight = BsonValueAsBool(right);
+			}
+
+			areEquivalent = buildAsUniqueLeft == buildAsUniqueRight;
+		}
 	}
+
+	return areEquivalent;
 }
 
 
