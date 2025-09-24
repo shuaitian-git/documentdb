@@ -212,7 +212,8 @@ static IndexBuildResult * rumbuild_serial(Relation heap, Relation index, struct
 
 static IndexBuildResult * rumbuild_parallel(Relation heap, Relation index, struct
 											IndexInfo *indexInfo,
-											RumBuildState *buildstate);
+											RumBuildState *buildstate,
+											bool canBuildParallel);
 
 /*
  * Creates new posting tree with one page, containing the given TIDs.
@@ -884,12 +885,16 @@ rumbuild(Relation heap, Relation index, struct IndexInfo *indexInfo)
 		}
 	}
 
-	/* We only support parallel build when it's sorted via itempointers only */
-	if (RumEnableParallelIndexBuild &&
-		isParallelIndexCapable &&
-		!buildstate.rumstate.attrnAddToColumn)
+	if (buildstate.rumstate.attrnAddToColumn != InvalidAttrNumber)
 	{
-		return rumbuild_parallel(heap, index, indexInfo, &buildstate);
+		isParallelIndexCapable = false;
+	}
+
+	/* We only support parallel build when it's sorted via itempointers only */
+	if (RumEnableParallelIndexBuild)
+	{
+		return rumbuild_parallel(heap, index, indexInfo, &buildstate,
+								 isParallelIndexCapable);
 	}
 	else
 	{
@@ -1504,7 +1509,7 @@ RumBufferTrim(RumBuffer *buffer)
 	Assert((buffer->nfrozen > 0) && (buffer->nfrozen <= buffer->nitems));
 
 	memmove(&buffer->items[0], &buffer->items[buffer->nfrozen],
-			sizeof(ItemPointerData) * (buffer->nitems - buffer->nfrozen));
+			sizeof(RumItem) * (buffer->nitems - buffer->nfrozen));
 
 	buffer->nitems -= buffer->nfrozen;
 	buffer->nfrozen = 0;
@@ -2296,7 +2301,7 @@ _rum_end_parallel(RumLeader *rumleader, RumBuildState *state)
 
 static IndexBuildResult *
 rumbuild_parallel(Relation heap, Relation index, struct IndexInfo *indexInfo,
-				  RumBuildState *buildstate)
+				  RumBuildState *buildstate, bool canBuildParallel)
 {
 	MemoryContext oldCtx;
 	IndexBuildResult *result;
@@ -2321,7 +2326,7 @@ rumbuild_parallel(Relation heap, Relation index, struct IndexInfo *indexInfo,
 	 * but there is no way to communicate that to plan_create_index_workers.
 	 */
 #if PG_VERSION_NUM >= 160000
-	if (RumParallelIndexWorkersOverride > 0)
+	if (RumParallelIndexWorkersOverride > 0 && canBuildParallel)
 	{
 		int parallel_workers = RumParallelIndexWorkersOverride;
 		parallel_workers = Min(parallel_workers,
@@ -2339,7 +2344,8 @@ rumbuild_parallel(Relation heap, Relation index, struct IndexInfo *indexInfo,
 #endif
 
 	if (indexInfo->ii_ParallelWorkers > 0 &&
-		RumParallelIndexWorkersOverride > 0)
+		RumParallelIndexWorkersOverride > 0 &&
+		canBuildParallel)
 	{
 		ereport(DEBUG1, (errmsg("parallel index build requested with %d workers",
 								indexInfo->ii_ParallelWorkers)));

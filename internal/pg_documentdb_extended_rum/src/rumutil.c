@@ -242,6 +242,10 @@ documentdb_rumhandler(PG_FUNCTION_ARGS)
 #if PG_VERSION_NUM >= 100000
 	amroutine->amcanparallel = false;
 #endif
+
+#if PG_VERSION_NUM >= 170000
+	amroutine->amcanbuildparallel = RumEnableParallelIndexBuild;
+#endif
 	amroutine->amkeytype = InvalidOid;
 
 	amroutine->ambuild = rumbuild;
