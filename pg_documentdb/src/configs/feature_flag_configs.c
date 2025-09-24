@@ -185,6 +185,9 @@ bool EnableLookupIdJoinOptimizationOnCollation =
 #define DEFAULT_USE_LEGACY_SHARD_KEY_FILTER_ON_UPDATE false
 bool UseLegacyShardKeyFilterOnUpdate = DEFAULT_USE_LEGACY_SHARD_KEY_FILTER_ON_UPDATE;
 
+#define DEFAULT_RUM_FAIL_ON_LOST_PATH false
+bool RumFailOnLostPath = DEFAULT_RUM_FAIL_ON_LOST_PATH;
+
 
 /*
  * SECTION: Cluster administration & DDL feature flags
@@ -578,6 +581,14 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether or not to use the older style shard key filter on update calls."),
 		NULL, &UseLegacyShardKeyFilterOnUpdate,
 		DEFAULT_USE_LEGACY_SHARD_KEY_FILTER_ON_UPDATE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.rumFailOnLostPath", newGucPrefix),
+		gettext_noop(
+			"Whether or not to fail the query when a lost path is detected in RUM"),
+		NULL, &RumFailOnLostPath,
+		DEFAULT_RUM_FAIL_ON_LOST_PATH,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

@@ -33,6 +33,7 @@ extern bool ThrowDeadlockOnCrud;
 extern bool EnableBackendStatementTimeout;
 extern int MaxCustomCommandTimeout;
 extern bool EnableVariablesSupportForWriteCommands;
+extern bool RumFailOnLostPath;
 
 /*
  *  This is a list of command options that are not currently supported.
@@ -350,7 +351,7 @@ GetWriteErrorFromErrorData(ErrorData *errorData, int writeErrorIdx)
 
 	if (errorData->sqlerrcode == ERRCODE_INTERNAL_ERROR && errorData->message != NULL)
 	{
-		if (strcmp(errorData->message, "Lost Path") == 0)
+		if (RumFailOnLostPath && strcmp(errorData->message, "Lost path") == 0)
 		{
 			/*
 			 * We need to throw this updated error and retry at the gateway
