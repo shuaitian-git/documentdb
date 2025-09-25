@@ -27,6 +27,7 @@ pub use crate::postgres::QueryCatalog;
 use either::Either::{Left, Right};
 use openssl::ssl::Ssl;
 use socket2::TcpKeepalive;
+use std::net::IpAddr;
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::{
     io::BufStream,
@@ -184,10 +185,22 @@ where
         )));
     }
 
+    let ip_address = match peer_address.ip() {
+        IpAddr::V4(v4) => IpAddr::V4(v4),
+        IpAddr::V6(v6) => {
+            // If it's an IPv4-mapped IPv6 (::ffff:a.b.c.d), extract the IPv4.
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                IpAddr::V4(v4)
+            } else {
+                IpAddr::V6(v6)
+            }
+        }
+    };
+
     let conn_ctx = ConnectionContext::new(
         service_context,
         telemetry,
-        peer_address.to_string(),
+        ip_address.to_string(),
         Some(tls_stream.ssl()),
         connection_id,
     );
