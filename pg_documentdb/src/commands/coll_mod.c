@@ -25,6 +25,7 @@
 #include "utils/query_utils.h"
 #include "utils/version_utils.h"
 #include "utils/feature_counter.h"
+#include "commands/coll_mod.h"
 
 
 /* --------------------------------------------------------- */
@@ -112,6 +113,7 @@ static void ModifyViewDefinition(Datum databaseDatum,
 								 pgbson_writer *writer);
 static bool GetHiddenFlagFromOptions(pgbson *indexOptions);
 static pgbson * UpdateHiddenInIndexOptions(pgbson *indexOptions, bool hidden);
+
 static void UpdatePostgresIndex(uint64_t collectionId, int indexId, bool hidden);
 
 /* --------------------------------------------------------- */
@@ -595,8 +597,9 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 						BoolIndexOption_False;
 
 			/* Update the postgres index status */
-			UpdatePostgresIndex(collection->collectionId, indexDetails.indexId,
-								indexOption->hidden);
+			UpdatePostgresIndexWithOverride(collection->collectionId,
+											indexDetails.indexId,
+											indexOption->hidden, UpdatePostgresIndex);
 
 			/* update the hidden field in indexOptions */
 			indexDetails.indexSpec.indexOptions = UpdateHiddenInIndexOptions(
@@ -788,6 +791,15 @@ UpdateHiddenInIndexOptions(pgbson *indexOptions, bool hidden)
 static void
 UpdatePostgresIndex(uint64_t collectionId, int indexId, bool hidden)
 {
+	bool ignoreMissingShards = false;
+	UpdatePostgresIndexCore(collectionId, indexId, hidden, ignoreMissingShards);
+}
+
+
+void
+UpdatePostgresIndexCore(uint64_t collectionId, int indexId, bool hidden, bool
+						ignoreMissingShards)
+{
 	/* First get the OID of the index */
 	char postgresIndexName[NAMEDATALEN] = { 0 };
 	pg_sprintf(postgresIndexName, DOCUMENT_DATA_TABLE_INDEX_NAME_FORMAT, indexId);
@@ -798,7 +810,8 @@ UpdatePostgresIndex(uint64_t collectionId, int indexId, bool hidden)
 
 	/* Add any additional shard OIDs needed for this */
 	indexOidList = list_concat(indexOidList,
-							   GetShardIndexOids(collectionId, indexId));
+							   GetShardIndexOids(collectionId, indexId,
+												 ignoreMissingShards));
 
 	ListCell *cell;
 	int numUpdated = 0;

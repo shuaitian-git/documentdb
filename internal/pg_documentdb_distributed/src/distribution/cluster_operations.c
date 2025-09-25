@@ -35,6 +35,7 @@ extern char *ApiGucPrefix;
 extern char *ClusterAdminRole;
 
 char *ApiDistributedSchemaName = "documentdb_api_distributed";
+char *ApiDistributedSchemaNameV2 = "documentdb_api_distributed";
 char *DistributedExtensionName = "documentdb_distributed";
 bool CreateDistributedFunctions = false;
 bool CreateIndexBuildQueueTable = false;

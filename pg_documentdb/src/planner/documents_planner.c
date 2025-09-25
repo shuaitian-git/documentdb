@@ -1898,7 +1898,8 @@ ProcessWorkerWriteQueryPath(PlannerInfo *root, RelOptInfo *rel, Index rti,
 
 	if (!(funcExpr->funcid == UpdateWorkerFunctionOid() ||
 		  funcExpr->funcid == InsertWorkerFunctionOid() ||
-		  funcExpr->funcid == DeleteWorkerFunctionOid()))
+		  funcExpr->funcid == DeleteWorkerFunctionOid() ||
+		  funcExpr->funcid == CommandNodeWorkerFunctionOid()))
 	{
 		return false;
 	}

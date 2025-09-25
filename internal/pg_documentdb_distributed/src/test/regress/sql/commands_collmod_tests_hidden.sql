@@ -69,8 +69,12 @@ set local enable_seqscan = off;
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 1 } }');
 ROLLBACK;
 
--- now hide the index again
+-- now hide the index again (with debug logs)
+set client_min_messages to debug1;
+SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT documentdb_api.coll_mod('collmod', 'coll_mod_test_hidden', '{ "collMod": "coll_mod_test_hidden", "index": { "name": "my_idx_1", "hidden": true } }');
+reset client_min_messages;
+reset citus.multi_shard_modify_mode;
 \d documentdb_data.documents_9201
 \d documentdb_data.documents_9201_920003
 \d documentdb_data.documents_9201_920004

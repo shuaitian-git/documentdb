@@ -252,7 +252,12 @@ extern TryGetCancelIndexBuildQuery_HookType try_get_cancel_index_build_query_hoo
 typedef bool (*ShouldScheduleIndexBuilds_HookType)();
 extern ShouldScheduleIndexBuilds_HookType should_schedule_index_builds_hook;
 
-typedef List *(*GettShardIndexOids_HookType)(uint64_t collectionId, int indexId);
+typedef List *(*GettShardIndexOids_HookType)(uint64_t collectionId, int indexId, bool
+											 ignoreMissing);
 extern GettShardIndexOids_HookType get_shard_index_oids_hook;
+
+typedef void (*UpdatePostgresIndex_HookType)(uint64_t collectionId, int indexId, bool
+											 hidden);
+extern UpdatePostgresIndex_HookType update_postgres_index_hook;
 
 #endif

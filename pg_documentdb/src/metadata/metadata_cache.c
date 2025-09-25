@@ -1152,6 +1152,9 @@ typedef struct DocumentDBApiOidCacheData
 	/* OID of the ApiInternalSchemaName.delete_worker function */
 	Oid DeleteWorkerFunctionOid;
 
+	/* OID of the ApiInternalSchemaName.command_node_worker function */
+	Oid CommandNodeWorkerFunctionOid;
+
 	/* OID of ApiInternalSchemaName.{ExtensionObjectPrefix}_core_bson_to_bson*/
 	Oid DocumentDBCoreBsonToBsonFunctionOId;
 
@@ -3056,6 +3059,29 @@ InsertWorkerFunctionOid(void)
 	}
 
 	return Cache.InsertWorkerFunctionOid;
+}
+
+
+Oid
+CommandNodeWorkerFunctionOid(void)
+{
+	InitializeDocumentDBApiExtensionCache();
+
+	if (Cache.CommandNodeWorkerFunctionOid == InvalidOid)
+	{
+		List *functionNameList = list_make2(makeString(DocumentDBApiInternalSchemaName),
+											makeString("command_node_worker"));
+		Oid paramOids[6] = {
+			OIDOID, DocumentDBCoreBsonTypeId(), REGCLASSOID, TEXTARRAYOID, BOOLOID,
+			TEXTOID
+		};
+		bool missingOK = true;
+
+		Cache.CommandNodeWorkerFunctionOid =
+			LookupFuncName(functionNameList, 6, paramOids, missingOK);
+	}
+
+	return Cache.CommandNodeWorkerFunctionOid;
 }
 
 

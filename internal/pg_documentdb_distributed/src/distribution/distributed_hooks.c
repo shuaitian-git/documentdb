@@ -29,6 +29,8 @@
 #include "shard_colocation.h"
 #include "distributed_hooks.h"
 
+#include "node_distributed_operations.h"
+
 extern bool UseLocalExecutionShardQueries;
 extern char *ApiDistributedSchemaName;
 
@@ -646,7 +648,7 @@ ShouldScheduleIndexBuildsCore()
 
 
 static List *
-GetDistributedShardIndexOidsCore(uint64_t collectionId, int indexId)
+GetDistributedShardIndexOidsCore(uint64_t collectionId, int indexId, bool ignoreMissing)
 {
 	/* First for the given collection, get the shard ids associated with it */
 	char tableName[NAMEDATALEN] = { 0 };
@@ -672,7 +674,7 @@ GetDistributedShardIndexOidsCore(uint64_t collectionId, int indexId)
 		{
 			indexShardList = lappend_oid(indexShardList, indexOid);
 		}
-		else
+		else if (!ignoreMissing)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTED),
 							errmsg("failed to find index to get index metadata."
@@ -720,6 +722,8 @@ InitializeDocumentDBDistributedHooks(void)
 	should_schedule_index_builds_hook = ShouldScheduleIndexBuildsCore;
 
 	get_shard_index_oids_hook = GetDistributedShardIndexOidsCore;
+
+	update_postgres_index_hook = UpdateDistributedPostgresIndex;
 
 	DistributedOperationsQuery =
 		"SELECT * FROM pg_stat_activity LEFT JOIN pg_catalog.get_all_active_transactions() ON process_id = pid JOIN pg_catalog.pg_dist_local_group ON TRUE";

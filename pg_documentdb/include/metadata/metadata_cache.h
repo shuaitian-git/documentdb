@@ -435,6 +435,7 @@ Oid ApiDataNamespaceOid(void);
 Oid UpdateWorkerFunctionOid(void);
 Oid InsertWorkerFunctionOid(void);
 Oid DeleteWorkerFunctionOid(void);
+Oid CommandNodeWorkerFunctionOid(void);
 
 /* Compat functions*/
 Oid DocumentDBCoreBsonToBsonFunctionOId(void);
