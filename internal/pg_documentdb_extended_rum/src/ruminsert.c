@@ -2425,9 +2425,13 @@ rumbuild_parallel(Relation heap, Relation index, struct IndexInfo *indexInfo,
 	 */
 	result = (IndexBuildResult *) palloc(sizeof(IndexBuildResult));
 
-	ereport(DEBUG1, (errmsg(
-						 "parallel index build completed with %f heaptuples and %f indextuples",
-						 reltuples, buildstate->indtuples)));
+	if (buildstate->bs_leader)
+	{
+		ereport(DEBUG1, (errmsg(
+							 "parallel index build completed with %f heaptuples and %f indextuples",
+							 reltuples, buildstate->indtuples)));
+	}
+
 	result->heap_tuples = reltuples;
 	result->index_tuples = buildstate->indtuples;
 	return result;
