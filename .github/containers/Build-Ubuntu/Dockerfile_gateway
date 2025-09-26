@@ -67,8 +67,9 @@ ENV CERT_PATH="" \
 
 RUN sudo mkdir /home/documentdb/gateway
 
-COPY --from=stage /home/documentdb/code/pg_documentdb_gw/target/release-with-symbols/documentdb_gateway /home/documentdb/gateway/documentdb_gateway
-COPY --from=stage /home/documentdb/code/pg_documentdb_gw/SetupConfiguration.json /home/documentdb/gateway/SetupConfiguration.json
+COPY --from=stage /home/documentdb/code/pg_documentdb_gw/target/release-with-symbols/documentdb_gateway \
+                  /home/documentdb/gateway/pg_documentdb_gw/target/release-with-symbols/documentdb_gateway
+COPY --from=stage /home/documentdb/code/pg_documentdb_gw/SetupConfiguration.json /home/documentdb/gateway/pg_documentdb_gw/SetupConfiguration.json
 COPY --from=stage /home/documentdb/code/scripts/start_oss_server.sh /home/documentdb/gateway/scripts/start_oss_server.sh
 COPY --from=stage /home/documentdb/code/scripts/build_and_start_gateway.sh /home/documentdb/gateway/scripts/build_and_start_gateway.sh
 COPY --from=stage /home/documentdb/code/scripts/emulator_entrypoint.sh /home/documentdb/gateway/scripts/emulator_entrypoint.sh

@@ -30,9 +30,7 @@
                 // Rust-analyzer default behavior skips checking/building some parts of the Rust codebase.
                 // This makes it check and build everything, which can help discover issues sooner, instead of
                 // only in the pull request validation build. It does make the checking/building slower, though.
-                "rust-analyzer.cargo.features": "all",
                 "rust-analyzer.cargo.allTargets": true,
-                "rust-analyzer.check.features": "all",
                 "rust-analyzer.check.allTargets": true,
                 // Code style: automatically format Rust code on save to save manual labor.
                 "[rust]": {
@@ -57,6 +55,5 @@
             "onAutoForward": "notify",
             "requireLocalPort": false
         }
-    },
-    "postCreateCommand": "chmod +x ${containerWorkspaceFolder}/.devcontainer/postcreate.sh && . ${containerWorkspaceFolder}/.devcontainer/postcreate.sh"
+    }
 }

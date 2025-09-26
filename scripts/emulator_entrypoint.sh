@@ -349,31 +349,30 @@ else
 fi
 
 # Setting up the configuration file
-cp /home/documentdb/gateway/SetupConfiguration.json /home/documentdb/gateway/SetupConfiguration_temp.json
+mkdir -p /home/documentdb/gateway/pg_documentdb_gw/target
+configFile="/home/documentdb/gateway/pg_documentdb_gw/target/SetupConfiguration_temp.json"
+cp /home/documentdb/gateway/pg_documentdb_gw/SetupConfiguration.json $configFile
+sudo chmod 755 $configFile
 
 if [ -n "${DOCUMENTDB_PORT:-}" ]; then
     echo "Updating GatewayListenPort in the configuration file..."
-    jq ".GatewayListenPort = $DOCUMENTDB_PORT" /home/documentdb/gateway/SetupConfiguration_temp.json > /home/documentdb/gateway/SetupConfiguration_temp.json.tmp && \
-    mv /home/documentdb/gateway/SetupConfiguration_temp.json.tmp /home/documentdb/gateway/SetupConfiguration_temp.json
+    jq ".GatewayListenPort = $DOCUMENTDB_PORT" $configFile > $configFile.tmp && \
+    mv $configFile.tmp $configFile
 fi
 
 if [ -n "${POSTGRESQL_PORT:-}" ]; then
     echo "Updating PostgresPort in the configuration file..."
-    jq ".PostgresPort = $POSTGRESQL_PORT" /home/documentdb/gateway/SetupConfiguration_temp.json > /home/documentdb/gateway/SetupConfiguration_temp.json.tmp && \
-    mv /home/documentdb/gateway/SetupConfiguration_temp.json.tmp /home/documentdb/gateway/SetupConfiguration_temp.json
+    jq ".PostgresPort = $POSTGRESQL_PORT" $configFile > $configFile.tmp && \
+    mv $configFile.tmp $configFile
 fi
 
 if [ -n "${CERT_PATH:-}" ] && [ -n "${KEY_FILE:-}" ]; then
     echo "Adding CertificateOptions to the configuration file..."
     jq --arg certPath "$CERT_PATH" --arg keyFilePath "$KEY_FILE" \
        '.CertificateOptions = { "CertType": "PemFile", "FilePath": $certPath, "KeyFilePath": $keyFilePath }' \
-       /home/documentdb/gateway/SetupConfiguration_temp.json > /home/documentdb/gateway/SetupConfiguration_temp.json.tmp && \
-    mv /home/documentdb/gateway/SetupConfiguration_temp.json.tmp /home/documentdb/gateway/SetupConfiguration_temp.json
+       $configFile > $configFile.tmp && \
+    mv $configFile.tmp $configFile
 fi
-
-sudo chmod 755 /home/documentdb/gateway/SetupConfiguration_temp.json
-
-configFile="/home/documentdb/gateway/SetupConfiguration_temp.json"
 
 echo "Starting gateway in the background..."
 if [ "$CREATE_USER" = "false" ]; then

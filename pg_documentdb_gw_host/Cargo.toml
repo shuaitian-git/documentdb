@@ -11,7 +11,7 @@ name = "pgrx_embed_pg_documentdb_gw_host"
 path = "./src/bin/pgrx_embed.rs"
 
 [features]
-default = ["pg15"]
+default = ["pg16"]
 pg15 = ["pgrx/pg15" ]
 pg16 = ["pgrx/pg16" ]
 pg17 = ["pgrx/pg17" ]
@@ -20,7 +20,7 @@ pg_test = []
 
 [dependencies]
 pgrx = "=0.16.0"
-documentdb_gateway = { path = "../../oss/pg_documentdb_gw" }
+documentdb_gateway = { path = "../pg_documentdb_gw" }
 tokio = { version = "1", features = ["full"] }
 simple_logger = { version = "4.2.0", default-features = false, features = [
     "timestamps",
