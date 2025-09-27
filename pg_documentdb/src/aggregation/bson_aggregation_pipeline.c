@@ -4802,8 +4802,6 @@ HandleSort(const bson_value_t *existingValue, Query *query,
 			SortByDir sortByDirection = isAscending ? SORTBY_ASC : SORTBY_DESC;
 			sortBy->location = -1;
 
-			/* If the sort is on _id and we can push it down to the primary key index, use ORDER BY object_id instead. */
-			/* match protocol defined behavior. */
 			Oid funcOid = BsonOrderByFunctionOid();
 			List *args = NIL;
 
