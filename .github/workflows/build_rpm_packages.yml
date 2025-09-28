@@ -25,7 +25,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [rhel8, rhel9]
         os: ${{ fromJson(github.event_name == 'pull_request' && '["rhel9"]' || '["rhel8","rhel9"]') }}
         arch: [amd64, arm64]
         include:
