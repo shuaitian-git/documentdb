@@ -20,8 +20,12 @@ else
    exit 1
 fi
 
-# Keep specific internal directories out of the Debian package.
-sed -i '/internal\/pg_documentdb_distributed/d' Makefile
+# Keep the internal directory out of the Debian package
+sed -i '/internal/d' Makefile
+
+# Remove check-extended-rum target and reference from repo Makefile (same style as above)
+sed -i '/^check-extended-rum:/,/^$/d' pg_documentdb/src/test/Makefile || true
+sed -i 's/\<check-extended-rum\>//g' pg_documentdb/src/test/Makefile || true
 
 # Build the Debian package
 debuild -us -uc
