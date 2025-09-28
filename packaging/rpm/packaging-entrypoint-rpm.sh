@@ -23,7 +23,7 @@ else
 fi
 
 # Remove 'internal' references from Makefile
-sed -i '/internal/d' Makefile
+sed -i '/internal\/pg_documentdb_distributed/d' Makefile
 
 # Create RPM build directories
 mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}

@@ -45,7 +45,7 @@ CRUD operations on BSON data types within a PostgreSQL framework.
 
 %build
 # Keep the internal directory out of the RPM package
-sed -i '/internal/d' Makefile
+sed -i '/internal\/pg_documentdb_distributed/d' Makefile
 
 # Build the extension
 # Ensure PG_CONFIG points to the correct pg_config for PGDG paths

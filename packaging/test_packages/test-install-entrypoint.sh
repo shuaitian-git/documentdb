@@ -5,7 +5,7 @@ set -e
 cd /test-install
 
 # Keep the internal directory out of the testing
-sed -i '/internal/d' Makefile
+sed -i '/internal\/pg_documentdb_distributed/d' Makefile
 
 # Run the test
 adduser --disabled-password --gecos "" documentdb

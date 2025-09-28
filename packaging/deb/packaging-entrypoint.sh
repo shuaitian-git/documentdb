@@ -20,8 +20,8 @@ else
    exit 1
 fi
 
-# Keep the internal directory out of the Debian package
-sed -i '/internal/d' Makefile
+# Keep specific internal directories out of the Debian package.
+sed -i '/internal\/pg_documentdb_distributed/d' Makefile
 
 # Build the Debian package
 debuild -us -uc
