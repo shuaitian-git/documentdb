@@ -512,6 +512,17 @@ DropIndexesConcurrentlyInternal(char *dbName, pgbson *arg)
 		StartTransactionCommand();
 	}
 	PG_END_TRY();
+
+
+	/* Post process if there's an error to massage the message */
+	if (dropIndexResult->errcode == ERRCODE_INSUFFICIENT_PRIVILEGE)
+	{
+		ereport(LOG, (errmsg(
+						  "Insufficient privileges to execute drop indexes - inner error %s",
+						  dropIndexResult->errmsg)));
+		dropIndexResult->errmsg = "Insufficient privileges to execute drop indexes";
+	}
+
 	return dropIndexResult;
 }
 
