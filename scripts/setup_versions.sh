@@ -8,8 +8,8 @@ set -e
 # declare all the versions of dependencies
 LIBBSON_VERSION=1.28.0
 
-# This maps to REL_18_RC1:6200622301310b1e47a2d5b7e25d098f0a38c551
-POSTGRES_18_REF="REL_18_RC1"
+# This maps to REL_18_0:3d6a828938a5fa0444275d3d2f67b64ec3199eb7
+POSTGRES_18_REF="REL_18_0"
 
 # This maps to REL_17_6:7885b94dd81b98bbab9ed878680d156df7bf857f
 POSTGRES_17_REF="REL_17_6"
@@ -25,8 +25,8 @@ POSTGRES_15_REF="REL_15_14"
 # shard operations with the latest minor release of PG15/16/17
 # This is v12.1.9 with the fix.
 CITUS_VERSION=b8418cc61de008a17b948005d42f63f3ccb675e7
-# This is commit ad266a2c0a3c9bdab1426ed33d1bc2d9a7d74f45
-CITUS_13_VERSION=v13.1.0
+# This is commit e8e06d8d0cc103b1150feeac7250efc488a3cd5b
+CITUS_13_VERSION=v13.2.0
 # For pg18 use an unstable main version for now
 CITUS_PG18_VERSION=b7bfe42f1a4d22db4b1ecc2636cdf83adf27c106
 # This is commit 6a065fd8dfb280680304991aa30d7f72787fdb04
