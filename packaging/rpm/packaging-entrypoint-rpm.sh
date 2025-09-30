@@ -25,10 +25,6 @@ fi
 # Remove 'internal' references from Makefile
 sed -i '/internal/d' Makefile
 
-# Remove check-extended-rum target and reference from repo Makefile (same style as above)
-sed -i '/^check-extended-rum:/,/^$/d' pg_documentdb/src/test/Makefile || true
-sed -i 's/\<check-extended-rum\>//g' pg_documentdb/src/test/Makefile || true
-
 # Create RPM build directories
 mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 

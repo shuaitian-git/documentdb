@@ -90,10 +90,13 @@ rm -rf %{buildroot}/usr/src/documentdb/build
 %defattr(-,root,root,-)
 /usr/pgsql-%{pg_version}/lib/pg_documentdb_core.so
 /usr/pgsql-%{pg_version}/lib/pg_documentdb.so
+/usr/pgsql-%{pg_version}/lib/pg_documentdb_extended_rum.so
 /usr/pgsql-%{pg_version}/share/extension/documentdb_core.control
 /usr/pgsql-%{pg_version}/share/extension/documentdb_core--*.sql
 /usr/pgsql-%{pg_version}/share/extension/documentdb.control
 /usr/pgsql-%{pg_version}/share/extension/documentdb--*.sql
+/usr/pgsql-%{pg_version}/share/extension/documentdb_extended_rum.control
+/usr/pgsql-%{pg_version}/share/extension/documentdb_extended_rum--*.sql
 /usr/src/documentdb
 /usr/lib/intelmathlib/LIBRARY/libbid.a
 # Bundled libbson files:
