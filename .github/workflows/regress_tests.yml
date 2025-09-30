@@ -24,7 +24,7 @@ jobs:
   test-run-in-Ubuntu:
     runs-on: ${{ matrix.runner }}
     name: Run sql tests on ${{ matrix.runner }} with pg ${{ matrix.pg_version }}
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.event_name != 'pull_request' || (matrix.pg_version == 15 && matrix.arch == 'amd64') || (matrix.pg_version == 16 && matrix.arch == 'arm64') || (matrix.pg_version == 17 && matrix.arch == 'amd64'))
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +35,6 @@ jobs:
         arch:
           - amd64
           - arm64
-        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"pg_version": 15, "arch": "arm64"}, {"pg_version": 16, "arch": "amd64"}, {"pg_version": 17, "arch": "arm64"}]') || fromJSON('[]') }}
         include:
           - arch: amd64
             runner: ubuntu-22.04
