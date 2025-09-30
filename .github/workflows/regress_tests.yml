@@ -28,18 +28,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pg_version:
-          - 15
-          - 16
-          - 17
-        arch:
-          - amd64
-          - arm64
-        include:
-          - arch: amd64
-            runner: ubuntu-22.04
-          - arch: arm64
-            runner: ubuntu-22.04-arm
+        include: ${{ github.event_name == 'pull_request' && fromJSON('[
+          {"pg_version": 15, "arch": "amd64", "runner": "ubuntu-22.04"},
+          {"pg_version": 16, "arch": "arm64", "runner": "ubuntu-22.04-arm"},
+          {"pg_version": 17, "arch": "amd64", "runner": "ubuntu-22.04"}
+        ]') || fromJSON('[
+          {"pg_version": 15, "arch": "amd64", "runner": "ubuntu-22.04"},
+          {"pg_version": 15, "arch": "arm64", "runner": "ubuntu-22.04-arm"},
+          {"pg_version": 16, "arch": "amd64", "runner": "ubuntu-22.04"},
+          {"pg_version": 16, "arch": "arm64", "runner": "ubuntu-22.04-arm"},
+          {"pg_version": 17, "arch": "amd64", "runner": "ubuntu-22.04"},
+          {"pg_version": 17, "arch": "arm64", "runner": "ubuntu-22.04-arm"}
+        ]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
