@@ -57,6 +57,11 @@ InitializeQueryDollarRange(pgbsonelement *filterElement, DollarRangeParams *rang
 			rangeParams->orderScanDirection = BsonValueAsInt32(bson_iter_value(
 																   &rangeIter));
 		}
+		else if (strcmp(key, "elemMatchIndexOp") == 0)
+		{
+			rangeParams->isElemMatch = true;
+			rangeParams->elemMatchValue = *bson_iter_value(&rangeIter);
+		}
 		else
 		{
 			ereport(ERROR, (errmsg("Range predicate not supported: %s", key),

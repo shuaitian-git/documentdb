@@ -120,6 +120,10 @@ bool EnableRumIndexScan = DEFAULT_ENABLE_RUM_INDEX_SCAN;
 #define DEFAULT_USE_NEW_ELEMMATCH_INDEX_PUSHDOWN false
 bool UseNewElemMatchIndexPushdown = DEFAULT_USE_NEW_ELEMMATCH_INDEX_PUSHDOWN;
 
+#define DEFAULT_USE_NEW_ELEMMATCH_INDEX_OPERATOR_ON_PUSHDOWN true
+bool UseNewElemMatchIndexOperatorOnPushdown =
+	DEFAULT_USE_NEW_ELEMMATCH_INDEX_OPERATOR_ON_PUSHDOWN;
+
 /* Can be removed after v110 (keep for a few releases for stability) */
 #define DEFAULT_ENABLE_INSERT_CUSTOM_PLAN true
 bool EnableInsertCustomPlan = DEFAULT_ENABLE_INSERT_CUSTOM_PLAN;
@@ -448,6 +452,14 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether or not to use the new elemMatch index pushdown logic."),
 		NULL, &UseNewElemMatchIndexPushdown,
 		DEFAULT_USE_NEW_ELEMMATCH_INDEX_PUSHDOWN,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.useNewElemMatchIndexOperatorOnPushdown", newGucPrefix),
+		gettext_noop(
+			"Whether or not to use the new elemMatch index operator on pushdown."),
+		NULL, &UseNewElemMatchIndexOperatorOnPushdown,
+		DEFAULT_USE_NEW_ELEMMATCH_INDEX_OPERATOR_ON_PUSHDOWN,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

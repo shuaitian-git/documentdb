@@ -279,7 +279,9 @@ gin_bson_composite_path_extract_query(PG_FUNCTION_ARGS)
 	 */
 	if (!hasArrayPaths)
 	{
-		MergeSingleVariableBounds(&variableBounds, runData);
+		variableBounds.variableBoundsList =
+			MergeSingleVariableBounds(variableBounds.variableBoundsList,
+									  runData->indexBounds);
 	}
 	else if (isOrderedScan)
 	{

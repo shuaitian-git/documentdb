@@ -1276,9 +1276,12 @@ bson_dollar_range(PG_FUNCTION_ARGS)
 	rangeState.isMinConditionSet = false;
 	rangeState.isMaxConditionSet = false;
 
-	if (rangeState.params.isFullScan)
+	if (rangeState.params.isFullScan || rangeState.params.isElemMatch)
 	{
-		/* if the range is a full scan, we don't need to traverse the document */
+		/* if the range is a full scan, we don't need to traverse the document
+		 * similarly for $elemMatch this range query is only used on the index
+		 * so we bypass the runtime recheck and let the runtime filter handle it.
+		 */
 		PG_RETURN_BOOL(true);
 	}
 
