@@ -1,3 +1,5 @@
+### documentdb v1.109-0 (Unreleased) ###
+
 ### documentdb v0.108-0 (Unreleased) ###
 * Top-level `let` variables and `$$NOW` supported by default.
 * Fix collation support on find and aggregation when variableSpec is not available *[Bugfix]*.
