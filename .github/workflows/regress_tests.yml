@@ -28,7 +28,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ github.event_name == 'pull_request' && fromJSON('[{"pg_version": 15, "arch": "amd64", "runner": "ubuntu-22.04"}, {"pg_version": 16, "arch": "arm64", "runner": "ubuntu-22.04-arm"}, {"pg_version": 17, "arch": "amd64", "runner": "ubuntu-22.04"}]') || fromJSON('[{"pg_version": 15, "arch": "amd64", "runner": "ubuntu-22.04"}, {"pg_version": 15, "arch": "arm64", "runner": "ubuntu-22.04-arm"}, {"pg_version": 16, "arch": "amd64", "runner": "ubuntu-22.04"}, {"pg_version": 16, "arch": "arm64", "runner": "ubuntu-22.04-arm"}, {"pg_version": 17, "arch": "amd64", "runner": "ubuntu-22.04"}, {"pg_version": 17, "arch": "arm64", "runner": "ubuntu-22.04-arm"}]') }}
+        pg_version:
+          - 15
+          - 16
+          - 17
+        arch:
+          - amd64
+          - arm64
+        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"pg_version": 15, "arch": "arm64"}, {"pg_version": 16, "arch": "amd64"}, {"pg_version": 17, "arch": "arm64"}]') || fromJSON('[]') }}
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
