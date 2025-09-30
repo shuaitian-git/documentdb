@@ -154,6 +154,16 @@ typedef struct
 } ForceIndexSupportFuncs;
 
 
+typedef struct IndexElemmatchState
+{
+	pgbson_array_writer *stateWriter;
+
+	const char *indexPath;
+	uint32_t indexPathLength;
+	bool isTopLevel;
+} IndexElemmatchState;
+
+
 /* --------------------------------------------------------- */
 /* Forward declaration */
 /* --------------------------------------------------------- */
@@ -294,6 +304,7 @@ static const ForceIndexSupportFuncs ForceIndexOperatorSupport[] =
 extern bool EnableVectorForceIndexPushdown;
 extern bool EnableGeonearForceIndexPushdown;
 extern bool UseNewElemMatchIndexPushdown;
+extern bool UseNewElemMatchIndexOperatorOnPushdown;
 extern bool DisableDollarSupportFuncSelectivity;
 extern bool EnableNewOperatorSelectivityMode;
 extern bool EnableIndexHintSupport;
@@ -3993,6 +4004,129 @@ PrimaryKeyLookupUnableToFindIndex(void)
 }
 
 
+static bool
+IsSupportedElemMatchExpr(Node *elemMatchExpr, bytea *options,
+						 const MongoIndexOperatorInfo **targetOperator,
+						 List **innerOpArgs, pgbsonelement *innerQueryElement)
+{
+	List *innerArgs;
+	const MongoIndexOperatorInfo *innerOperator = GetMongoIndexQueryOperatorFromNode(
+		elemMatchExpr,
+		&innerArgs);
+	if (innerOperator == NULL ||
+		innerOperator->indexStrategy == BSON_INDEX_STRATEGY_INVALID)
+	{
+		/* This is not a valid operator for elemMatch */
+		return false;
+	}
+
+	if (innerOperator->indexStrategy == BSON_INDEX_STRATEGY_DOLLAR_ELEMMATCH ||
+		IsNegationStrategy(innerOperator->indexStrategy))
+	{
+		/* We don't support negation strategies for nested elemMatch
+		 * TODO(Composite): Can we do this safely?
+		 */
+		return false;
+	}
+
+	Node *operand = lsecond(innerArgs);
+	Datum innerQueryValue = ((Const *) operand)->constvalue;
+
+	/* Check if the index is valid for the function */
+	if (!ValidateIndexForQualifierValue(options, innerQueryValue,
+										innerOperator->indexStrategy))
+	{
+		return false;
+	}
+
+	/* Since $eq can fail to traverse array of array paths, elemMatch pushdown cannot handle
+	 * this since we need to skip the recheck.
+	 * TODO: If we can get the recheck skipped here, we can support this here too.
+	 */
+	pgbsonelement queryElement;
+	PgbsonToSinglePgbsonElement(DatumGetPgBson(innerQueryValue), &queryElement);
+	StringView queryPath = {
+		.string = queryElement.path,
+		.length = queryElement.pathLength
+	};
+	if (PathHasArrayIndexElements(&queryPath))
+	{
+		/* We don't support array index elements in elemMatch */
+		return false;
+	}
+
+	if (innerOperator->indexStrategy == BSON_INDEX_STRATEGY_DOLLAR_TEXT)
+	{
+		return false;
+	}
+
+	*targetOperator = innerOperator;
+	*innerOpArgs = innerArgs;
+	*innerQueryElement = queryElement;
+	return true;
+}
+
+
+static void
+WalkExprAndAddSupportedElemMatchExprsNew(List *clauses, bytea *options,
+										 IndexElemmatchState *elemMatchState, const
+										 char *topLevelPath)
+{
+	CHECK_FOR_INTERRUPTS();
+	check_stack_depth();
+
+	ListCell *elemMatchCell;
+	foreach(elemMatchCell, clauses)
+	{
+		Node *elemMatchExpr = (Node *) lfirst(elemMatchCell);
+
+		if (IsA(elemMatchCell, BoolExpr))
+		{
+			BoolExpr *boolExpr = (BoolExpr *) elemMatchExpr;
+			if (boolExpr->boolop != AND_EXPR)
+			{
+				/* We only support $elemMatch with AND expressions */
+				continue;
+			}
+
+			WalkExprAndAddSupportedElemMatchExprsNew(
+				boolExpr->args, options, elemMatchState, topLevelPath);
+			continue;
+		}
+
+
+		List *innerArgs = NIL;
+		const MongoIndexOperatorInfo *innerOperator;
+		pgbsonelement queryElement;
+		if (!IsSupportedElemMatchExpr(elemMatchExpr, options, &innerOperator, &innerArgs,
+									  &queryElement))
+		{
+			continue;
+		}
+
+		if (elemMatchState->indexPath == NULL)
+		{
+			elemMatchState->indexPath = queryElement.path;
+			elemMatchState->indexPathLength = queryElement.pathLength;
+			elemMatchState->isTopLevel = strcmp(topLevelPath, queryElement.path) == 0;
+		}
+		else if (elemMatchState->indexPathLength != queryElement.pathLength ||
+				 strncmp(elemMatchState->indexPath, queryElement.path,
+						 queryElement.pathLength) != 0)
+		{
+			continue;
+		}
+
+		pgbson_writer qualWriter;
+		PgbsonArrayWriterStartDocument(elemMatchState->stateWriter, &qualWriter);
+		PgbsonWriterAppendInt32(&qualWriter, "op", 2, innerOperator->indexStrategy);
+		PgbsonWriterAppendValue(&qualWriter, "value", 5, &queryElement.bsonValue);
+		PgbsonWriterAppendBool(&qualWriter, "isTopLevel", 10, elemMatchState->isTopLevel);
+		PgbsonArrayWriterEndDocument(elemMatchState->stateWriter, &qualWriter);
+	}
+}
+
+
 static List *
 WalkExprAndAddSupportedElemMatchExprs(List *clauses, bytea *options)
 {
@@ -4020,58 +4154,47 @@ WalkExprAndAddSupportedElemMatchExprs(List *clauses, bytea *options)
 			continue;
 		}
 
-		List *innerArgs;
-		const MongoIndexOperatorInfo *innerOperator = GetMongoIndexQueryOperatorFromNode(
-			elemMatchExpr,
-			&innerArgs);
-		if (innerOperator == NULL ||
-			innerOperator->indexStrategy == BSON_INDEX_STRATEGY_INVALID)
-		{
-			/* This is not a valid operator for elemMatch */
-			continue;
-		}
-
-		if (innerOperator->indexStrategy == BSON_INDEX_STRATEGY_DOLLAR_ELEMMATCH ||
-			IsNegationStrategy(innerOperator->indexStrategy))
-		{
-			/* We don't support negation strategies for nested elemMatch
-			 * TODO(Composite): Can we do this safely?
-			 */
-			continue;
-		}
-
-		Node *operand = lsecond(innerArgs);
-		Datum innerQueryValue = ((Const *) operand)->constvalue;
-
-		/* Check if the index is valid for the function */
-		if (!ValidateIndexForQualifierValue(options, innerQueryValue,
-											innerOperator->indexStrategy))
-		{
-			continue;
-		}
-
-		/* Since $eq can fail to traverse array of array paths, elemMatch pushdown cannot handle
-		 * this since we need to skip the recheck.
-		 * TODO: If we can get the recheck skipped here, we can support this here too.
-		 */
+		List *innerArgs = NIL;
+		const MongoIndexOperatorInfo *innerOperator;
 		pgbsonelement queryElement;
-		PgbsonToSinglePgbsonElement(DatumGetPgBson(innerQueryValue), &queryElement);
-		StringView queryPath = {
-			.string = queryElement.path,
-			.length = queryElement.pathLength
-		};
-		if (PathHasArrayIndexElements(&queryPath))
+		if (!IsSupportedElemMatchExpr(elemMatchExpr, options, &innerOperator, &innerArgs,
+									  &queryElement))
 		{
-			/* We don't support array index elements in elemMatch */
 			continue;
 		}
 
 		Expr *finalExpression =
-			(Expr *) GetOpExprClauseFromIndexOperator(innerOperator, innerArgs, options);
+			(Expr *) GetOpExprClauseFromIndexOperator(innerOperator, innerArgs,
+													  options);
 		matchedArgs = lappend(matchedArgs, finalExpression);
 	}
 
 	return matchedArgs;
+}
+
+
+static Expr *
+GetElemMatchIndexPushdownOperator(Expr *documentExpr, pgbsonelement *queryElement)
+{
+	/* In this path, we write the elemMatch as a simple $elemMatch opExpr
+	 * with a opExpr format:
+	 * "path": { "elemMatchIndexOp": [ { "op": INDEX_STRATEGY, "value": BSON } ] }
+	 */
+	pgbson_writer writer;
+	PgbsonWriterInit(&writer);
+	pgbson_writer elemMatchWriter;
+	PgbsonWriterStartDocument(&writer, queryElement->path, queryElement->pathLength,
+							  &elemMatchWriter);
+	PgbsonWriterAppendValue(&elemMatchWriter, "elemMatchIndexOp", 16,
+							&queryElement->bsonValue);
+	PgbsonWriterEndDocument(&writer, &elemMatchWriter);
+
+	Const *bsonConst = makeConst(BsonTypeId(), -1, InvalidOid, -1, PointerGetDatum(
+									 PgbsonWriterGetPgbson(&writer)), false,
+								 false);
+	return (Expr *) make_opclause(BsonRangeMatchOperatorOid(), BOOLOID, false,
+								  documentExpr, (Expr *) bsonConst, InvalidOid,
+								  InvalidOid);
 }
 
 
@@ -4095,19 +4218,50 @@ ProcessElemMatchOperator(bytea *options, Datum queryValue, const
 	/* Get the underlying list of expressions that are AND-ed */
 	List *clauses = make_ands_implicit(expr);
 
-	List *matchedArgs = WalkExprAndAddSupportedElemMatchExprs(clauses, options);
-	if (matchedArgs == NIL)
+	if (UseNewElemMatchIndexOperatorOnPushdown)
 	{
-		return NULL;
-	}
-	else if (list_length(matchedArgs) == 1)
-	{
-		/* If there's only one argument for $elemMatch, return it */
-		return (Expr *) linitial(matchedArgs);
+		IndexElemmatchState elemMatchState = { 0 };
+
+		pgbson_writer writer;
+		PgbsonWriterInit(&writer);
+		pgbson_array_writer arrayWriter;
+		PgbsonWriterStartArray(&writer, "", 0, &arrayWriter);
+		elemMatchState.stateWriter = &arrayWriter;
+
+		WalkExprAndAddSupportedElemMatchExprsNew(clauses, options, &elemMatchState,
+												 argElement.path);
+
+		if (elemMatchState.indexPath == NULL)
+		{
+			PgbsonWriterFree(&writer);
+			return NULL;
+		}
+
+		pgbsonelement queryElement;
+		queryElement.path = elemMatchState.indexPath;
+		queryElement.pathLength = elemMatchState.indexPathLength;
+		queryElement.bsonValue = PgbsonArrayWriterGetValue(&arrayWriter);
+		Expr *result = GetElemMatchIndexPushdownOperator(context.documentExpr,
+														 &queryElement);
+		PgbsonWriterFree(&writer);
+		return result;
 	}
 	else
 	{
-		return make_ands_explicit(matchedArgs);
+		List *matchedArgs = WalkExprAndAddSupportedElemMatchExprs(clauses, options);
+		if (matchedArgs == NIL)
+		{
+			return NULL;
+		}
+		else if (list_length(matchedArgs) == 1)
+		{
+			/* If there's only one argument for $elemMatch, return it */
+			return (Expr *) linitial(matchedArgs);
+		}
+		else
+		{
+			return make_ands_explicit(matchedArgs);
+		}
 	}
 }
 
