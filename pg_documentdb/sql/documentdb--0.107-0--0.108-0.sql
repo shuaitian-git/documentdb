@@ -5,6 +5,9 @@
 
 GRANT UPDATE (indisvalid) ON pg_catalog.pg_index to __API_ADMIN_ROLE__;
 
+-- update operator restrict function for $range.
+ALTER OPERATOR __API_CATALOG_SCHEMA__.@<>(__CORE_SCHEMA__.bson, __CORE_SCHEMA__.bson) SET (RESTRICT = __API_SCHEMA_INTERNAL__.bson_dollar_selectivity);
+
 -- if there's existing installations that were created before 0.108 we need to update the operator class to not depend on rum directly.
 DO LANGUAGE plpgsql $cmd$
 DECLARE text_ops_op_family oid;

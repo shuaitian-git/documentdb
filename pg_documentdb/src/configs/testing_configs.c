@@ -83,9 +83,6 @@ bool EnableDebugQueryText = DEFAULT_ENABLE_DEBUG_QUERY_TEXT;
 #define DEFAULT_ENABLE_MULTI_INDEX_RUM_JOIN false
 bool EnableMultiIndexRumJoin = DEFAULT_ENABLE_MULTI_INDEX_RUM_JOIN;
 
-#define DEFAULT_ENABLE_TTL_DESC_SORT false
-bool EnableTTLDescSort = DEFAULT_ENABLE_TTL_DESC_SORT;
-
 void
 InitializeTestConfigurations(const char *prefix, const char *newGucPrefix)
 {
@@ -285,17 +282,6 @@ InitializeTestConfigurations(const char *prefix, const char *newGucPrefix)
 		NULL,
 		&EnableMultiIndexRumJoin,
 		DEFAULT_ENABLE_MULTI_INDEX_RUM_JOIN,
-		PGC_USERSET,
-		0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enableTTLDescSort", newGucPrefix),
-		gettext_noop(
-			"Whether or not to enable TTL descending sort on field."),
-		NULL,
-		&EnableTTLDescSort,
-		DEFAULT_ENABLE_TTL_DESC_SORT,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);

@@ -3,7 +3,7 @@ MODULE_big = pg_$(EXTENSION)
 EXTVERSION = 1.0
 PGFILEDESC = "DocumentDB Extended RUM index access method"
 
-OSS_SRC_DIR = ../../
+OSS_SRC_DIR = ../
 
 SOURCES = $(wildcard src/*.c)
 OBJS = $(patsubst %.c,%.o,$(SOURCES)) $(WIN32RES)

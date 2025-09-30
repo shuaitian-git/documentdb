@@ -102,19 +102,22 @@ fi
 
 cargo pgrx init --pg$PGVERSION $pg_config_path
 
-profileArg=""
+packageProfileArg=""
+installProfileArg=""
 if [ "$profile" != "" ]; then
-    profileArg="--profile $profile"
+    packageProfileArg="--profile $profile"
+    installProfileArg=$packageProfileArg
 else
-    profile="--profile release"
+    installProfileArg="--release"
+    packageProfileArg=""
 fi
 
 if [ "$INSTALL" == "True" ]; then
     pushd $SOURCEDIR
-    cargo pgrx install --sudo --pg-config $pg_config_path $profileArg
+    cargo pgrx install --sudo --pg-config $pg_config_path $installProfileArg
     popd
 elif [ "$PACKAGEDIR" != "" ]; then
     pushd $SOURCEDIR
-    cargo pgrx package --pg-config $pg_config_path --out-dir $PACKAGEDIR $profileArg --no-default-features
+    cargo pgrx package --pg-config $pg_config_path --out-dir $PACKAGEDIR $packageProfileArg --no-default-features
     popd
 fi

@@ -238,7 +238,7 @@ static bool TryUseAlternateIndexForPrimaryKeyLookup(PlannerInfo *root, RelOptInf
 													context,
 													MatchIndexPath matchIndexPath);
 static void PrimaryKeyLookupUnableToFindIndex(void);
-
+static bool IsBsonRangeArgsForFullScan(List *args);
 
 static const ForceIndexSupportFuncs ForceIndexOperatorSupport[] =
 {
@@ -302,6 +302,7 @@ extern bool LowSelectivityForLookup;
 extern bool EnableIndexOrderbyPushdown;
 extern bool EnableIndexOrderbyPushdownLegacy;
 extern bool EnableIndexOrderByReverse;
+extern bool SetSelectivityForFullScan;
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -372,6 +373,40 @@ dollar_support(PG_FUNCTION_ARGS)
 				responsePointer = (Pointer) req;
 			}
 		}
+		else if (SetSelectivityForFullScan &&
+				 IsClusterVersionAtleast(DocDB_V0, 10, 0) &&
+				 req->funcid == BsonRangeMatchFunctionId())
+		{
+			/* For fullScan for orderby, we want to ensure we mark the
+			 * selectivity as 1.0 to ensure that we say that it will select
+			 * all rows for planner estimation.
+			 */
+			if (IsBsonRangeArgsForFullScan(req->args))
+			{
+				req->selectivity = 1.0;
+				responsePointer = (Pointer) req;
+			}
+		}
+	}
+	else if (IsA(supportRequest, SupportRequestCost))
+	{
+		/* Since a fullscan qpqual is ripped out by the planner,
+		 * we simply say here that its cost is super low.
+		 */
+		SupportRequestCost *req = (SupportRequestCost *) supportRequest;
+		if (SetSelectivityForFullScan &&
+			IsClusterVersionAtleast(DocDB_V0, 10, 0) &&
+			req->funcid == BsonRangeMatchFunctionId() && req->node != NULL &&
+			IsA(req->node, FuncExpr))
+		{
+			FuncExpr *func = (FuncExpr *) req->node;
+			if (IsBsonRangeArgsForFullScan(func->args))
+			{
+				req->per_tuple = 1e-9;
+				req->startup = 0;
+				responsePointer = (Pointer) req;
+			}
+		}
 	}
 
 	PG_RETURN_POINTER(responsePointer);
@@ -432,6 +467,38 @@ bson_dollar_merge_filter_support(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_POINTER(NULL);
+}
+
+
+static bool
+IsBsonRangeArgsForFullScan(List *args)
+{
+	if (list_length(args) == 2)
+	{
+		return false;
+	}
+
+	Expr *queryVal = lsecond(args);
+	if (!IsA(queryVal, Const))
+	{
+		/* If the query value is not a constant, we can't push down */
+		return false;
+	}
+
+	Const *queryConst = (Const *) queryVal;
+	pgbson *queryBson = DatumGetPgBson(queryConst->constvalue);
+
+	pgbsonelement queryElement;
+	PgbsonToSinglePgbsonElement(queryBson, &queryElement);
+
+	DollarRangeParams rangeParams = { 0 };
+	InitializeQueryDollarRange(&queryElement, &rangeParams);
+	if (rangeParams.isFullScan)
+	{
+		return true;
+	}
+
+	return false;
 }
 
 

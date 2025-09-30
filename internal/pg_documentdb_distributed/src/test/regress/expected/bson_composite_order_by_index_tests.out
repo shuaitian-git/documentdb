@@ -2203,3 +2203,104 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM bs
          Order By: ((document <>-| '{ "a" : { "$numberInt" : "-1" } }'::bson) AND (document <>-| '{ "b" : { "$numberInt" : "-1" } }'::bson))
 (11 rows)
 
+-- test index selectivity for orderby vs filters.
+CALL documentdb_api.drop_indexes('comp_db', '{ "dropIndexes": "index_orderby_selection", "index": "a_b_c_d_1" }');
+                          retval                          
+---------------------------------------------------------------------
+ { "ok" : true, "nIndexesWas" : { "$numberLong" : "3" } }
+(1 row)
+
+CALL documentdb_api.drop_indexes('comp_db', '{ "dropIndexes": "index_orderby_selection", "index": "a_b_d_1" }');
+                          retval                          
+---------------------------------------------------------------------
+ { "ok" : true, "nIndexesWas" : { "$numberLong" : "2" } }
+(1 row)
+
+TRUNCATE documentdb_data.documents_68011;
+ANALYZE documentdb_data.documents_68011;
+-- now create 2 types of indexes: One that only matches the order by and one that matches the order and filters
+SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "createIndexes": "index_orderby_selection", "indexes": [ { "key": { "orderKey": 1, "otherPath": 1 }, "enableOrderedIndex": true, "name": "sortIndex_1" }] }', true);
+                                                                                                   create_indexes_non_concurrently                                                                                                    
+---------------------------------------------------------------------
+ { "raw" : { "defaultShard" : { "numIndexesBefore" : { "$numberInt" : "1" }, "numIndexesAfter" : { "$numberInt" : "2" }, "createdCollectionAutomatically" : false, "ok" : { "$numberInt" : "1" } } }, "ok" : { "$numberInt" : "1" } }
+(1 row)
+
+SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "createIndexes": "index_orderby_selection", "indexes": [ { "key": { "filter1": 1, "filter2": 1, "orderKey": 1, "filter3": 1 }, "enableOrderedIndex": true, "name": "filterSortIndex_1" }] }', true);
+                                                                                                   create_indexes_non_concurrently                                                                                                    
+---------------------------------------------------------------------
+ { "raw" : { "defaultShard" : { "numIndexesBefore" : { "$numberInt" : "2" }, "numIndexesAfter" : { "$numberInt" : "3" }, "createdCollectionAutomatically" : false, "ok" : { "$numberInt" : "1" } } }, "ok" : { "$numberInt" : "1" } }
+(1 row)
+
+SELECT COUNT(*) FROM ( SELECT documentdb_api.insert_one('comp_db', 'index_orderby_selection',
+    FORMAT('{ "_id": %s, "filter1": "filter1-%s", "filter2": "filter2-%s", "filter3": %s, "orderKey": %s, "otherPath": "somePath-%s" }', i, i % 10, i, i % 100, i, i)::bson) FROM generate_series(1, 10000) i) j;
+ count 
+---------------------------------------------------------------------
+ 10000
+(1 row)
+
+set documentdb.enableIndexOrderbyPushdown to on;
+reset enable_sort;
+-- this has all the paths matching.
+EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF)
+    SELECT * FROM bson_aggregation_find('comp_db', '{ "find": "index_orderby_selection", "filter": { "filter1": "filter1-5", "filter2": "filter2-55", "filter3": { "$gt": 50 } }, "sort": { "orderKey": 1 }, "limit": 10 }');
+                                                                                               QUERY PLAN                                                                                               
+---------------------------------------------------------------------
+ Limit (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
+         indexName: filterSortIndex_1
+         isMultiKey: false
+         indexBounds: ["filter1": ["filter1-5", "filter1-5"], "filter2": ["filter2-55", "filter2-55"], "orderKey": (MinKey, MaxKey), "filter3": (50, Infinity]]
+         innerScanLoops: 2 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 1)]
+         ->  Index Scan using "filterSortIndex_1" on documents_68011_680022 collection (actual rows=1 loops=1)
+               Index Cond: ((document @= '{ "filter1" : "filter1-5" }'::bson) AND (document @= '{ "filter2" : "filter2-55" }'::bson) AND (document @> '{ "filter3" : { "$numberInt" : "50" } }'::bson))
+               Order By: (document |-<> '{ "orderKey" : { "$numberInt" : "1" } }'::bson)
+(11 rows)
+
+-- this one can't push the order by but should prefer the filter.
+EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF)
+    SELECT * FROM bson_aggregation_find('comp_db', '{ "find": "index_orderby_selection", "filter": { "filter1": "filter1-5", "filter2": { "$gte": "filter2-55" }, "filter3": { "$gt": 50 } }, "sort": { "orderKey": 1 }, "limit": 10 }');
+                                                                                                  QUERY PLAN                                                                                                   
+---------------------------------------------------------------------
+ Limit (actual rows=10 loops=1)
+   ->  Sort (actual rows=10 loops=1)
+         Sort Key: (bson_orderby(document, '{ "orderKey" : { "$numberInt" : "1" } }'::bson)) NULLS FIRST
+         Sort Method: top-N heapsort  Memory: 28kB
+         ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=255 loops=1)
+               indexName: filterSortIndex_1
+               isMultiKey: false
+               indexBounds: ["filter1": ["filter1-5", "filter1-5"], "filter2": ["filter2-55", { }), "orderKey": (MinKey, MaxKey), "filter3": (50, Infinity]]
+               innerScanLoops: 501 loops
+               scanType: ordered
+               scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 36)]
+               ->  Index Scan using "filterSortIndex_1" on documents_68011_680022 collection (actual rows=255 loops=1)
+                     Index Cond: ((document @= '{ "filter1" : "filter1-5" }'::bson) AND (document @>= '{ "filter2" : "filter2-55" }'::bson) AND (document @> '{ "filter3" : { "$numberInt" : "50" } }'::bson))
+(13 rows)
+
+SELECT documentdb_api.coll_mod('comp_db', 'index_orderby_selection', '{ "collMod": "index_orderby_selection", "index": { "name": "filterSortIndex_1", "hidden": true }}');
+                                   coll_mod                                   
+---------------------------------------------------------------------
+ { "ok" : { "$numberInt" : "1" }, "hidden_old" : false, "hidden_new" : true }
+(1 row)
+
+-- now it picks the sort index
+EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF)
+    SELECT * FROM bson_aggregation_find('comp_db', '{ "find": "index_orderby_selection", "filter": { "filter1": "filter1-5", "filter2": { "$gte": "filter2-55" }, "filter3": { "$gt": 50 } }, "sort": { "orderKey": 1 }, "limit": 10 }');
+                                                                                             QUERY PLAN                                                                                              
+---------------------------------------------------------------------
+ Limit (actual rows=10 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=10 loops=1)
+         indexName: sortIndex_1
+         isMultiKey: false
+         indexBounds: ["orderKey": (MinKey, MaxKey), "otherPath": (MinKey, MaxKey)]
+         innerScanLoops: 595 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 595)]
+         ->  Index Scan using "sortIndex_1" on documents_68011_680022 collection (actual rows=10 loops=1)
+               Index Cond: (document @<> '{ "orderKey" : { "orderByScan" : { "$numberInt" : "1" } } }'::bson)
+               Order By: (document |-<> '{ "orderKey" : { "$numberInt" : "1" } }'::bson)
+               Filter: ((document @= '{ "filter1" : "filter1-5" }'::bson) AND (document @>= '{ "filter2" : "filter2-55" }'::bson) AND (document @> '{ "filter3" : { "$numberInt" : "50" } }'::bson))
+               Rows Removed by Filter: 585
+(13 rows)
+

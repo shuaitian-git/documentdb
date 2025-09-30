@@ -40,7 +40,6 @@ CALL documentdb_api_internal.delete_expired_rows(10);
 -- 4.a. Check what documents are left after purging
 SELECT shard_key_value, object_id, document  from documentdb_api.collection('db', 'ttlcoll') order by object_id;
 
-
 -- 5. TTL indexes behaves like normal indexes that are used in queries
 BEGIN;
 set local enable_seqscan TO off;
@@ -328,7 +327,6 @@ SELECT count(*) < 9900 from documentdb_api.collection('db', 'ttlRepeatedDeletes'
 SELECT count(*) < 9900 from documentdb_api.collection('db', 'ttlRepeatedDeletes2');
 END;
 
-
 -- 21. TTL index with forced ordered scan via index hints
 
 set documentdb.enableExtendedExplainPlans to on;
@@ -457,6 +455,7 @@ SET client_min_messages TO LOG;
 SET LOCAL documentdb.useIndexHintsForTTLTask to off;
 SET LOCAL documentdb.logTTLProgressActivity to on;
 SET LOCAL documentdb.enableTTLDescSort to on;
+SET LOCAL documentdb.enableIndexOrderbyPushdown to on;
 CALL documentdb_api_internal.delete_expired_rows(100);
 RESET client_min_messages;
 END;
@@ -465,13 +464,17 @@ SELECT count(*) from ( SELECT shard_key_value, object_id, document  from documen
 
 BEGIN;
 SET LOCAL documentdb.enableIndexOrderbyPushdown to on;
+set local enable_seqscan to off;
+set LOCAL enable_bitmapscan to off;
 SET client_min_messages TO INFO;
+
 -- Check ORDER BY uses index 
 EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) 
     SELECT ctid FROM documentdb_data.documents_20006_2000122
         WHERE 
         bson_dollar_lt(document, '{ "ttl" : { "$date" : { "$numberLong" : "1657900030775" } } }'::documentdb_core.bson) AND
-        documentdb_api_internal.bson_dollar_index_hint(document, 'ttl_index'::text, '{"key": {"ttl": 1}}'::documentdb_core.bson, true)
-        ORDER BY document OPERATOR(documentdb_api_internal.<>-|) '{ "ttl" : -1}'::documentdb_core.bson
+        documentdb_api_internal.bson_dollar_index_hint(document, 'ttl_index'::text, '{"key": {"ttl": 1}}'::documentdb_core.bson, true) AND
+        documentdb_api_internal.bson_dollar_fullscan(document, '{ "ttl" : -1 }'::documentdb_core.bson)
+        ORDER BY documentdb_api_catalog.bson_orderby(document, '{ "ttl" : -1}'::documentdb_core.bson)
         LIMIT 100;
 END;

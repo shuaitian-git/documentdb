@@ -59,18 +59,17 @@ Step 3. Setup DocumentDB using Docker
 ```bash
 
    # Pull the latest DocumentDB Docker image
-   docker pull ghcr.io/microsoft/documentdb/documentdb-local:latest
+   docker pull ghcr.io/documentdb/documentdb/documentdb-local:latest
 
    # Tag the image for convenience
-   docker tag ghcr.io/microsoft/documentdb/documentdb-local:latest documentdb
+   docker tag ghcr.io/documentdb/documentdb/documentdb-local:latest documentdb
 
    # Run the container with your chosen username and password
    docker run -dt -p 10260:10260 --name documentdb-container documentdb --username <YOUR_USERNAME> --password <YOUR_PASSWORD>
-   docker image rm -f ghcr.io/microsoft/documentdb/documentdb-local:latest || echo "No existing documentdb image to remove"
+   docker image rm -f ghcr.io/documentdb/documentdb/documentdb-local:latest || echo "No existing documentdb image to remove"
 
 ```
 
-> **Note:** During the transition to the Linux Foundation, Docker images may still be hosted on Microsoft's container registry. These will be migrated to the new DocumentDB organization as the transition completes.
    > **Note:** Replace `<YOUR_USERNAME>` and `<YOUR_PASSWORD>` with your desired credentials. You must set these when creating the container for authentication to work.
    > 
    > **Port Note:** Port `10260` is used by default in these instructions to avoid conflicts with other local database services. You can use port `27017` (the standard MongoDB port) or any other available port if you prefer. If you do, be sure to update the port number in both your `docker run` command and your connection string accordingly.
