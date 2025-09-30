@@ -110,6 +110,9 @@ bool ForceBitmapScanForLookup = DEFAULT_FORCE_BITMAP_SCAN_FOR_LOOKUP;
 #define DEFAULT_LOW_SELECTIVITY_FOR_LOOKUP true
 bool LowSelectivityForLookup = DEFAULT_LOW_SELECTIVITY_FOR_LOOKUP;
 
+#define DEFAULT_SET_SELECTIVITY_FOR_FULL_SCAN true
+bool SetSelectivityForFullScan = DEFAULT_SET_SELECTIVITY_FOR_FULL_SCAN;
+
 /* Remove after v110 */
 #define DEFAULT_ENABLE_RUM_INDEX_SCAN true
 bool EnableRumIndexScan = DEFAULT_ENABLE_RUM_INDEX_SCAN;
@@ -469,6 +472,13 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether or not to use low selectivity for lookup."),
 		NULL, &LowSelectivityForLookup,
 		DEFAULT_LOW_SELECTIVITY_FOR_LOOKUP,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.setSelectivityForFullScan", newGucPrefix),
+		gettext_noop("Whether or not to set the selectivity for full scans"),
+		NULL, &SetSelectivityForFullScan,
+		DEFAULT_SET_SELECTIVITY_FOR_FULL_SCAN,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

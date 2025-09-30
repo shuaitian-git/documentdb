@@ -485,3 +485,34 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT * FROM bson_aggr
 SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "createIndexes": "unique_sort", "indexes": [ { "key": { "a": 1, "b": 1 }, "enableOrderedIndex": true, "name": "a_b_1", "unique": true }] }', true);
 select COUNT(documentdb_api.insert_one('comp_db', 'unique_sort', FORMAT('{ "_id": %s, "a": %s, "b": %s, "c": %s, "d": %s }', i, i, i, i, i )::bson)) FROM generate_series(1, 100) AS i;
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_find('comp_db', '{ "find": "unique_sort", "sort": { "a": -1, "b": -1 }}');
+
+
+-- test index selectivity for orderby vs filters.
+CALL documentdb_api.drop_indexes('comp_db', '{ "dropIndexes": "index_orderby_selection", "index": "a_b_c_d_1" }');
+CALL documentdb_api.drop_indexes('comp_db', '{ "dropIndexes": "index_orderby_selection", "index": "a_b_d_1" }');
+TRUNCATE documentdb_data.documents_68011;
+ANALYZE documentdb_data.documents_68011;
+
+-- now create 2 types of indexes: One that only matches the order by and one that matches the order and filters
+SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "createIndexes": "index_orderby_selection", "indexes": [ { "key": { "orderKey": 1, "otherPath": 1 }, "enableOrderedIndex": true, "name": "sortIndex_1" }] }', true);
+SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "createIndexes": "index_orderby_selection", "indexes": [ { "key": { "filter1": 1, "filter2": 1, "orderKey": 1, "filter3": 1 }, "enableOrderedIndex": true, "name": "filterSortIndex_1" }] }', true);
+
+SELECT COUNT(*) FROM ( SELECT documentdb_api.insert_one('comp_db', 'index_orderby_selection',
+    FORMAT('{ "_id": %s, "filter1": "filter1-%s", "filter2": "filter2-%s", "filter3": %s, "orderKey": %s, "otherPath": "somePath-%s" }', i, i % 10, i, i % 100, i, i)::bson) FROM generate_series(1, 10000) i) j;
+
+set documentdb.enableIndexOrderbyPushdown to on;
+reset enable_sort;
+
+-- this has all the paths matching.
+EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF)
+    SELECT * FROM bson_aggregation_find('comp_db', '{ "find": "index_orderby_selection", "filter": { "filter1": "filter1-5", "filter2": "filter2-55", "filter3": { "$gt": 50 } }, "sort": { "orderKey": 1 }, "limit": 10 }');
+
+-- this one can't push the order by but should prefer the filter.
+EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF)
+    SELECT * FROM bson_aggregation_find('comp_db', '{ "find": "index_orderby_selection", "filter": { "filter1": "filter1-5", "filter2": { "$gte": "filter2-55" }, "filter3": { "$gt": 50 } }, "sort": { "orderKey": 1 }, "limit": 10 }');
+
+SELECT documentdb_api.coll_mod('comp_db', 'index_orderby_selection', '{ "collMod": "index_orderby_selection", "index": { "name": "filterSortIndex_1", "hidden": true }}');
+
+-- now it picks the sort index
+EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF)
+    SELECT * FROM bson_aggregation_find('comp_db', '{ "find": "index_orderby_selection", "filter": { "filter1": "filter1-5", "filter2": { "$gte": "filter2-55" }, "filter3": { "$gt": 50 } }, "sort": { "orderKey": 1 }, "limit": 10 }');

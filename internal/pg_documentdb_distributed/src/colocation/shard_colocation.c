@@ -445,7 +445,7 @@ RewriteListCollectionsQueryForDistribution(Query *source)
 										InvalidOid, DEFAULT_COLLATION_OID,
 										COERCE_EXPLICIT_CALL);
 
-	FuncExpr *castConcatExpr = makeFuncExpr(F_REGCLASS, OIDOID, list_make1(concatExpr),
+	FuncExpr *castConcatExpr = makeFuncExpr(F_TO_REGCLASS, OIDOID, list_make1(concatExpr),
 											DEFAULT_COLLATION_OID, DEFAULT_COLLATION_OID,
 											COERCE_EXPLICIT_CALL);
 

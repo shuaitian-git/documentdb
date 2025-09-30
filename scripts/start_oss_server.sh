@@ -100,6 +100,10 @@ if [ "$gatewayWorker" == "true" ]; then
   preloadLibraries="$preloadLibraries, pg_documentdb_gw_host"
 fi
 
+if [ "$useDocumentdbExtendedRum" == "true" ]; then
+  preloadLibraries="$preloadLibraries, pg_documentdb_extended_rum"
+fi
+
 source="${BASH_SOURCE[0]}"
 while [[ -h $source ]]; do
    scriptroot="$( cd -P "$( dirname "$source" )" && pwd )"
@@ -178,6 +182,7 @@ fi
 if [ "$useDocumentdbExtendedRum" == "true" ]; then
   echo "${green}Configuring PostgreSQL to use pg_documentdb_extended_rum extension instead of rum${reset}"
   echo "documentdb.rum_library_load_option = 'require_documentdb_extended_rum'" >> $postgresConfigFile
+  echo "documentdb.alternate_index_handler_name = 'extended_rum'" >> $postgresConfigFile
 fi
 
 userName=$(whoami)
@@ -188,6 +193,10 @@ StartServer $postgresDirectory $coordinatorPort
 
 if [ "$initSetup" == "true" ]; then
   SetupPostgresServerExtensions "$userName" $coordinatorPort $extensionName
+fi
+
+if [ "$useDocumentdbExtendedRum" == "true" ]; then
+  psql -p $coordinatorPort -d postgres -c "CREATE EXTENSION documentdb_extended_rum"
 fi
 
 if [ "$distributed" == "true" ]; then
