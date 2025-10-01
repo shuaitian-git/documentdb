@@ -20,9 +20,10 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     pkg-config \
     cmake \
     git \
-	locales \
-	gcc \
+    locales \
+    gcc \
     gdb \
+    clang \
     libipc-run-perl \
     unzip \
     apt-transport-https \
@@ -42,6 +43,10 @@ RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg m
     wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && \
     apt-get update && \
     rm -rf /var/lib/apt/lists/*
+
+# install mongosh
+RUN curl https://downloads.mongodb.com/compass/mongodb-mongosh_2.5.6_amd64.deb -o mongodb-mongosh_2.5.6_amd64.deb \
+         && dpkg -i mongodb-mongosh_2.5.6_amd64.deb && rm mongodb-mongosh_2.5.6_amd64.deb
 
 # Prepare for running install scripts
 ENV CLEANUP_SETUP=1

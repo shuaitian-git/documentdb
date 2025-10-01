@@ -70,7 +70,7 @@ if [ "$help" == "true" ]; then
     echo "${green}       are no longer required."
     echo "${green}[-o] - optional argument. specifies the owner for the database operations. Default is postgres."
     echo "${green}if SetupConfigurationFile not specified assumed to be"
-    echo "${green}oss/pg_documentdb_gw/SetupConfiguration.json and the default port is 10260"
+    echo "${green}pg_documentdb_gw/SetupConfiguration.json and the default port is 10260"
     exit 1
 fi
 
@@ -85,6 +85,8 @@ while [[ -L $source ]]; do
     [[ $source != /* ]] && source="$scriptroot/$source"
 done
 scriptDir="$(cd -P "$(dirname "$source")" && pwd)"
+
+. $scriptDir/utils.sh
 
 # Check if PostgreSQL is running with a timeout of 10 minutes
 timeout=600
@@ -120,25 +122,7 @@ if [ "$createUser" = "true" ]; then
         exit 1
     fi
 
-    echo "Setting up user $userName with owner $owner"
-    echo "Checking if role $userName exists..."
-    if ! psql -h "$hostname" -p "$port" -U "$owner" -d postgres -c "SELECT 1 FROM pg_roles WHERE rolname = '$userName';" | grep -q 1; then
-        echo "Role $userName does not exist. Creating role..."
-        if ! psql -h "$hostname" -p "$port" -U "$owner" -d postgres -c "CREATE ROLE \"$userName\" WITH LOGIN INHERIT PASSWORD '$userPassword' IN ROLE documentdb_admin_role;"; then
-            echo "Failed to create role $userName."
-            exit 1
-        fi
-    else
-        echo "Role $userName already exists."
-    fi
-    if ! psql -h "$hostname" -p "$port" -U "$owner" -d postgres -c "ALTER ROLE \"$userName\" CREATEROLE"; then
-        echo "Failed to alter role $userName."
-        exit 1
-    fi
-    if ! psql -h "$hostname" -p "$port" -U "$owner" -d postgres -c "GRANT \"$userName\" TO $owner WITH ADMIN OPTION"; then
-        echo "Failed to grant role $userName to $owner."
-        exit 1
-    fi
+    SetupCustomAdminUser "$userName" "$userPassword" "$port" "$owner"
 else
     echo "Skipping user creation."
 fi
