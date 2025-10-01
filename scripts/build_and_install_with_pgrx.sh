@@ -9,17 +9,20 @@ set -e
 PGVERSION=""
 SOURCEDIR=""
 INSTALL="False"
+CLEAN="False"
 help="false"
 PACKAGEDIR=""
 profile=""
 
-while getopts "d:v:ihp:r:" opt; do
+while getopts "d:v:ichp:r:" opt; do
   case $opt in
     d) SOURCEDIR="$OPTARG"
     ;;
     v) PGVERSION="$OPTARG"
     ;;
     i) INSTALL="True"
+    ;;
+    c) CLEAN="True"
     ;;
     h) help="true"
     ;;
@@ -45,12 +48,18 @@ if [ "$help" == "true" ]; then
     echo "  -i                      : Install the built extension into PostgreSQL."
     echo "  -h                      : Display this help message."
     echo "  -p <package_directory>  : Directory to store the built package (optional)."
-    echo "  -r <profile>            : Build profile to use (optional, e.g., release, debug)."
+    echo "  -r <profile>            : Build profile to use (optional, e.g., release, dev)."
+    echo "  -c                      : Clean the build artifacts before building."
     exit 0
 fi
 
 if [ "$SOURCEDIR" == "" ]; then
     SOURCEDIR=$(pwd)
+fi
+
+if [ ! -f "$SOURCEDIR/Cargo.toml" ]; then
+  echo "Error: Cargo.toml not found in source directory: $SOURCEDIR"
+  exit 1
 fi
 
 if [ "$PACKAGEDIR" != "" ] && [ "$INSTALL" == "True" ]; then
@@ -59,8 +68,8 @@ if [ "$PACKAGEDIR" != "" ] && [ "$INSTALL" == "True" ]; then
 fi
 
 if [ "$PGVERSION" == "" ]; then
-    echo "Postgres version not provided. Use -v to provide Postgres version."
-    exit 1
+    PGVERSION=$(pg_config --version | awk '{print $2}' | cut -d. -f1)
+    echo "Using default PostgreSQL version: $PGVERSION"
 fi
 
 source="${BASH_SOURCE[0]}"
@@ -82,8 +91,28 @@ PATH=$pgBinDir:$PATH;
 pg_config_path=$pgBinDir/pg_config
 
 # Install cargo-pgrx
+# use cargo toml-cli to parse the toml file and get the pgrx version.
+if command -v toml > /dev/null; then
+    echo "toml-cli is already installed."
+else
+    echo "Installing toml-cli..."
+    cargo install toml-cli
+fi
+
+# Get pgrx version from Cargo.toml using toml-cli
+pgrxVersionRequired=$(toml get $SOURCEDIR/Cargo.toml dependencies.pgrx.version 2>/dev/null | tr -d '"' | sed 's/=//')
+if [ -z "$pgrxVersionRequired" ]; then
+  pgrxVersionRequired=$(toml get $SOURCEDIR/Cargo.toml dependencies.pgrx 2>/dev/null | tr -d '"' | sed 's/=//')
+fi
+
+if [ -z "$pgrxVersionRequired" ]; then
+  echo "Error: Could not find pgrx version in $SOURCEDIR/Cargo.toml"
+  exit 1
+else
+  echo "Using pgrx version $pgrxVersionRequired"
+fi
+
 pgrxInstallRequired="false"
-pgrxVersionRequired=$(grep -o 'pgrx = "[^"]*"' $SOURCEDIR/Cargo.toml | cut -d '"' -f 2 | sed 's/=//')
 if command -v cargo-pgrx > /dev/null; then
     pgrxVersionInstalled=$(cargo pgrx --version | awk '{print $2}')
     if [ "$pgrxVersionInstalled" != "$pgrxVersionRequired" ]; then
@@ -112,12 +141,14 @@ else
     packageProfileArg=""
 fi
 
-if [ "$INSTALL" == "True" ]; then
-    pushd $SOURCEDIR
-    cargo pgrx install --sudo --pg-config $pg_config_path $installProfileArg
-    popd
-elif [ "$PACKAGEDIR" != "" ]; then
-    pushd $SOURCEDIR
-    cargo pgrx package --pg-config $pg_config_path --out-dir $PACKAGEDIR $packageProfileArg --no-default-features
-    popd
+pushd $SOURCEDIR
+if [ "$CLEAN" == "True" ]; then
+    cargo clean
 fi
+
+if [ "$INSTALL" == "True" ]; then
+    cargo pgrx install --sudo --pg-config $pg_config_path $installProfileArg
+elif [ "$PACKAGEDIR" != "" ]; then
+    cargo pgrx package --pg-config $pg_config_path --out-dir $PACKAGEDIR $packageProfileArg --no-default-features
+fi
+popd

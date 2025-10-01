@@ -101,6 +101,22 @@ function SetupPostgresServerExtensions()
 }
 
 
+function SetupCustomAdminUser()
+{
+  # This sets up a user
+  local user=$1
+  local pass=$2
+  local port=$3
+  local owner=$4
+
+  echo "Setting up custom user $user with owner $owner.";
+  if ! psql -p "$port" -U "$owner" -d postgres -c "SELECT 1 FROM pg_roles WHERE rolname = '$user';" | grep -q 1; then
+    psql -p $port -U $owner -d postgres -c "SELECT documentdb_api.create_user('{\"createUser\":\"$user\", \"pwd\":\"$pass\", \"roles\":[{\"role\":\"readWriteAnyDatabase\",\"db\":\"admin\"}, {\"role\":\"clusterAdmin\",\"db\":\"admin\"}]}');";
+  else
+    echo "Role $user already exists."
+  fi
+}
+
 function InitDatabaseExtended()
 {
   local _directory=$1
