@@ -203,6 +203,7 @@ where
         ip_address.to_string(),
         Some(tls_stream.ssl()),
         connection_id,
+        "TCP".to_string(),
     );
 
     let buffered_stream = BufStream::with_capacity(
