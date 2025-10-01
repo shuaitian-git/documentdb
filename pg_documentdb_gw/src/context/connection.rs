@@ -37,6 +37,7 @@ pub struct ConnectionContext {
     pub ip_address: String,
     pub cipher_type: i32,
     pub ssl_protocol: String,
+    transport_protocol: String,
 }
 
 impl ConnectionContext {
@@ -46,6 +47,7 @@ impl ConnectionContext {
         ip_address: String,
         tls_config: Option<&SslRef>,
         connection_id: Uuid,
+        transport_protocol: String,
     ) -> Self {
         let tls_provider = service_context.tls_provider();
 
@@ -69,6 +71,7 @@ impl ConnectionContext {
             ip_address,
             cipher_type,
             ssl_protocol,
+            transport_protocol,
         }
     }
 
@@ -178,5 +181,9 @@ impl ConnectionContext {
         self.connection_id.hash(&mut hasher);
         let finished_hash = hasher.finish();
         (finished_hash & 0x7FFF_FFFF) as i64
+    }
+
+    pub fn transport_protocol(&self) -> &str {
+        &self.transport_protocol
     }
 }
