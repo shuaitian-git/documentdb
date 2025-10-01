@@ -19,7 +19,7 @@ pg18 = ["pgrx/pg18" ]
 pg_test = []
 
 [dependencies]
-pgrx = "=0.16.0"
+pgrx = { version ="=0.16.0", default-features = false }
 documentdb_gateway = { path = "../pg_documentdb_gw" }
 tokio = { version = "1", features = ["full"] }
 simple_logger = { version = "4.2.0", default-features = false, features = [

@@ -16,7 +16,9 @@ distributed="false"
 allowExternalAccess="false"
 gatewayWorker="false"
 useDocumentdbExtendedRum="false"
-while getopts "d:p:hcsxegr" opt; do
+customAdminUser="docdb_admin"
+customAdminUserPassword="Admin100"
+while getopts "d:p:u:a:hcsxegr" opt; do
   case $opt in
     d) postgresDirectory="$OPTARG"
     ;;
@@ -36,6 +38,10 @@ while getopts "d:p:hcsxegr" opt; do
     g) gatewayWorker="true"
     ;;
     r) useDocumentdbExtendedRum="true"
+    ;;
+    u) customAdminUser="$OPTARG"
+    ;;
+    a) customAdminUserPassword="$OPTARG"
     ;;
   esac
 
@@ -67,9 +73,11 @@ if [ "$help" == "true" ]; then
     echo "${green}[-x] - start oss server with documentdb_distributed extension"
     echo "${green}[-e] - optional argument. Allows PostgreSQL access from any IP address"
     echo "${green}[-p <port>] - optional argument. specifies the port for the backend"
+    echo "${green}[-u <user>] - optional argument. Specifies a custom admin user to connect to the database"
+    echo "${green}[-a <password>] - optional argument. Specifies the password for the custom admin user"
     echo "${green}[-g] - optional argument. starts the gateway worker host along with the backend"
     echo "${green}[-r] - optional argument. use the pg_documentdb_extended_rum extension instead of rum"
-    echo "${green}if postgresDir not specified assumed to be /data"
+    echo "${green}if postgresDir not specified assumed to be $HOME/.documentdb/data"
     exit 1;
 fi
 
@@ -119,7 +127,7 @@ scriptDir="$( cd -P "$( dirname "$source" )" && pwd )"
 . $scriptDir/utils.sh
 
 if [ -z $postgresDirectory ]; then
-    postgresDirectory="/data"
+    postgresDirectory="$HOME/.documentdb/data"
 fi
 
 # Only initialize if directory doesn't exist, is empty, or doesn't contain a valid PostgreSQL data directory
@@ -193,6 +201,7 @@ StartServer $postgresDirectory $coordinatorPort
 
 if [ "$initSetup" == "true" ]; then
   SetupPostgresServerExtensions "$userName" $coordinatorPort $extensionName
+  SetupCustomAdminUser "$customAdminUser" "$customAdminUserPassword" $coordinatorPort "$userName"
 fi
 
 if [ "$useDocumentdbExtendedRum" == "true" ]; then
