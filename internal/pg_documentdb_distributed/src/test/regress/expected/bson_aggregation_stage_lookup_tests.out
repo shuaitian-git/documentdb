@@ -2108,7 +2108,6 @@ BEGIN;
 set local enable_indexscan to off;
 set local enable_bitmapscan to off;
 set local enable_material to off;
-set local documentdb.useLegacyForcePushdownBehavior to off;
 EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('db',
   '{ "aggregate": "source1", "pipeline": [ 
     { "$match": { "field1": { "$eq": "value10" } } },

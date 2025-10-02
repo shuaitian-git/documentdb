@@ -400,7 +400,6 @@ static char FeatureMapping[MAX_FEATURE_COUNT][MAX_FEATURE_NAME_LENGTH] = {
 
 	/* Feature usage stats */
 	[FEATURE_USAGE_TTL_PURGER_CALLS] = "ttl_purger_calls",
-	[FEATURE_USAGE_INDEX_SCAN_WITH_LIMIT] = "index_scan_with_limit",
 
 	/* Feature mapping region - User CRUD*/
 	[FEATURE_USER_CREATE] = "user_create",

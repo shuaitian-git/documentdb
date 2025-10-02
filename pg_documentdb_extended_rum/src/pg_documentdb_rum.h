@@ -997,11 +997,8 @@ typedef enum SimilarityType
 
 #define RUM_SIMILARITY_FUNCTION_DEFAULT SMT_COSINE
 #define RUM_SIMILARITY_THRESHOLD_DEFAULT 0.5
-#define RUM_DEFAULT_ALLOW_ORDER_BY_RAW_KEYS true
-#define RUM_DEFAULT_ENABLE_REFIND_LEAF_ON_ENTRY_NEXT_ITEM true
 #define RUM_DEFAULT_THROW_ERROR_ON_INVALID_DATA_PAGE false
 #define RUM_DEFAULT_DISABLE_FAST_SCAN false
-#define RUM_DEFAULT_ENABLE_ENTRY_FIND_ITEM_ON_SCAN true
 #define RUM_DEFAULT_ENABLE_PARALLEL_INDEX_BUILD true
 #define RUM_DEFAULT_PARALLEL_INDEX_WORKERS_OVERRIDE -1
 #define RUM_DEFAULT_SKIP_RETRY_ON_DELETE_PAGE true
@@ -1015,11 +1012,8 @@ typedef enum SimilarityType
 extern int RumFuzzySearchLimit;
 extern bool RumUseNewVacuumScan;
 extern int RumDataPageIntermediateSplitSize;
-extern bool RumAllowOrderByRawKeys;
-extern bool RumEnableRefindLeafOnEntryNextItem;
 extern bool RumThrowErrorOnInvalidDataPage;
 extern bool RumDisableFastScan;
-extern bool RumEnableEntryFindItemOnScan;
 extern bool RumEnableParallelIndexBuild;
 extern int RumParallelIndexWorkersOverride;
 extern bool RumSkipRetryOnDeletePage;

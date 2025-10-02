@@ -43,11 +43,7 @@ typedef struct RumItemScanEntryBounds
 
 /* GUC parameter */
 int RumFuzzySearchLimit = 0;
-bool RumAllowOrderByRawKeys = RUM_DEFAULT_ALLOW_ORDER_BY_RAW_KEYS;
-bool RumEnableRefindLeafOnEntryNextItem =
-	RUM_DEFAULT_ENABLE_REFIND_LEAF_ON_ENTRY_NEXT_ITEM;
 bool RumDisableFastScan = RUM_DEFAULT_DISABLE_FAST_SCAN;
-bool RumEnableEntryFindItemOnScan = RUM_DEFAULT_ENABLE_ENTRY_FIND_ITEM_ON_SCAN;
 bool RumForceOrderedIndexScan = DEFAULT_FORCE_RUM_ORDERED_INDEX_SCAN;
 bool RumPreferOrderedIndexScan = RUM_DEFAULT_PREFER_ORDERED_INDEX_SCAN;
 bool RumEnableSkipIntermediateEntry = RUM_DEFAULT_ENABLE_SKIP_INTERMEDIATE_ENTRY;
@@ -1818,7 +1814,7 @@ startScan(IndexScanDesc scan)
 		scanType = RumOrderedScan;
 		startOrderedScanEntries(scan, rumstate, so);
 	}
-	else if (RumAllowOrderByRawKeys && so->norderbys > 0 &&
+	else if (so->norderbys > 0 &&
 			 so->willSort && !rumstate->useAlternativeOrder)
 	{
 		scanType = RumOrderedScan;
@@ -1989,7 +1985,7 @@ entryGetNextItem(RumState *rumstate, RumScanEntry entry, Snapshot snapshot,
 		page = BufferGetPage(entry->buffer);
 
 		/* If the page got split by the time we get here, then refind the leftmost page */
-		while (!RumPageIsLeaf(page) && RumEnableRefindLeafOnEntryNextItem)
+		while (!RumPageIsLeaf(page))
 		{
 			RumBtreeData btree;
 			BlockNumber newBlock;
@@ -2733,7 +2729,7 @@ scanGetItemRegular(IndexScanDesc scan, RumItem *advancePast,
 				   (IsScanEntryNotPast(rumstate, entry, &myAdvancePast) ||
 					IsScanEntryLessThan(rumstate, entry, &myIntermediatePast)))
 			{
-				if (!entry->isPartialMatch && RumEnableEntryFindItemOnScan &&
+				if (!entry->isPartialMatch &&
 					IsScanEntryLessThan(rumstate, entry, &myIntermediatePast))
 				{
 					entryFindItem(rumstate, entry, &myIntermediatePast,
@@ -3102,7 +3098,7 @@ entryFindItem(RumState *rumstate, RumScanEntry entry, RumItem *item, Snapshot sn
 
 	/* If the page got split by the time we get here, then refind the leftmost page */
 	page = BufferGetPage(entry->buffer);
-	while (!RumPageIsLeaf(page) && RumEnableRefindLeafOnEntryNextItem)
+	while (!RumPageIsLeaf(page))
 	{
 		RumBtreeData btree;
 		BlockNumber newBlock;
@@ -4223,7 +4219,7 @@ rumgettuple(IndexScanDesc scan, ScanDirection direction)
 		}
 
 		startScan(scan);
-		if (RumAllowOrderByRawKeys && so->scanType == RumOrderedScan)
+		if (so->scanType == RumOrderedScan)
 		{
 			so->useSimpleScan = true;
 		}

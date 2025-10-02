@@ -462,7 +462,6 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT * FROM bson_aggr
 -- if we're querying just filters, use a_b_d since it's better
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT * FROM bson_aggregation_find('comp_db', '{ "find": "index_orderby_selection", "filter": { "a": { "$in": [ 1, 2 ] }, "b": { "$in": [ 2, 3 ] }, "d": 10 } }');
 
-set documentdb.enableIndexOrderbyPushdownLegacy to on;
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT * FROM bson_aggregation_find('comp_db', '{ "find": "index_orderby_selection", "filter": { "a": { "$in": [ 1, 2 ] }, "b": { "$in": [ 2, 3 ] }, "d": 10 }, "sort": { "a": 1, "b": 1, "c": 1 } }');
 
 -- the same should work if the indexes were created in the reverse order
@@ -471,8 +470,6 @@ CALL documentdb_api.drop_indexes('comp_db', '{ "dropIndexes": "index_orderby_sel
 
 SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "createIndexes": "index_orderby_selection", "indexes": [ { "key": { "a": 1, "b": 1, "d": 1 }, "enableOrderedIndex": true, "name": "a_b_d_1" }] }', true);
 SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_db', '{ "createIndexes": "index_orderby_selection", "indexes": [ { "key": { "a": 1, "b": 1, "c": 1, "d": 1 }, "enableOrderedIndex": true, "name": "a_b_c_d_1" }] }', true);
-
-set documentdb.enableIndexOrderbyPushdownLegacy to off;
 
 -- order by should use the order by filter index (a_b_c_1)
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT * FROM bson_aggregation_find('comp_db', '{ "find": "index_orderby_selection", "filter": { "a": { "$in": [ 1, 2 ] }, "b": { "$in": [ 2, 3 ] }, "d": 10 }, "sort": { "a": 1, "b": 1, "c": 1 } }');
