@@ -980,21 +980,13 @@ BEGIN;
 SET client_min_messages TO LOG;
 SET LOCAL documentdb.logTTLProgressActivity to on;
 CALL documentdb_api_internal.delete_expired_rows(100);
-LOG:  Number of rows deleted: 0, table = documents_20006_2000104, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=1 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 100, table = documents_20006_2000105, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=1 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000106, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=1 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000107, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=1 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000108, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=1 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000109, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=1 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000110, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=1 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000111, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=1 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
 RESET client_min_messages;
 END;
@@ -1003,21 +995,13 @@ SET client_min_messages TO LOG;
 SET LOCAL documentdb.useIndexHintsForTTLTask to off;
 SET LOCAL documentdb.logTTLProgressActivity to on;
 CALL documentdb_api_internal.delete_expired_rows(100);
-LOG:  Number of rows deleted: 0, table = documents_20006_2000104, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 100, table = documents_20006_2000105, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000106, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000107, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000108, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000109, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000110, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 0, table = documents_20006_2000111, index_id=20023, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=0
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
 RESET client_min_messages;
 END;
@@ -1157,21 +1141,13 @@ SET LOCAL documentdb.logTTLProgressActivity to on;
 SET LOCAL documentdb.enableTTLDescSort to on;
 SET LOCAL documentdb.enableIndexOrderbyPushdown to on;
 CALL documentdb_api_internal.delete_expired_rows(100);
-LOG:  Number of rows deleted: 100, table = documents_20006_2000120, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=1
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 100, table = documents_20006_2000121, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=1
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 100, table = documents_20006_2000122, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=1
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 100, table = documents_20006_2000123, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=1
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 100, table = documents_20006_2000124, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=1
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 100, table = documents_20006_2000125, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=1
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 100, table = documents_20006_2000126, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=1
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
-LOG:  Number of rows deleted: 100, table = documents_20006_2000127, index_id=20025, batch_size=100, expiry_cutoff=<redacted> has_pfe=false, statement_timeout=60000, lock_timeout=10000 used_hints=0 disabled_seq_scan=0 index_is_ordered=1 use_desc_sort=1
 LOG:  TTL job elapsed time:<redacted> limit: 20000ms
 RESET client_min_messages;
 END;
