@@ -84,23 +84,6 @@ _PG_init(void)
 							 PGC_USERSET, 0,
 							 NULL, NULL, NULL);
 
-	DefineCustomBoolVariable(DOCUMENTDB_RUM_GUC_PREFIX ".enable_rum_orderby_index_scan",
-							 "Sets whether or not to allow order by in the RUM index",
-							 NULL,
-							 &RumAllowOrderByRawKeys,
-							 RUM_DEFAULT_ALLOW_ORDER_BY_RAW_KEYS,
-							 PGC_USERSET, 0,
-							 NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		DOCUMENTDB_RUM_GUC_PREFIX ".enable_rum_refind_leaf_on_entry_next_item",
-		"Sets whether or not to refind the leaf page on entry next item",
-		NULL,
-		&RumEnableRefindLeafOnEntryNextItem,
-		RUM_DEFAULT_ENABLE_REFIND_LEAF_ON_ENTRY_NEXT_ITEM,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
 	DefineCustomBoolVariable(
 		DOCUMENTDB_RUM_GUC_PREFIX ".rum_throw_error_on_invalid_data_page",
 		"Sets whether or not to throw an error on invalid data page",
@@ -116,15 +99,6 @@ _PG_init(void)
 		NULL,
 		&RumDisableFastScan,
 		RUM_DEFAULT_DISABLE_FAST_SCAN,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		DOCUMENTDB_RUM_GUC_PREFIX ".enable_rum_entry_find_item_on_scan",
-		"Sets whether or not to enable entry find item on scan",
-		NULL,
-		&RumEnableEntryFindItemOnScan,
-		RUM_DEFAULT_ENABLE_ENTRY_FIND_ITEM_ON_SCAN,
 		PGC_USERSET, 0,
 		NULL, NULL, NULL);
 

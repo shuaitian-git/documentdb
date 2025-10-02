@@ -109,7 +109,6 @@ typedef enum BackgroundIndexRunStatus
 
 extern int MaxIndexBuildAttempts;
 extern int IndexQueueEvictionIntervalInSec;
-extern bool EnableMultipleIndexBuildsPerRun;
 
 /* Do not retry the index build if error code belongs to following list. */
 static const SkippableError SkippableErrors[] = {
@@ -191,26 +190,19 @@ command_build_index_concurrently(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	if (EnableMultipleIndexBuildsPerRun)
-	{
-		BackgroundIndexRunStatus runStatus = RunStatus_NoValidIndexFound;
-		MemoryContext createContext = AllocSetContextCreate(fcinfo->flinfo->fn_mcxt,
-															"Create Index Child context",
-															ALLOCSET_DEFAULT_SIZES);
-		do {
-			runStatus = build_index_concurrently_from_indexqueue_core(createContext);
+	BackgroundIndexRunStatus runStatus = RunStatus_NoValidIndexFound;
+	MemoryContext createContext = AllocSetContextCreate(fcinfo->flinfo->fn_mcxt,
+														"Create Index Child context",
+														ALLOCSET_DEFAULT_SIZES);
+	do {
+		runStatus = build_index_concurrently_from_indexqueue_core(createContext);
 
-			/* Commit and start before doing another round */
-			PopAllActiveSnapshots();
-			CommitTransactionCommand();
-			StartTransactionCommand();
-			MemoryContextReset(createContext);
-		} while (runStatus == RunStatus_IndexBuildDone);
-	}
-	else
-	{
-		build_index_concurrently_from_indexqueue_core(fcinfo->flinfo->fn_mcxt);
-	}
+		/* Commit and start before doing another round */
+		PopAllActiveSnapshots();
+		CommitTransactionCommand();
+		StartTransactionCommand();
+		MemoryContextReset(createContext);
+	} while (runStatus == RunStatus_IndexBuildDone);
 
 	PG_RETURN_VOID();
 }

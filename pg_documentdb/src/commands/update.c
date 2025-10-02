@@ -110,7 +110,6 @@ extern int NumBsonDocumentsUpdated;
 /* This guc is temporary and is used to handle whether the parameter “bypassDocumentValidation” could be set in the request command.*/
 extern bool EnableBypassDocumentValidation;
 extern bool EnableSchemaValidation;
-extern bool UseLegacyShardKeyFilterOnUpdate;
 
 /*
  * UpdateSpec describes a single update operation.
@@ -1946,7 +1945,7 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 			argCount++;
 		}
 		else if (hasShardKeyValueFilter &&
-				 (UseLegacyShardKeyFilterOnUpdate || collection->shardKey != NULL ||
+				 (collection->shardKey != NULL ||
 				  setShardKeyValueFilter))
 		{
 			/* We align this query key to be 1 more than the base plan */
@@ -3386,7 +3385,7 @@ SelectUpdateCandidate(MongoCollection *collection, int64 shardKeyHash,
 						 CoreSchemaName,
 						 objectidSqlArg, FullBsonTypeName);
 	}
-	else if (!queryHasNonIdFilters || UseLegacyShardKeyFilterOnUpdate ||
+	else if (!queryHasNonIdFilters ||
 			 collection->shardKey != NULL || setShardKeyValueFilter)
 	{
 		/* query match handles adding shard_key_value filter in general so we add shard_key_value here only

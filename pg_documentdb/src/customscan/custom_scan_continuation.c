@@ -175,7 +175,6 @@ const StringView PrimaryKeyShardKey =
 	.string = "pk"
 };
 
-extern bool EnableRumIndexScan;
 extern bool EnablePrimaryKeyCursorScan;
 
 #define InputContinuationNodeName "ExtensionScanInputContinuation"
@@ -360,19 +359,7 @@ UpdatePathsToForceRumIndexScanToBitmapHeapScan(PlannerInfo *root, RelOptInfo *re
 			 * Let postgres deal with whether a Bitmap path or index path is better
 			 * for high limits.
 			 */
-			if (EnableRumIndexScan)
-			{
-				allowIndexScans = true;
-			}
-			else
-			{
-				/*
-				 * Queries that has limit and planned with index scan, but are being
-				 * forced to use bitmap heap scan. These queries can benefit from using
-				 * Index scan via EnableRumIndexScan.
-				 */
-				ReportFeatureUsage(FEATURE_USAGE_INDEX_SCAN_WITH_LIMIT);
-			}
+			allowIndexScans = true;
 		}
 
 		if (!allowIndexScans)

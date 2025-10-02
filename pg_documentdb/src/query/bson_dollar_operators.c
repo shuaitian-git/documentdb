@@ -284,7 +284,6 @@ typedef struct
 typedef bool (*IsQueryFilterNullFunc)(const TraverseValidateState *state);
 extern bool EnableCollation;
 extern bool EnableNowSystemVariable;
-extern bool UseLegacyNullEqualityBehavior;
 
 /* --------------------------------------------------------- */
 /* Forward declaration */
@@ -2836,7 +2835,7 @@ CompareBsonAgainstQuery(const pgbson *element,
 	bool isFilterNull = isQueryFilterNull != NULL && isQueryFilterNull(
 		&state.traverseState);
 	const TraverseBsonExecutionFuncs *execFuncs = &CompareExecutionFuncs;
-	if (isFilterNull && !UseLegacyNullEqualityBehavior)
+	if (isFilterNull)
 	{
 		/* if the filter is null, start by assuming path mismatch. If we find
 		 * pathNotFound, it'll get overwritten. This way we can track explicitly

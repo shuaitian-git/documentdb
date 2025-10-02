@@ -79,7 +79,6 @@ extern bool DefaultInlineWriteOperations;
 extern int MaxAggregationStagesAllowed;
 extern bool EnableIndexOrderbyPushdown;
 extern bool EnableIndexHintSupport;
-extern bool EnableIndexOrderbyPushdownLegacy;
 
 /* GUC to config tdigest compression */
 extern int TdigestCompressionAccuracy;
@@ -4635,42 +4634,7 @@ CanPushSortFilterToIndex(Query *query)
 
 	RangeTblRef *rtref = linitial(query->jointree->fromlist);
 	RangeTblEntry *entry = rt_fetch(rtref->rtindex, query->rtable);
-	if (entry->rtekind != RTE_RELATION)
-	{
-		return false;
-	}
-
-	if (!EnableIndexOrderbyPushdownLegacy)
-	{
-		return true;
-	}
-
-	/* If there's no quals, we can push a full scan order by */
-	if (query->jointree->quals == NULL)
-	{
-		return true;
-	}
-
-	if (!IsA(query->jointree->quals, OpExpr))
-	{
-		return false;
-	}
-
-	OpExpr *opExpr = (OpExpr *) query->jointree->quals;
-	if (opExpr->opno != BigintEqualOperatorId())
-	{
-		return false;
-	}
-
-	if (IsA(linitial(opExpr->args), Var) &&
-		castNode(Var, linitial(opExpr->args))->varattno ==
-		DOCUMENT_DATA_TABLE_SHARD_KEY_VALUE_VAR_ATTR_NUMBER)
-	{
-		return true;
-	}
-
-	/* Unknown case */
-	return false;
+	return entry->rtekind == RTE_RELATION;
 }
 
 

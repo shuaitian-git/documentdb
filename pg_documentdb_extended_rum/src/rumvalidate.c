@@ -245,7 +245,7 @@ rumvalidate(Oid opclassoid)
 												INTERNALOID, INTERNALOID,
 												INTERNALOID, INTERNALOID);
 				}
-				else if (RumAllowOrderByRawKeys)
+				else
 				{
 					ok = check_amproc_signature(procform->amproc, opcintype, false,
 												4, 4,
@@ -262,12 +262,6 @@ rumvalidate(Oid opclassoid)
 						hasRawOrderingProc = true;
 					}
 				}
-				else
-				{
-					ok = check_amproc_signature(procform->amproc, FLOAT8OID, false,
-												3, 3,
-												opcintype, opcintype, INT2OID);
-				}
 				break;
 			}
 
@@ -278,7 +272,7 @@ rumvalidate(Oid opclassoid)
 											opcintype_overload, opcintype_overload,
 											INT2OID);
 
-				if (!ok && RumAllowOrderByRawKeys)
+				if (!ok)
 				{
 					ok = check_amproc_signature(procform->amproc, opckeytype, false,
 												4, 4,
@@ -356,7 +350,7 @@ rumvalidate(Oid opclassoid)
 							 format_operator(oprform->amopopr))));
 				result = false;
 			}
-			else if (RumAllowOrderByRawKeys && hasRawOrderingProc &&
+			else if (hasRawOrderingProc &&
 					 oprform->amoplefttype != TSVECTOROID &&
 					 check_amop_signature(oprform->amopopr, opcintype,
 										  oprform->amoplefttype,
