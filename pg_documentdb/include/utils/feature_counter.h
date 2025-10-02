@@ -387,7 +387,6 @@ typedef enum
 
 	/* Feature usage stats */
 	FEATURE_USAGE_TTL_PURGER_CALLS,
-	FEATURE_USAGE_INDEX_SCAN_WITH_LIMIT,
 
 	/* Feature mapping region - User CRUD*/
 	FEATURE_USER_CREATE,

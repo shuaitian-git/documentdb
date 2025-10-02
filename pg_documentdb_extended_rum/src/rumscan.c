@@ -23,8 +23,6 @@
 
 #include "pg_documentdb_rum.h"
 
-extern bool RumAllowOrderByRawKeys;
-
 IndexScanDesc
 rumbeginscan(Relation rel, int nkeys, int norderbys)
 {
@@ -204,10 +202,7 @@ rumFillScanKey(RumScanOpaque so, OffsetNumber attnum,
 		}
 
 		/* Add key to order by additional information... */
-		if (key->attnum == rumstate->attrnAttachColumn ||
-
-		    /* ...add key to order by index key value */
-			(key->useCurKey && !RumAllowOrderByRawKeys))
+		if (key->attnum == rumstate->attrnAttachColumn)
 		{
 			Form_pg_attribute attr = RumTupleDescAttr(rumstate->origTupdesc,
 													  attnum - 1);
@@ -287,7 +282,7 @@ rumFillScanKey(RumScanOpaque so, OffsetNumber attnum,
 			{
 				/* These are default rum ordering things - let it be */
 			}
-			else if (numOrderingArgs == 4 && RumAllowOrderByRawKeys)
+			else if (numOrderingArgs == 4)
 			{
 				/* This is ordering by raw key - let it be */
 				so->willSort = true;
