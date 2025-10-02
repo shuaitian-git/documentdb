@@ -57,6 +57,9 @@ typedef struct TtlIndexEntry
 	/* ID of the collection */
 	uint64 collectionId;
 
+	/* The shardid being pruned */
+	uint64 shardId;
+
 	/* The TTL index id */
 	uint64 indexId;
 
@@ -149,6 +152,7 @@ delete_expired_rows_for_index(PG_FUNCTION_ARGS)
 
 	TtlIndexEntry indexEntry = {
 		.collectionId = collectionId,
+		.shardId = shardId,
 		.indexId = indexId,
 		.indexKeyDatum = indexKeyDatum,
 		.indexPfeDatum = partialFilterDatum,
@@ -783,18 +787,30 @@ DeleteExpiredRowsForIndexCore(char *tableName, TtlIndexEntry *indexEntry, int64
 		SPI_OK_DELETE,
 		TTLPurgerStatementTimeout, TTLPurgerLockTimeout);
 
-	if (true)
+	if (LogTTLProgressActivity)
 	{
-		ereport(LOG,
-				errmsg(
-					"Number of rows deleted: %ld, table = %s, index_id=%lu, batch_size=%d, expiry_cutoff=%ld, has_pfe=%s, statement_timeout=%d, lock_timeout=%d used_hints=%d disabled_seq_scan=%d index_is_ordered=%d use_desc_sort=%d",
-					(int64) rowsCount, tableName, indexEntry->indexId,
-					ttlDeleteBatchSize,
-					currentTime - indexExpiryMilliseconds, (argCount == 2) ? "true" :
-					"false",
-					TTLPurgerStatementTimeout, TTLPurgerLockTimeout,
-					useIndexHintsForTTLQuery, disableSeqAndBitmapScan,
-					indexEntry->indexIsOrdered, useDescendingSort));
+		uint64 shardId = indexEntry->shardId;
+		if (shardId == 0 && strncmp(tableName, "documents_", 10) == 0)
+		{
+			/* Compute the shardId from the table if applicable */
+			char *numEndPointer = NULL;
+			uint64 parsedCollectionId = strtoull(&tableName[10], &numEndPointer, 10);
+			if (parsedCollectionId == indexEntry->collectionId &&
+				numEndPointer != NULL && numEndPointer[0] == '_' &&
+				numEndPointer[1] != '\0')
+			{
+				shardId = strtoull(&numEndPointer[1], &numEndPointer, 10);
+			}
+		}
+
+		elog_unredacted(
+			"Number of rows deleted: %ld, collectionId = %lu, shardId=%lu, index_id=%lu, batch_size=%d, expiry_cutoff=%ld, has_pfe=%d, statement_timeout=%d, lock_timeout=%d used_hints=%d disabled_seq_scan=%d index_is_ordered=%d use_desc_sort=%d",
+			(int64) rowsCount, indexEntry->collectionId,
+			shardId, indexEntry->indexId, ttlDeleteBatchSize,
+			currentTime - indexExpiryMilliseconds, (argCount == 2),
+			TTLPurgerStatementTimeout, TTLPurgerLockTimeout,
+			useIndexHintsForTTLQuery, disableSeqAndBitmapScan,
+			indexEntry->indexIsOrdered, useDescendingSort);
 	}
 
 	if (rowsCount > 0)
