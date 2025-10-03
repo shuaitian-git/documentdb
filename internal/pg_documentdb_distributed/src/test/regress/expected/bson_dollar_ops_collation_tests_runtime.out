@@ -3163,7 +3163,7 @@ SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "pr
  { "_id" : "bat", "a" : "bat", "newField" : false }
 (5 rows)
 
--- test $find auto $$NOW generation
+-- test $find without auto variables ($$NOW) generation
 BEGIN;
 SET LOCAL documentdb.enableNowSystemVariable='off';
 SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "projection": { "a": 1, "newField": { "$gte": ["$a", "CAT"] } }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "en", "strength" : 3} }');
@@ -5181,6 +5181,159 @@ SELECT documentdb_api.drop_collection('db', 'coll_delete');
 (1 row)
 
 SELECT documentdb_api.drop_collection('db', 'coll_delete_sort');
+ drop_collection 
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- find with positional queries
+SELECT documentdb_api.insert_one('db', 'coll_find_positional', '{"_id":1, "a":"cat", "b":[{"a":"cat"},{"a":"caT"}], "c": ["cat"]}', NULL);
+NOTICE:  creating collection
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db', 'coll_find_positional', '{"_id":2, "a":"dog", "b":[{"a":"dog"},{"a":"doG"}], "c": ["dog"]}', NULL);
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db', 'coll_find_positional', '{"_id":3, "a":"caT", "b":[{"a":"caT"},{"a":"cat"}], "c": ["caT"]}', NULL);
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 3}
+}');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 1 }
+}');
+                           document                            
+---------------------------------------------------------------------
+ { "_id" : { "$numberInt" : "1" }, "b" : [ { "a" : "cat" } ] }
+ { "_id" : { "$numberInt" : "3" }, "b" : [ { "a" : "caT" } ] }
+(2 rows)
+
+EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 1 }
+}');
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       QUERY PLAN                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.document
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Query: SELECT documentdb_api_internal.bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" }, "b.$" : { "$numberInt" : "1" } }'::documentdb_core.bson, '{ "a" : "CAT", "b" : { "$elemMatch" : { "a" : "CAT" } } }'::documentdb_core.bson, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson, 'en-u-ks-level1'::text) AS document FROM documentdb_data.documents_8012_7990452 collection WHERE ((document OPERATOR(documentdb_api_catalog.#=) '{ "a" : "CAT", "collation" : "en-u-ks-level1" }'::documentdb_core.bsonquery) AND documentdb_api_catalog.bson_dollar_elemmatch(document, '{ "b" : { "a" : "CAT" }, "collation" : "en-u-ks-level1" }'::documentdb_core.bson) AND (shard_key_value OPERATOR(pg_catalog.=) '8012'::bigint)) ORDER BY (documentdb_api_internal.bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text)) USING OPERATOR(documentdb_api_internal.<<<) NULLS FIRST LIMIT '5'::bigint
+         Node: host=localhost port=58070 dbname=regression
+         ->  Limit
+               Output: (documentdb_api_internal.bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" }, "b.$" : { "$numberInt" : "1" } }'::documentdb_core.bson, '{ "a" : "CAT", "b" : { "$elemMatch" : { "a" : "CAT" } } }'::documentdb_core.bson, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson, 'en-u-ks-level1'::text)), (documentdb_api_internal.bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text))
+               ->  Sort
+                     Output: (documentdb_api_internal.bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" }, "b.$" : { "$numberInt" : "1" } }'::documentdb_core.bson, '{ "a" : "CAT", "b" : { "$elemMatch" : { "a" : "CAT" } } }'::documentdb_core.bson, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson, 'en-u-ks-level1'::text)), (documentdb_api_internal.bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text))
+                     Sort Key: (documentdb_api_internal.bson_orderby(collection.document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text)) USING <<< NULLS FIRST
+                     ->  Bitmap Heap Scan on documentdb_data.documents_8012_7990452 collection
+                           Output: documentdb_api_internal.bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" }, "b.$" : { "$numberInt" : "1" } }'::documentdb_core.bson, '{ "a" : "CAT", "b" : { "$elemMatch" : { "a" : "CAT" } } }'::documentdb_core.bson, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson, 'en-u-ks-level1'::text), documentdb_api_internal.bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text)
+                           Recheck Cond: (collection.shard_key_value = '8012'::bigint)
+                           Filter: ((collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : "CAT", "collation" : "en-u-ks-level1" }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@#?) '{ "b" : { "a" : "CAT" }, "collation" : "en-u-ks-level1" }'::documentdb_core.bson))
+                           ->  Bitmap Index Scan on _id_
+                                 Index Cond: (collection.shard_key_value = '8012'::bigint)
+(18 rows)
+
+-- sharded: find with positional queries
+SELECT documentdb_api.shard_collection('db', 'coll_find_positional', '{ "a": "hashed" }', false);
+ shard_collection 
+---------------------------------------------------------------------
+ 
+(1 row)
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 3}
+}');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 1 }
+}');
+                           document                            
+---------------------------------------------------------------------
+ { "_id" : { "$numberInt" : "1" }, "b" : [ { "a" : "cat" } ] }
+ { "_id" : { "$numberInt" : "3" }, "b" : [ { "a" : "caT" } ] }
+(2 rows)
+
+EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 1 }
+}');
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       QUERY PLAN                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+---------------------------------------------------------------------
+ Limit
+   Output: remote_scan.document, remote_scan."?sort?"
+   ->  Sort
+         Output: remote_scan.document, remote_scan."?sort?"
+         Sort Key: remote_scan."?sort?" USING <<< NULLS FIRST
+         ->  Custom Scan (Citus Adaptive)
+               Output: remote_scan.document, remote_scan."?sort?"
+               Task Count: 8
+               Tasks Shown: One of 8
+               ->  Task
+                     Query: SELECT documentdb_api_internal.bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" }, "b.$" : { "$numberInt" : "1" } }'::documentdb_core.bson, '{ "a" : "CAT", "b" : { "$elemMatch" : { "a" : "CAT" } } }'::documentdb_core.bson, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson, 'en-u-ks-level1'::text) AS document, documentdb_api_internal.bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text) AS "?sort?" FROM documentdb_data.documents_8012_7990464 collection WHERE ((document OPERATOR(documentdb_api_catalog.#=) '{ "a" : "CAT", "collation" : "en-u-ks-level1" }'::documentdb_core.bsonquery) AND documentdb_api_catalog.bson_dollar_elemmatch(document, '{ "b" : { "a" : "CAT" }, "collation" : "en-u-ks-level1" }'::documentdb_core.bson)) ORDER BY (documentdb_api_internal.bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text)) USING OPERATOR(documentdb_api_internal.<<<) NULLS FIRST LIMIT '5'::bigint
+                     Node: host=localhost port=58070 dbname=regression
+                     ->  Limit
+                           Output: (documentdb_api_internal.bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" }, "b.$" : { "$numberInt" : "1" } }'::documentdb_core.bson, '{ "a" : "CAT", "b" : { "$elemMatch" : { "a" : "CAT" } } }'::documentdb_core.bson, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson, 'en-u-ks-level1'::text)), (documentdb_api_internal.bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text))
+                           ->  Sort
+                                 Output: (documentdb_api_internal.bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" }, "b.$" : { "$numberInt" : "1" } }'::documentdb_core.bson, '{ "a" : "CAT", "b" : { "$elemMatch" : { "a" : "CAT" } } }'::documentdb_core.bson, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson, 'en-u-ks-level1'::text)), (documentdb_api_internal.bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text))
+                                 Sort Key: (documentdb_api_internal.bson_orderby(collection.document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text)) USING <<< NULLS FIRST
+                                 ->  Seq Scan on documentdb_data.documents_8012_7990464 collection
+                                       Output: documentdb_api_internal.bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" }, "b.$" : { "$numberInt" : "1" } }'::documentdb_core.bson, '{ "a" : "CAT", "b" : { "$elemMatch" : { "a" : "CAT" } } }'::documentdb_core.bson, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson, 'en-u-ks-level1'::text), documentdb_api_internal.bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::documentdb_core.bson, 'en-u-ks-level1'::text)
+                                       Filter: ((collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : "CAT", "collation" : "en-u-ks-level1" }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@#?) '{ "b" : { "a" : "CAT" }, "collation" : "en-u-ks-level1" }'::documentdb_core.bson))
+(20 rows)
+
+SELECT documentdb_api.drop_collection('db', 'coll_find_positional');
  drop_collection 
 ---------------------------------------------------------------------
  t

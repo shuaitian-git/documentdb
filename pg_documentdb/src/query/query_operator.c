@@ -556,7 +556,8 @@ CreateQualForBsonValueArrayExpression(const bson_value_t *expression)
  * typically supplied by an @@ operator).
  */
 List *
-CreateQualsForBsonValueTopLevelQueryIter(bson_iter_t *queryIter)
+CreateQualsForBsonValueTopLevelQueryIter(bson_iter_t *queryIter,
+										 const char *collationString)
 {
 	Var *var = makeVar(1, 1, INTERNALOID, -1, DEFAULT_COLLATION_OID, 0);
 	BsonQueryOperatorContext context = { 0 };
@@ -566,6 +567,11 @@ CreateQualsForBsonValueTopLevelQueryIter(bson_iter_t *queryIter)
 	context.coerceOperatorExprIfApplicable = false;
 	context.requiredFilterPathNameHashSet = NULL;
 	context.variableContext = NULL;
+
+	if (IsCollationApplicable(collationString))
+	{
+		context.collationString = collationString;
+	}
 
 	return CreateQualsFromQueryDocIterator(queryIter, &context);
 }

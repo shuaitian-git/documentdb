@@ -1690,7 +1690,8 @@ BuildBsonPathTreeForDollarProjectFind(BsonProjectionQueryState *state,
 									  BsonProjectionContext *projectionContext)
 {
 	BuildBsonPathTreeContext context = { 0 };
-	context.pathTreeState = GetPathTreeStateForFind(projectionContext->querySpec);
+	context.pathTreeState = GetPathTreeStateForFind(projectionContext->querySpec,
+													projectionContext->collationString);
 	context.allowInclusionExclusion = projectionContext->allowInclusionExclusion;
 
 	/* Set the necessary function hooks for find projection */

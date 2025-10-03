@@ -1355,7 +1355,9 @@ GetNodePositionalDataFromPath(const StringView *path,
 		if (state->positionalSpec->processedQuerySpec == NULL)
 		{
 			PositionalUpdateSpec *spec = (PositionalUpdateSpec *) state->positionalSpec;
-			spec->processedQuerySpec = GetPositionalQueryData(spec->querySpec);
+			const char *collationString = NULL;
+			spec->processedQuerySpec = GetPositionalQueryData(spec->querySpec,
+															  collationString);
 		}
 
 		return (PositionalData) {
