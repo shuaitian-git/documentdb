@@ -63,13 +63,11 @@ SELECT bson_dollar_unwind(cursorpage, '$cursor.firstBatch') FROM documentdb_api.
 -- the index is used for queries
 set enable_seqscan = off;
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 1 } }');
-                                         QUERY PLAN                                         
+                                      QUERY PLAN                                      
 ---------------------------------------------------------------------
- Bitmap Heap Scan on documents_9201_920002 collection
-   Recheck Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-   ->  Bitmap Index Scan on my_idx_1
-         Index Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(4 rows)
+ Index Scan using my_idx_1 on documents_9201_920002 collection
+   Index Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
+(2 rows)
 
 SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 1 } }');
                    document                    
@@ -193,13 +191,11 @@ SELECT bson_dollar_unwind(cursorpage, '$cursor.firstBatch') FROM documentdb_api.
 
 -- can use the index again
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 1 } }');
-                                         QUERY PLAN                                         
+                                      QUERY PLAN                                      
 ---------------------------------------------------------------------
- Bitmap Heap Scan on documents_9201_920002 collection
-   Recheck Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-   ->  Bitmap Index Scan on my_idx_1
-         Index Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(4 rows)
+ Index Scan using my_idx_1 on documents_9201_920002 collection
+   Index Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
+(2 rows)
 
 -- the row shows up from the index 
 SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 101 } }');
@@ -219,30 +215,24 @@ set citus.explain_all_tasks to on;
 BEGIN;
 set local enable_seqscan = off;
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 1 } }');
-                                                               QUERY PLAN                                                                
+                                                            QUERY PLAN                                                             
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 3
    Tasks Shown: All
    ->  Task
          Node: host=localhost port=58070 dbname=regression
-         ->  Bitmap Heap Scan on documents_9201_920004 collection
-               Recheck Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-               ->  Bitmap Index Scan on my_idx_1
-                     Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
+         ->  Index Scan using my_idx_1 on documents_9201_920004 collection
+               Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
    ->  Task
          Node: host=localhost port=58070 dbname=regression
-         ->  Bitmap Heap Scan on documents_9201_920005 collection
-               Recheck Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-               ->  Bitmap Index Scan on my_idx_1
-                     Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
+         ->  Index Scan using my_idx_1 on documents_9201_920005 collection
+               Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
    ->  Task
          Node: host=localhost port=58070 dbname=regression
-         ->  Bitmap Heap Scan on documents_9201_920006 collection
-               Recheck Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-               ->  Bitmap Index Scan on my_idx_1
-                     Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(21 rows)
+         ->  Index Scan using my_idx_1 on documents_9201_920006 collection
+               Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
+(15 rows)
 
 ROLLBACK;
 -- now hide the index again (with debug logs)
@@ -400,29 +390,23 @@ SELECT bson_dollar_unwind(cursorpage, '$cursor.firstBatch') FROM documentdb_api.
 BEGIN;
 set local enable_seqscan = off;
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 1 } }');
-                                                               QUERY PLAN                                                                
+                                                            QUERY PLAN                                                             
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 3
    Tasks Shown: All
    ->  Task
          Node: host=localhost port=58070 dbname=regression
-         ->  Bitmap Heap Scan on documents_9201_920004 collection
-               Recheck Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-               ->  Bitmap Index Scan on my_idx_1
-                     Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
+         ->  Index Scan using my_idx_1 on documents_9201_920004 collection
+               Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
    ->  Task
          Node: host=localhost port=58070 dbname=regression
-         ->  Bitmap Heap Scan on documents_9201_920005 collection
-               Recheck Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-               ->  Bitmap Index Scan on my_idx_1
-                     Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
+         ->  Index Scan using my_idx_1 on documents_9201_920005 collection
+               Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
    ->  Task
          Node: host=localhost port=58070 dbname=regression
-         ->  Bitmap Heap Scan on documents_9201_920006 collection
-               Recheck Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-               ->  Bitmap Index Scan on my_idx_1
-                     Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(21 rows)
+         ->  Index Scan using my_idx_1 on documents_9201_920006 collection
+               Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
+(15 rows)
 
 ROLLBACK;

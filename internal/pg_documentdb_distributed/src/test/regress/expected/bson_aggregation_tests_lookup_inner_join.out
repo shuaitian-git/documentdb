@@ -157,7 +157,7 @@ set local documentdb.enableLookupInnerJoin to off;
 -- LEFT JOIN with force bitmap scan, should use materialize seq scan
 EXPLAIN (SUMMARY OFF, COSTS OFF) SELECT document FROM bson_aggregation_pipeline('lookupdb', 
     '{ "aggregate": "planes", "pipeline": [ { "$match": { "model": { "$exists": true } } }, { "$lookup": { "from": "gate_availability", "as": "matched_docs", "localField": "model", "foreignField": "plane_model" } }, { "$unwind": "$matched_docs" } ], "cursor": {} }');
-                                                                                                                                   QUERY PLAN                                                                                                                                    
+                                                                                                                            QUERY PLAN                                                                                                                             
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
@@ -165,21 +165,20 @@ EXPLAIN (SUMMARY OFF, COSTS OFF) SELECT document FROM bson_aggregation_pipeline(
    ->  Task
          Node: host=localhost port=58070 dbname=regression
          ->  Nested Loop
-               Join Filter: documentdb_api_internal.bson_dollar_lookup_join_filter(collection_0_1.document, documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "plane_model" : "model" }'::documentdb_core.bson), 'plane_model'::text)
                ->  Bitmap Heap Scan on documents_7311_731002 collection
                      Recheck Cond: (document OPERATOR(documentdb_api_catalog.@>=) '{ "model" : { "$minKey" : 1 } }'::documentdb_core.bson)
                      ->  Bitmap Index Scan on planes_model_1
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>=) '{ "model" : { "$minKey" : 1 } }'::documentdb_core.bson)
-               ->  Materialize
-                     ->  Seq Scan on documents_7312_731004 collection_0_1
-                           Filter: (document IS NOT NULL)
-(14 rows)
+               ->  Index Scan using plane_model_1 on documents_7312_731004 collection_0_1
+                     Index Cond: (document OPERATOR(documentdb_api_catalog.@*=) documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "plane_model" : "model" }'::documentdb_core.bson))
+                     Filter: documentdb_api_internal.bson_dollar_lookup_join_filter(document, documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "plane_model" : "model" }'::documentdb_core.bson), 'plane_model'::text)
+(13 rows)
 
 set local documentdb.enableLookupInnerJoin to on;
 -- RIGHT JOIN with force bitmap scan, should use materialize seq scan
 EXPLAIN (SUMMARY OFF, COSTS OFF) SELECT document FROM bson_aggregation_pipeline('lookupdb', 
     '{ "aggregate": "planes", "pipeline": [ { "$match": { "model": { "$exists": true } } }, { "$lookup": { "from": "gate_availability", "as": "matched_docs", "localField": "model", "foreignField": "plane_model" } }, { "$unwind": "$matched_docs" } ], "cursor": {} }');
-                                                                                                                                   QUERY PLAN                                                                                                                                    
+                                                                                                                            QUERY PLAN                                                                                                                             
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
@@ -187,13 +186,13 @@ EXPLAIN (SUMMARY OFF, COSTS OFF) SELECT document FROM bson_aggregation_pipeline(
    ->  Task
          Node: host=localhost port=58070 dbname=regression
          ->  Nested Loop
-               Join Filter: documentdb_api_internal.bson_dollar_lookup_join_filter(collection_0_1.document, documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "plane_model" : "model" }'::documentdb_core.bson), 'plane_model'::text)
                ->  Bitmap Heap Scan on documents_7311_731002 collection
                      Recheck Cond: (document OPERATOR(documentdb_api_catalog.@>=) '{ "model" : { "$minKey" : 1 } }'::documentdb_core.bson)
                      ->  Bitmap Index Scan on planes_model_1
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>=) '{ "model" : { "$minKey" : 1 } }'::documentdb_core.bson)
-               ->  Materialize
-                     ->  Seq Scan on documents_7312_731004 collection_0_1
+               ->  Index Scan using plane_model_1 on documents_7312_731004 collection_0_1
+                     Index Cond: (document OPERATOR(documentdb_api_catalog.@*=) documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "plane_model" : "model" }'::documentdb_core.bson))
+                     Filter: documentdb_api_internal.bson_dollar_lookup_join_filter(document, documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "plane_model" : "model" }'::documentdb_core.bson), 'plane_model'::text)
 (13 rows)
 
 set local documentdb.forceBitmapScanForLookup to off;

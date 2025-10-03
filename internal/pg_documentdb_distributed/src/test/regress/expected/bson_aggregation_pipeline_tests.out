@@ -488,14 +488,14 @@ SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "aggregatio
 (2 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "aggregation_pipeline", "pipeline": [ { "$group": { "_id": { "$mod": [ { "$toInt": "$_id" }, 2 ] }, "d": { "$first": "$_id" }, "e": { "$last":  "$_id" } } }], "cursor": {} }');
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               QUERY PLAN                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 QUERY PLAN                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Output: remote_scan.document
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Query: SELECT documentdb_core.bson_repath_and_build(c1, c2, c3, c4, c5, c6) AS document FROM (SELECT '_id'::text AS c1, documentdb_api_internal.bson_expression_get(agg_stage_0_1.document, '{ "" : { "$mod" : [ { "$toInt" : "$_id" }, { "$numberInt" : "2" } ] } }'::documentdb_core.bson, true, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson) AS c2, 'd'::text AS c3, documentdb_api_catalog.bsonfirstonsorted(documentdb_api_internal.bson_expression_get(agg_stage_0_1.document, '{ "" : "$_id" }'::documentdb_core.bson, true, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson)) AS c4, 'e'::text AS c5, documentdb_api_catalog.bsonlastonsorted(documentdb_api_internal.bson_expression_get(agg_stage_0_1.document, '{ "" : "$_id" }'::documentdb_core.bson, true, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson)) AS c6 FROM (SELECT collection.document FROM documentdb_data.documents_4110_411001 collection WHERE (collection.shard_key_value OPERATOR(pg_catalog.=) '4110'::bigint)) agg_stage_0_1 GROUP BY (documentdb_api_internal.bson_expression_get(agg_stage_0_1.document, '{ "" : { "$mod" : [ { "$toInt" : "$_id" }, { "$numberInt" : "2" } ] } }'::documentdb_core.bson, true, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson))) agg_stage_0
+         Query: SELECT documentdb_core.bson_repath_and_build(c1, c2, c3, c4, c5, c6) AS document FROM (SELECT '_id'::text AS c1, documentdb_api_internal.bson_expression_get(collection.document, '{ "" : { "$mod" : [ { "$toInt" : "$_id" }, { "$numberInt" : "2" } ] } }'::documentdb_core.bson, true, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson) AS c2, 'd'::text AS c3, documentdb_api_catalog.bsonfirstonsorted(documentdb_api_internal.bson_expression_get(collection.document, '{ "" : "$_id" }'::documentdb_core.bson, true, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson)) AS c4, 'e'::text AS c5, documentdb_api_catalog.bsonlastonsorted(documentdb_api_internal.bson_expression_get(collection.document, '{ "" : "$_id" }'::documentdb_core.bson, true, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson)) AS c6 FROM documentdb_data.documents_4110_411001 collection WHERE (collection.shard_key_value OPERATOR(pg_catalog.=) '4110'::bigint) GROUP BY (documentdb_api_internal.bson_expression_get(collection.document, '{ "" : { "$mod" : [ { "$toInt" : "$_id" }, { "$numberInt" : "2" } ] } }'::documentdb_core.bson, true, '{ "now" : NOW_SYS_VARIABLE }'::documentdb_core.bson))) agg_stage_0
          Node: host=localhost port=58070 dbname=regression
          ->  Subquery Scan on agg_stage_0
                Output: documentdb_core.bson_repath_and_build(agg_stage_0.c1, agg_stage_0.c2, agg_stage_0.c3, agg_stage_0.c4, agg_stage_0.c5, agg_stage_0.c6)
@@ -1510,7 +1510,7 @@ $Q$);
    ->  Distributed Subplan X_X
          ->  Limit
                ->  Sort
-                     Sort Key: remote_scan."?sort?" DESC NULLS LAST
+                     Sort Key: remote_scan."?sort?" USING >>> NULLS LAST
                      ->  Custom Scan (Citus Adaptive)
                            Task Count: 8
                            Tasks Shown: One of 8
@@ -1518,7 +1518,7 @@ $Q$);
                                  Node: host=localhost port=58070 dbname=regression
                                  ->  Limit
                                        ->  Sort
-                                             Sort Key: (documentdb_api_catalog.bson_orderby(document, '{ "_id" : { "$numberDouble" : "-1.0" } }'::documentdb_core.bson)) DESC NULLS LAST
+                                             Sort Key: (documentdb_api_catalog.bson_orderby(document, '{ "_id" : { "$numberDouble" : "-1.0" } }'::documentdb_core.bson)) USING >>> NULLS LAST
                                              ->  Seq Scan on documents_4112_411056 collection
                                                    Filter: (((document OPERATOR(documentdb_api_catalog.@<) '{ "_id" : { "$numberDouble" : "9999.0" } }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@!=) '{ "some_other_field" : { "$numberDouble" : "3.0" } }'::documentdb_core.bson)) OR (document OPERATOR(documentdb_api_catalog.@=) '{ "this_predicate_matches_nothing" : true }'::documentdb_core.bson))
    Task Count: 1
@@ -1547,7 +1547,7 @@ $Q$);
          ->  Subquery Scan on agg_stage_3
                ->  Limit
                      ->  Sort
-                           Sort Key: (documentdb_api_catalog.bson_orderby(collection.document, '{ "_id" : { "$numberDouble" : "-1.0" } }'::documentdb_core.bson)) DESC NULLS LAST
+                           Sort Key: (documentdb_api_catalog.bson_orderby(collection.document, '{ "_id" : { "$numberDouble" : "-1.0" } }'::documentdb_core.bson)) USING >>> NULLS LAST
                            ->  Seq Scan on documents_4110_411001 collection
                                  Filter: (((document OPERATOR(documentdb_api_catalog.@<) '{ "_id" : { "$numberDouble" : "9999.0" } }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@!=) '{ "some_other_field" : { "$numberDouble" : "3.0" } }'::documentdb_core.bson)) OR (document OPERATOR(documentdb_api_catalog.@=) '{ "this_predicate_matches_nothing" : true }'::documentdb_core.bson))
 (11 rows)
