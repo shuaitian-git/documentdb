@@ -38,6 +38,12 @@ bool IsNativeAuthEnabled = DEFAULT_ENABLE_NATIVE_AUTHENTICATION;
 #define DEFAULT_ENABLE_ROLE_CRUD false
 bool EnableRoleCrud = DEFAULT_ENABLE_ROLE_CRUD;
 
+#define DEFAULT_ENABLE_USERS_ADMIN_DB_CHECK false
+bool EnableUsersAdminDBCheck = DEFAULT_ENABLE_USERS_ADMIN_DB_CHECK;
+
+#define DEFAULT_ENABLE_ROLES_ADMIN_DB_CHECK true
+bool EnableRolesAdminDBCheck = DEFAULT_ENABLE_ROLES_ADMIN_DB_CHECK;
+
 /*
  * SECTION: Vector Search flags
  */
@@ -532,5 +538,19 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to delay holding the portal until we know there is more data to be fetched."),
 		NULL, &EnableDelayedHoldPortal, DEFAULT_ENABLE_DELAYED_HOLD_PORTAL,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableUsersAdminDBCheck", newGucPrefix),
+		gettext_noop(
+			"Enables db admin requirement for user CRUD APIs through the data plane."),
+		NULL, &EnableUsersAdminDBCheck, DEFAULT_ENABLE_USERS_ADMIN_DB_CHECK,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableRolesAdminDBCheck", newGucPrefix),
+		gettext_noop(
+			"Enables db admin requirement for role CRUD APIs through the data plane."),
+		NULL, &EnableRolesAdminDBCheck, DEFAULT_ENABLE_ROLES_ADMIN_DB_CHECK,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }
