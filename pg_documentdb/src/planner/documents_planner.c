@@ -538,10 +538,20 @@ ExtensionRelPathlistHookCoreNew(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	 * Streaming cursors auto convert into Bitmap Paths.
 	 * Handle force conversion of bitmap paths.
 	 */
-	if (!updatedPaths &&
-		IsBitmapHeapConversionSupported(root, rel))
+	if (!updatedPaths)
 	{
-		UpdatePathsToForceRumIndexScanToBitmapHeapScan(root, rel);
+		if (IsBitmapHeapConversionSupported(root, rel))
+		{
+			UpdatePathsToForceRumIndexScanToBitmapHeapScan(root, rel);
+		}
+		else if (indexContext.forceIndexQueryOpData.type == ForceIndexOpType_Text)
+		{
+			/* Text indexes require bitmap paths since we leverage bitmapquals
+			 * to run the meta_qual.
+			 * TODO support indexscan if available.
+			 */
+			UpdatePathsToForceRumIndexScanToBitmapHeapScan(root, rel);
+		}
 	}
 
 	/* For vector, text search inject custom scan path to track lifetime of

@@ -48,13 +48,11 @@ SELECT documentdb_api_catalog.bson_dollar_unwind(cursorpage, '$cursor.firstBatch
 -- the index is used for queries
 set enable_seqscan = off;
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 1 } }');
-                                         QUERY PLAN                                         
---------------------------------------------------------------------------------------------
- Bitmap Heap Scan on documents_8701 collection
-   Recheck Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-   ->  Bitmap Index Scan on my_idx_1
-         Index Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(4 rows)
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Index Scan using my_idx_1 on documents_8701 collection
+   Index Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
+(2 rows)
 
 SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 1 } }');
                    document                    
@@ -152,13 +150,11 @@ SELECT documentdb_api_catalog.bson_dollar_unwind(cursorpage, '$cursor.firstBatch
 
 -- can use the index again
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 1 } }');
-                                         QUERY PLAN                                         
---------------------------------------------------------------------------------------------
- Bitmap Heap Scan on documents_8701 collection
-   Recheck Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-   ->  Bitmap Index Scan on my_idx_1
-         Index Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(4 rows)
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Index Scan using my_idx_1 on documents_8701 collection
+   Index Cond: (document @= '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
+(2 rows)
 
 -- the row shows up from the index 
 SELECT document FROM bson_aggregation_find('collmod', '{ "find": "coll_mod_test_hidden", "filter": { "a": 101 } }');

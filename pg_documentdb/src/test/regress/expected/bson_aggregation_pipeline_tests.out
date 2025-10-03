@@ -1416,7 +1416,7 @@ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_pipeline('db', '{ "agg
  Subquery Scan on agg_stage_3
    ->  Limit
          ->  Sort
-               Sort Key: (bson_orderby(collection.document, '{ "_id" : { "$numberDouble" : "-1.0" } }'::bson)) DESC NULLS LAST
+               Sort Key: (bson_orderby(collection.document, '{ "_id" : { "$numberDouble" : "-1.0" } }'::bson)) USING >>> NULLS LAST
                ->  Seq Scan on documents_3503 collection
                      Filter: (((document @< '{ "_id" : { "$numberDouble" : "9999.0" } }'::bson) AND (document @!= '{ "some_other_field" : { "$numberDouble" : "3.0" } }'::bson)) OR (document @= '{ "this_predicate_matches_nothing" : true }'::bson))
 (6 rows)
@@ -1427,7 +1427,7 @@ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_pipeline('db', '{ "agg
  Subquery Scan on agg_stage_3
    ->  Limit
          ->  Sort
-               Sort Key: (bson_orderby(collection.document, '{ "_id" : { "$numberDouble" : "-1.0" } }'::bson)) DESC NULLS LAST
+               Sort Key: (bson_orderby(collection.document, '{ "_id" : { "$numberDouble" : "-1.0" } }'::bson)) USING >>> NULLS LAST
                ->  Seq Scan on documents_3500 collection
                      Filter: (((document @< '{ "_id" : { "$numberDouble" : "9999.0" } }'::bson) AND (document @!= '{ "some_other_field" : { "$numberDouble" : "3.0" } }'::bson)) OR (document @= '{ "this_predicate_matches_nothing" : true }'::bson))
 (6 rows)

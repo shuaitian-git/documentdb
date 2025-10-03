@@ -1683,12 +1683,10 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                      innerScanLoops: 0 loops
                      scanType: regular
                      scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 0)]
-                     ->  Bitmap Heap Scan on documentdb_data.documents_1200_1200005 collection (actual rows=0 loops=1)
+                     ->  Index Scan using queryoperator_b_a on documentdb_data.documents_1200_1200005 collection (actual rows=0 loops=1)
                            Output: object_id, document
-                           Recheck Cond: ((collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "b" : null }'::documentdb_core.bson))
-                           ->  Bitmap Index Scan on queryoperator_b_a (actual rows=0 loops=1)
-                                 Index Cond: ((collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "b" : null }'::documentdb_core.bson))
-(26 rows)
+                           Index Cond: ((collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "b" : null }'::documentdb_core.bson))
+(24 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$and" : [ { "a": 3 }, { "$or": [ { "b": null }, { "b": { "$exists": true }} ] } ] }' ORDER BY object_id;
                                                                                                                                                                                                                                                     QUERY PLAN                                                                                                                                                                                                                                                     
@@ -1902,7 +1900,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Sort (actual rows=25 loops=1)
                Sort Key: object_id
-               Sort Method: quicksort  Memory: 28kB
+               Sort Method: quicksort  Memory: 27kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=25 loops=1)
                      indexName: queryoperator_a_c
                      isMultiKey: true
@@ -1930,7 +1928,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Sort (actual rows=27 loops=1)
                Sort Key: object_id
-               Sort Method: quicksort  Memory: 28kB
+               Sort Method: quicksort  Memory: 27kB
                ->  Bitmap Heap Scan on documents_1200_1200005 collection (actual rows=27 loops=1)
                      Recheck Cond: (shard_key_value = '1200'::bigint)
                      Heap Blocks: exact=1
@@ -1950,7 +1948,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Sort (actual rows=25 loops=1)
                Sort Key: object_id
-               Sort Method: quicksort  Memory: 28kB
+               Sort Method: quicksort  Memory: 27kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=25 loops=1)
                      indexName: queryoperator_a_c
                      isMultiKey: true

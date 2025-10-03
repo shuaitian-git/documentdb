@@ -415,10 +415,9 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
 ---------------------------------------------------------------------
  Subquery Scan on agg_stage_1 (actual rows=3 loops=1)
    Output: bson_repath_and_build(agg_stage_1.c1, agg_stage_1.c2, agg_stage_1.c3, agg_stage_1.c4)
-   ->  HashAggregate (actual rows=3 loops=1)
+   ->  GroupAggregate (actual rows=3 loops=1)
          Output: '_id'::text, (bson_expression_get(collection.document, '{ "" : "$country" }'::bson, true, '{ "now" : NOW_SYS_VARIABLE }'::bson)), 'n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)
          Group Key: bson_expression_get(collection.document, '{ "" : "$country" }'::bson, true, '{ "now" : NOW_SYS_VARIABLE }'::bson)
-         Batches: 1  Memory Usage: 24kB
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=9 loops=1)
                Output: bson_expression_get(collection.document, '{ "" : "$country" }'::bson, true, '{ "now" : NOW_SYS_VARIABLE }'::bson)
                indexName: country_1
@@ -430,6 +429,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                ->  Index Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=9 loops=1)
                      Output: collection.document
                      Index Cond: (collection.document @>= '{ "country" : "Mexico" }'::bson)
+                     Order By: (collection.document |-<> '{ "country" : { "$numberInt" : "1" } }'::bson)
 (17 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$eq": "Mexico"}} }]}');
@@ -519,7 +519,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
 -- if we turn the GUC off by it shouldn't use index only scan
 set documentdb.enableIndexOnlyScan to off;
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$lt": "Mexico"}} }, { "$count": "count" }]}');
-                                                QUERY PLAN                                                 
+                                                     QUERY PLAN                                                      
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
    Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
@@ -530,12 +530,9 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          innerScanLoops: 6 loops
          scanType: ordered
          scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 7)]
-         ->  Bitmap Heap Scan on documentdb_data.documents_69001_690002 collection (actual rows=7 loops=1)
-               Recheck Cond: (collection.document @< '{ "country" : "Mexico" }'::bson)
-               Heap Blocks: exact=1
-               ->  Bitmap Index Scan on country_1 (actual rows=7 loops=1)
-                     Index Cond: (collection.document @< '{ "country" : "Mexico" }'::bson)
-(14 rows)
+         ->  Index Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=7 loops=1)
+               Index Cond: (collection.document @< '{ "country" : "Mexico" }'::bson)
+(11 rows)
 
 set documentdb.enableIndexOnlyScan to on;
 -- if we insert a multi-key value, it shouldn't use index only scan

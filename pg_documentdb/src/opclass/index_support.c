@@ -1783,6 +1783,7 @@ ConsiderIndexOrderByPushdown(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *
 
 	if (sortDetails == NIL || !isOrderById)
 	{
+		list_free_deep(sortDetails);
 		return;
 	}
 
