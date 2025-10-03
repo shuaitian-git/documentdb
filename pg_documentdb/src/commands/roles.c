@@ -27,6 +27,9 @@
 /* GUC to enable user crud operations */
 extern bool EnableRoleCrud;
 
+/* GUC that controls whether the DB admin check is enabled */
+extern bool EnableRolesAdminDBCheck;
+
 PG_FUNCTION_INFO_V1(command_create_role);
 PG_FUNCTION_INFO_V1(command_drop_role);
 PG_FUNCTION_INFO_V1(command_roles_info);
@@ -201,7 +204,7 @@ ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec)
 {
 	bson_iter_t createRoleIter;
 	PgbsonInitIterator(createRoleBson, &createRoleIter);
-
+	bool dbFound = false;
 	while (bson_iter_next(&createRoleIter))
 	{
 		const char *key = bson_iter_key(&createRoleIter);
@@ -266,6 +269,20 @@ ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec)
 									BsonTypeName(bson_iter_type(&createRoleIter)))));
 			}
 		}
+		else if (strcmp(key, "$db") == 0 && EnableRolesAdminDBCheck)
+		{
+			EnsureTopLevelFieldType(key, &createRoleIter, BSON_TYPE_UTF8);
+			uint32_t strLength = 0;
+			const char *dbName = bson_iter_utf8(&createRoleIter, &strLength);
+
+			dbFound = true;
+			if (strcmp(dbName, "admin") != 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"CreateRole must be called from 'admin' database.")));
+			}
+		}
 		else if (IsCommonSpecIgnoredField(key))
 		{
 			continue;
@@ -275,6 +292,12 @@ ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec)
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 							errmsg("The specified field '%s' is not supported.", key)));
 		}
+	}
+
+	if (!dbFound && EnableRolesAdminDBCheck)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("The required $db property is missing.")));
 	}
 
 	if (createRoleSpec->roleName == NULL)
@@ -353,7 +376,7 @@ ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec)
 {
 	bson_iter_t dropRoleIter;
 	PgbsonInitIterator(dropRoleBson, &dropRoleIter);
-
+	bool dbFound = false;
 	while (bson_iter_next(&dropRoleIter))
 	{
 		const char *key = bson_iter_key(&dropRoleIter);
@@ -380,6 +403,20 @@ ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec)
 
 			dropRoleSpec->roleName = pstrdup(roleNameValue);
 		}
+		else if (strcmp(key, "$db") == 0 && EnableRolesAdminDBCheck)
+		{
+			EnsureTopLevelFieldType(key, &dropRoleIter, BSON_TYPE_UTF8);
+			uint32_t strLength = 0;
+			const char *dbName = bson_iter_utf8(&dropRoleIter, &strLength);
+
+			dbFound = true;
+			if (strcmp(dbName, "admin") != 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"DropRole must be called from 'admin' database.")));
+			}
+		}
 		else if (IsCommonSpecIgnoredField(key))
 		{
 			continue;
@@ -389,6 +426,12 @@ ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec)
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 							errmsg("Unsupported field specified: '%s'.", key)));
 		}
+	}
+
+	if (!dbFound && EnableRolesAdminDBCheck)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("The required $db property is missing.")));
 	}
 
 	if (dropRoleSpec->roleName == NULL)
@@ -490,6 +533,7 @@ ParseRolesInfoSpec(pgbson *rolesInfoBson, RolesInfoSpec *rolesInfoSpec)
 	rolesInfoSpec->showBuiltInRoles = false;
 	rolesInfoSpec->showPrivileges = false;
 	bool rolesInfoFound = false;
+	bool dbFound = false;
 	while (bson_iter_next(&rolesInfoIter))
 	{
 		const char *key = bson_iter_key(&rolesInfoIter);
@@ -552,6 +596,20 @@ ParseRolesInfoSpec(pgbson *rolesInfoBson, RolesInfoSpec *rolesInfoSpec)
 									"'showPrivileges' must be a boolean value")));
 			}
 		}
+		else if (strcmp(key, "$db") == 0 && EnableRolesAdminDBCheck)
+		{
+			EnsureTopLevelFieldType(key, &rolesInfoIter, BSON_TYPE_UTF8);
+			uint32_t strLength = 0;
+			const char *dbName = bson_iter_utf8(&rolesInfoIter, &strLength);
+
+			dbFound = true;
+			if (strcmp(dbName, "admin") != 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"RolesInfo must be called from 'admin' database.")));
+			}
+		}
 		else if (IsCommonSpecIgnoredField(key))
 		{
 			continue;
@@ -561,6 +619,12 @@ ParseRolesInfoSpec(pgbson *rolesInfoBson, RolesInfoSpec *rolesInfoSpec)
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 							errmsg("Unsupported field specified: '%s'.", key)));
 		}
+	}
+
+	if (!dbFound && EnableRolesAdminDBCheck)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("The required $db property is missing.")));
 	}
 
 	if (!rolesInfoFound)

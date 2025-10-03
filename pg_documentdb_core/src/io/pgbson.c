@@ -732,7 +732,10 @@ BsonValueInitIterator(const bson_value_t *value, bson_iter_t *iterator)
 {
 	if (value->value_type != BSON_TYPE_DOCUMENT && value->value_type != BSON_TYPE_ARRAY)
 	{
-		ereport(ERROR, (errmsg("expected a document or array to init iterator")));
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg(
+							"expected a document or array to init iterator, got %s",
+							BsonTypeName(value->value_type))));
 	}
 
 	if (!bson_iter_init_from_data(iterator, value->value.v_doc.data,
