@@ -291,6 +291,15 @@ SetPointReadQualsOnIndexScan(IndexScan *indexScan, Expr *queryQuals)
 					/* Text search does not qualify here */
 					return false;
 				}
+				else if (funcExpr->funcid == BsonIndexHintFunctionOid())
+				{
+					return false;
+				}
+				else if (funcExpr->funcid == BsonFullScanFunctionOid())
+				{
+					/* Strip full scan */
+					continue;
+				}
 			}
 
 			runtimeClauses = lappend(runtimeClauses, expr);

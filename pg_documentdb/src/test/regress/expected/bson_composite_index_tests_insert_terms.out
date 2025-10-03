@@ -590,14 +590,12 @@ LOG:  Name: documents_rum_index_5609, access method: documentdb_rum, 1st opfamil
 LOG:  Name: documents_rum_index_5608, access method: documentdb_rum, 1st opfamily: bson_rum_single_path_ops, numPaths 1
 LOG:  Name: documents_rum_index_5607, access method: documentdb_rum, 1st opfamily: bson_rum_single_path_ops, numPaths 1
 LOG:  Name: documents_rum_index_5612, access method: documentdb_rum, 1st opfamily: bson_rum_single_path_ops, numPaths 3
-                                                                                                         QUERY PLAN                                                                                                          
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Bitmap Heap Scan on documentdb_data.documents_5603 collection  (cost=0.00..4.02 rows=1 width=32)
+                                                                                                      QUERY PLAN                                                                                                       
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using a_1_b_1_c_1 on documentdb_data.documents_5603 collection  (cost=0.00..4.01 rows=1 width=32)
    Output: document
-   Recheck Cond: ((collection.document @= '{ "a" : { "$numberInt" : "1" } }'::bson) AND (collection.document @>= '{ "b" : { "$minKey" : 1 } }'::bson) AND (collection.document @>= '{ "c" : { "$minKey" : 1 } }'::bson))
-   ->  Bitmap Index Scan on a_1_b_1_c_1  (cost=0.00..0.00 rows=1 width=0)
-         Index Cond: ((collection.document @= '{ "a" : { "$numberInt" : "1" } }'::bson) AND (collection.document @>= '{ "b" : { "$minKey" : 1 } }'::bson) AND (collection.document @>= '{ "c" : { "$minKey" : 1 } }'::bson))
-(5 rows)
+   Index Cond: ((collection.document @= '{ "a" : { "$numberInt" : "1" } }'::bson) AND (collection.document @>= '{ "b" : { "$minKey" : 1 } }'::bson) AND (collection.document @>= '{ "c" : { "$minKey" : 1 } }'::bson))
+(3 rows)
 
 set documentdb.enableIndexPriorityOrdering to off;
 EXPLAIN VERBOSE SELECT document FROM documentdb_api_catalog.bson_aggregation_find('comp_db', '{ "find": "comp_collection", "filter": { "a": 1, "b": {"$exists": true}, "c": {"$exists": true} } }');
@@ -608,14 +606,12 @@ LOG:  Name: documents_rum_index_5609, access method: documentdb_rum, 1st opfamil
 LOG:  Name: documents_rum_index_5608, access method: documentdb_rum, 1st opfamily: bson_rum_single_path_ops, numPaths 1
 LOG:  Name: documents_rum_index_5607, access method: documentdb_rum, 1st opfamily: bson_rum_single_path_ops, numPaths 1
 LOG:  Name: collection_pk_5603, access method: btree, 1st opfamily: integer_ops, numPaths 2
-                                                                                                         QUERY PLAN                                                                                                          
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Bitmap Heap Scan on documentdb_data.documents_5603 collection  (cost=0.00..4.02 rows=1 width=32)
+                                                                                                      QUERY PLAN                                                                                                       
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using a_1_b_1_c_1 on documentdb_data.documents_5603 collection  (cost=0.00..4.01 rows=1 width=32)
    Output: document
-   Recheck Cond: ((collection.document @= '{ "a" : { "$numberInt" : "1" } }'::bson) AND (collection.document @>= '{ "b" : { "$minKey" : 1 } }'::bson) AND (collection.document @>= '{ "c" : { "$minKey" : 1 } }'::bson))
-   ->  Bitmap Index Scan on a_1_b_1_c_1  (cost=0.00..0.00 rows=1 width=0)
-         Index Cond: ((collection.document @= '{ "a" : { "$numberInt" : "1" } }'::bson) AND (collection.document @>= '{ "b" : { "$minKey" : 1 } }'::bson) AND (collection.document @>= '{ "c" : { "$minKey" : 1 } }'::bson))
-(5 rows)
+   Index Cond: ((collection.document @= '{ "a" : { "$numberInt" : "1" } }'::bson) AND (collection.document @>= '{ "b" : { "$minKey" : 1 } }'::bson) AND (collection.document @>= '{ "c" : { "$minKey" : 1 } }'::bson))
+(3 rows)
 
 SELECT documentdb_api_internal.create_indexes_non_concurrently(
     'comp_db', '{ "createIndexes": "comp_collection", "indexes": [ { "name": "a_1_b_1_c_1_comp", "key": { "a": 1, "b": 1, "c": 1} } ] }', TRUE);
@@ -634,14 +630,12 @@ LOG:  Name: documents_rum_index_5613, access method: documentdb_rum, 1st opfamil
 LOG:  Name: documents_rum_index_5608, access method: documentdb_rum, 1st opfamily: bson_rum_single_path_ops, numPaths 1
 LOG:  Name: documents_rum_index_5607, access method: documentdb_rum, 1st opfamily: bson_rum_single_path_ops, numPaths 1
 LOG:  Name: documents_rum_index_5612, access method: documentdb_rum, 1st opfamily: bson_rum_single_path_ops, numPaths 3
-                                                                                                         QUERY PLAN                                                                                                          
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Bitmap Heap Scan on documentdb_data.documents_5603 collection  (cost=0.00..4.02 rows=1 width=32)
+                                                                                                      QUERY PLAN                                                                                                       
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using a_1_b_1_c_1_comp on documentdb_data.documents_5603 collection  (cost=0.00..4.01 rows=1 width=32)
    Output: document
-   Recheck Cond: ((collection.document @= '{ "a" : { "$numberInt" : "1" } }'::bson) AND (collection.document @>= '{ "b" : { "$minKey" : 1 } }'::bson) AND (collection.document @>= '{ "c" : { "$minKey" : 1 } }'::bson))
-   ->  Bitmap Index Scan on a_1_b_1_c_1_comp  (cost=0.00..0.00 rows=1 width=0)
-         Index Cond: ((collection.document @= '{ "a" : { "$numberInt" : "1" } }'::bson) AND (collection.document @>= '{ "b" : { "$minKey" : 1 } }'::bson) AND (collection.document @>= '{ "c" : { "$minKey" : 1 } }'::bson))
-(5 rows)
+   Index Cond: ((collection.document @= '{ "a" : { "$numberInt" : "1" } }'::bson) AND (collection.document @>= '{ "b" : { "$minKey" : 1 } }'::bson) AND (collection.document @>= '{ "c" : { "$minKey" : 1 } }'::bson))
+(3 rows)
 
 reset client_min_messages;
 reset documentdb.forceDisableSeqScan;

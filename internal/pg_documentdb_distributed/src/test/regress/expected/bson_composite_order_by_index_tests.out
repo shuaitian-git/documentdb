@@ -89,24 +89,19 @@ ANALYZE documentdb_data.documents_68001;
 set enable_seqscan to off;
 -- no pushdown
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_find('comp_db', '{ "find": "query_orderby", "filter": { "a": { "$exists": true }}, "sort": { "a": 1 } }');
-                                         QUERY PLAN                                         
+                                       QUERY PLAN                                        
 ---------------------------------------------------------------------
- Sort (actual rows=7 loops=1)
-   Sort Key: (bson_orderby(document, '{ "a" : { "$numberInt" : "1" } }'::bson)) NULLS FIRST
-   Sort Method: quicksort  Memory: 25kB
-   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=7 loops=1)
-         indexName: a_c
-         isMultiKey: false
-         indexBounds: ["a": [MinKey, MaxKey], "c": (MinKey, MaxKey)]
-         innerScanLoops: 7 loops
-         scanType: ordered
-         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 7)]
-         ->  Bitmap Heap Scan on documents_68001_680002 collection (actual rows=7 loops=1)
-               Recheck Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
-               Heap Blocks: exact=1
-               ->  Bitmap Index Scan on a_c (actual rows=7 loops=1)
-                     Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
-(15 rows)
+ Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=7 loops=1)
+   indexName: a_c
+   isMultiKey: false
+   indexBounds: ["a": [MinKey, MaxKey], "c": (MinKey, MaxKey)]
+   innerScanLoops: 7 loops
+   scanType: ordered
+   scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 7)]
+   ->  Index Scan using a_c on documents_68001_680002 collection (actual rows=7 loops=1)
+         Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+         Order By: (document |-<> '{ "a" : { "$numberInt" : "1" } }'::bson)
+(10 rows)
 
 -- now the order by succeeds with an index scan
 SET documentdb.enableIndexOrderbyPushdown to on;
@@ -1003,7 +998,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF)
 ---------------------------------------------------------------------
  Sort (actual rows=100 loops=1)
    Sort Key: (bson_orderby(document, '{ "a" : { "$numberInt" : "1" } }'::bson)) NULLS FIRST, (bson_orderby(document, '{ "_id" : { "$numberInt" : "1" } }'::bson)) NULLS FIRST
-   Sort Method: quicksort  Memory: 36kB
+   Sort Method: quicksort  Memory: 35kB
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=100 loops=1)
          indexName: a_1_id_1
          isMultiKey: true

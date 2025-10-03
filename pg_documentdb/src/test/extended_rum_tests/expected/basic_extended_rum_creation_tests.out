@@ -49,29 +49,23 @@ Check constraints:
 -- validate they're used in queries
 set enable_seqscan to off;
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('exrumdb', '{ "find": "index_creation_tests", "filter": { "a": "hello world" } }');
-                            QUERY PLAN                             
--------------------------------------------------------------------
- Bitmap Heap Scan on documents_101 collection
-   Recheck Cond: (document @= '{ "a" : "hello world" }'::bson)
-   ->  Bitmap Index Scan on a_1
-         Index Cond: (document @= '{ "a" : "hello world" }'::bson)
-(4 rows)
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Index Scan using a_1 on documents_101 collection
+   Index Cond: (document @= '{ "a" : "hello world" }'::bson)
+(2 rows)
 
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('exrumdb', '{ "find": "index_creation_tests", "filter": { "c": "hello world" } }');
-                            QUERY PLAN                             
--------------------------------------------------------------------
- Bitmap Heap Scan on documents_101 collection
-   Recheck Cond: (document @= '{ "c" : "hello world" }'::bson)
-   ->  Bitmap Index Scan on c_1
-         Index Cond: (document @= '{ "c" : "hello world" }'::bson)
-(4 rows)
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Index Scan using c_1 on documents_101 collection
+   Index Cond: (document @= '{ "c" : "hello world" }'::bson)
+(2 rows)
 
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('exrumdb', '{ "find": "index_creation_tests", "filter": { "a": "hello world", "b": "myfoo" } }');
-                                                   QUERY PLAN                                                    
------------------------------------------------------------------------------------------------------------------
- Bitmap Heap Scan on documents_101 collection
-   Recheck Cond: ((document @= '{ "a" : "hello world" }'::bson) AND (document @= '{ "b" : "myfoo" }'::bson))
-   ->  Bitmap Index Scan on "a_1_b_-1"
-         Index Cond: ((document @= '{ "a" : "hello world" }'::bson) AND (document @= '{ "b" : "myfoo" }'::bson))
-(4 rows)
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Index Scan using "a_1_b_-1" on documents_101 collection
+   Index Cond: ((document @= '{ "a" : "hello world" }'::bson) AND (document @= '{ "b" : "myfoo" }'::bson))
+(2 rows)
 

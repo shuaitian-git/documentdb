@@ -4625,7 +4625,7 @@ HandleReplaceWith(const bson_value_t *existingValue, Query *query,
  * index pushdown.
  */
 static bool
-CanPushSortFilterToIndex(Query *query)
+CanPushSortFilterToIndex(Query *query, AggregationPipelineBuildContext *context)
 {
 	if (list_length(query->jointree->fromlist) != 1)
 	{
@@ -4634,7 +4634,12 @@ CanPushSortFilterToIndex(Query *query)
 
 	RangeTblRef *rtref = linitial(query->jointree->fromlist);
 	RangeTblEntry *entry = rt_fetch(rtref->rtindex, query->rtable);
-	return entry->rtekind == RTE_RELATION;
+
+	/* Only push sort to index via meta_qual if it's a mongo collection
+	 * This means catalog tables used in listCollections and such do not
+	 * get the sort.
+	 */
+	return entry->rtekind == RTE_RELATION && context->mongoCollection != NULL;
 }
 
 
@@ -4810,7 +4815,7 @@ HandleSort(const bson_value_t *existingValue, Query *query,
 				 * If there's an orderby pushdown to the index, add a full scan clause iff
 				 * the query has no filters yet.
 				 */
-				if (CanPushSortFilterToIndex(query) && (
+				if (CanPushSortFilterToIndex(query, context) && (
 						IsClusterVersionAtLeastPatch(DocDB_V0, 103, 1) ||
 						IsClusterVersionAtLeastPatch(DocDB_V0, 104, 1) ||
 						IsClusterVersionAtleast(DocDB_V0, 105, 0)))
@@ -4825,7 +4830,6 @@ HandleSort(const bson_value_t *existingValue, Query *query,
 					query->jointree->quals = (Node *) make_ands_explicit(
 						currentQuals);
 				}
-
 
 				/* If sort by is descending use the new operators: this allows for
 				 * customization of reverse scan.
@@ -6177,7 +6181,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		 * the query has no filters yet.
 		 */
 		if (isGroupByValidForIndexPushdown &&
-			CanPushSortFilterToIndex(query) && (
+			CanPushSortFilterToIndex(query, context) && (
 				IsClusterVersionAtLeastPatch(DocDB_V0, 103, 1) ||
 				IsClusterVersionAtLeastPatch(DocDB_V0, 104, 1) ||
 				IsClusterVersionAtleast(DocDB_V0, 105, 0)))

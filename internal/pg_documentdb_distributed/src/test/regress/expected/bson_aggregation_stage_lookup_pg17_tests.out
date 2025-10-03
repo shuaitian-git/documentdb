@@ -896,12 +896,10 @@ EXPLAIN(costs off) SELECT document from bson_aggregation_pipeline('db',
                      ->  Bitmap Index Scan on _id_
                            Index Cond: (shard_key_value = '6013'::bigint)
                ->  Aggregate
-                     ->  Bitmap Heap Scan on documents_6012_60207 collection_0_1
-                           Recheck Cond: (document OPERATOR(documentdb_api_catalog.@>) '{ "order_quantity" : { "$numberInt" : "110" } }'::documentdb_core.bson)
+                     ->  Index Scan using idx_establishments_order_quantity on documents_6012_60207 collection_0_1
+                           Index Cond: (document OPERATOR(documentdb_api_catalog.@>) '{ "order_quantity" : { "$numberInt" : "110" } }'::documentdb_core.bson)
                            Filter: documentdb_api_internal.bson_dollar_lookup_join_filter(document, documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "establishment_name" : "establishment_name" }'::documentdb_core.bson), 'establishment_name'::text)
-                           ->  Bitmap Index Scan on idx_establishments_order_quantity
-                                 Index Cond: (document OPERATOR(documentdb_api_catalog.@>) '{ "order_quantity" : { "$numberInt" : "110" } }'::documentdb_core.bson)
-(16 rows)
+(14 rows)
 
 ROLLBACK;
 -- Adding a $sort in the pipeline
@@ -946,7 +944,7 @@ BEGIN;
 SET LOCAL enable_seqscan TO off;
 EXPLAIN(costs off) SELECT document from bson_aggregation_pipeline('db', 
   '{ "aggregate": "menu", "pipeline": [ { "$lookup": { "from": "establishments", "pipeline": [ { "$match": { "establishment_name" : { "$eq" : "Pizza Palace" } }}], "as": "matched_docs", "localField": "establishment_name", "foreignField": "establishment_name" }} ], "cursor": {} }');
-                                                                                                                                                                                      QUERY PLAN                                                                                                                                                                                       
+                                                                                                                                                                                   QUERY PLAN                                                                                                                                                                                    
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
@@ -959,19 +957,17 @@ EXPLAIN(costs off) SELECT document from bson_aggregation_pipeline('db',
                      ->  Bitmap Index Scan on _id_
                            Index Cond: (shard_key_value = '6013'::bigint)
                ->  Aggregate
-                     ->  Bitmap Heap Scan on documents_6012_60207 collection_0_1
-                           Recheck Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "establishment_name" : "Pizza Palace" }'::documentdb_core.bson)
+                     ->  Index Scan using idx_establishments_establishment_name on documents_6012_60207 collection_0_1
+                           Index Cond: ((document OPERATOR(documentdb_api_catalog.@=) '{ "establishment_name" : "Pizza Palace" }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@*=) documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "establishment_name" : "establishment_name" }'::documentdb_core.bson)))
                            Filter: documentdb_api_internal.bson_dollar_lookup_join_filter(document, documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "establishment_name" : "establishment_name" }'::documentdb_core.bson), 'establishment_name'::text)
-                           ->  Bitmap Index Scan on idx_establishments_establishment_name
-                                 Index Cond: ((document OPERATOR(documentdb_api_catalog.@=) '{ "establishment_name" : "Pizza Palace" }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@*=) documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "establishment_name" : "establishment_name" }'::documentdb_core.bson)))
-(16 rows)
+(14 rows)
 
 ROLLBACK;
 BEGIN;
 SET LOCAL enable_seqscan TO off;
 EXPLAIN(costs off) SELECT document from bson_aggregation_pipeline('db', 
   '{ "aggregate": "menu", "pipeline": [ { "$lookup": { "from": "establishments", "pipeline": [ { "$match": { "establishment_name" : { "$eq" : "Pizza Palace" } }}], "as": "matched_docs", "localField": "establishment_name", "foreignField": "establishment_name" }} ], "cursor": {} }');
-                                                                                                                                                                                      QUERY PLAN                                                                                                                                                                                       
+                                                                                                                                                                                   QUERY PLAN                                                                                                                                                                                    
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
@@ -984,12 +980,10 @@ EXPLAIN(costs off) SELECT document from bson_aggregation_pipeline('db',
                      ->  Bitmap Index Scan on _id_
                            Index Cond: (shard_key_value = '6013'::bigint)
                ->  Aggregate
-                     ->  Bitmap Heap Scan on documents_6012_60207 collection_0_1
-                           Recheck Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "establishment_name" : "Pizza Palace" }'::documentdb_core.bson)
+                     ->  Index Scan using idx_establishments_establishment_name on documents_6012_60207 collection_0_1
+                           Index Cond: ((document OPERATOR(documentdb_api_catalog.@=) '{ "establishment_name" : "Pizza Palace" }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@*=) documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "establishment_name" : "establishment_name" }'::documentdb_core.bson)))
                            Filter: documentdb_api_internal.bson_dollar_lookup_join_filter(document, documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "establishment_name" : "establishment_name" }'::documentdb_core.bson), 'establishment_name'::text)
-                           ->  Bitmap Index Scan on idx_establishments_establishment_name
-                                 Index Cond: ((document OPERATOR(documentdb_api_catalog.@=) '{ "establishment_name" : "Pizza Palace" }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@*=) documentdb_api_internal.bson_dollar_lookup_extract_filter_expression(collection.document, '{ "establishment_name" : "establishment_name" }'::documentdb_core.bson)))
-(16 rows)
+(14 rows)
 
 ROLLBACK;
 -- (B).4 Nested lookup pipeline (lookup pipeline containing lookup)

@@ -68,7 +68,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
 set documentdb.useNewElemMatchIndexOperatorOnPushdown to off;
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
     '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$gt": 120, "$lt": 150 } } } }');
-                                                                        QUERY PLAN                                                                         
+                                                                     QUERY PLAN                                                                      
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: price_1
@@ -77,13 +77,11 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
    innerScanLoops: 2 loops
    scanType: regular
    scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 3), (isInequality: true, estimatedEntryCount: 4)]
-   ->  Bitmap Heap Scan on documents_10641_1064002 collection (actual rows=1 loops=1)
+   ->  Index Scan using price_1 on documents_10641_1064002 collection (actual rows=1 loops=1)
+         Index Cond: ((document @> '{ "price" : { "$numberInt" : "120" } }'::bson) AND (document @< '{ "price" : { "$numberInt" : "150" } }'::bson))
          Filter: (document @#? '{ "price" : { "$gt" : { "$numberInt" : "120" }, "$lt" : { "$numberInt" : "150" } } }'::bson)
          Rows Removed by Filter: 1
-         Heap Blocks: exact=1
-         ->  Bitmap Index Scan on price_1 (actual rows=2 loops=1)
-               Index Cond: ((document @> '{ "price" : { "$numberInt" : "120" } }'::bson) AND (document @< '{ "price" : { "$numberInt" : "150" } }'::bson))
-(13 rows)
+(11 rows)
 
 reset documentdb.useNewElemMatchIndexOperatorOnPushdown;
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
@@ -250,7 +248,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
 -- disjoint filter handling for elemMatch and non elemMatch: this matches a document since these are matching different elements of the array.
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
     '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$eq": 110, "$elemMatch": { "$gt": 155, "$lt": 165 } } } }');
-                                                                                                                                                                      QUERY PLAN                                                                                                                                                                       
+                                                                                                                                                                   QUERY PLAN                                                                                                                                                                    
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: price_1
@@ -259,11 +257,8 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
    innerScanLoops: 1 loops
    scanType: regular
    scanKeyDetails: key 1: [(isInequality: false, estimatedEntryCount: 1), (isInequality: true, estimatedEntryCount: 1)]
-   ->  Bitmap Heap Scan on documents_10641_1064002 collection (actual rows=1 loops=1)
-         Recheck Cond: (document @= '{ "price" : { "$numberInt" : "110" } }'::bson)
+   ->  Index Scan using price_1 on documents_10641_1064002 collection (actual rows=1 loops=1)
+         Index Cond: ((document @= '{ "price" : { "$numberInt" : "110" } }'::bson) AND (document @<> '{ "price" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "2" }, "value" : { "$numberInt" : "155" }, "isTopLevel" : true }, { "op" : { "$numberInt" : "4" }, "value" : { "$numberInt" : "165" }, "isTopLevel" : true } ] } }'::bson))
          Filter: (document @#? '{ "price" : { "$gt" : { "$numberInt" : "155" }, "$lt" : { "$numberInt" : "165" } } }'::bson)
-         Heap Blocks: exact=1
-         ->  Bitmap Index Scan on price_1 (actual rows=1 loops=1)
-               Index Cond: ((document @= '{ "price" : { "$numberInt" : "110" } }'::bson) AND (document @<> '{ "price" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "2" }, "value" : { "$numberInt" : "155" }, "isTopLevel" : true }, { "op" : { "$numberInt" : "4" }, "value" : { "$numberInt" : "165" }, "isTopLevel" : true } ] } }'::bson))
-(13 rows)
+(10 rows)
 

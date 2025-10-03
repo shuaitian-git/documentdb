@@ -2897,12 +2897,10 @@ EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM documentdb_api.collection('
    ->  Task
          Query: SELECT document FROM documentdb_data.documents_6403_640061 collection WHERE ((document OPERATOR(documentdb_api_catalog.#>=) '{ "a.b.c" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1230" } ] }'::documentdb_core.bsonquery) AND (document OPERATOR(documentdb_api_catalog.#<=) '{ "a.b.c" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1240" } ] }'::documentdb_core.bsonquery) AND (shard_key_value OPERATOR(pg_catalog.=) '6403'::bigint))
          Node: host=localhost port=58070 dbname=regression
-         ->  Bitmap Heap Scan on documentdb_data.documents_6403_640061 collection
+         ->  Index Scan using wkey_2 on documentdb_data.documents_6403_640061 collection
                Output: document
-               Recheck Cond: (collection.document OPERATOR(documentdb_api_catalog.@<>) '{ "a.b.c" : { "min" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1230" } ], "max" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1240" } ], "minInclusive" : true, "maxInclusive" : true } }'::documentdb_core.bson)
-               ->  Bitmap Index Scan on wkey_2
-                     Index Cond: (collection.document OPERATOR(documentdb_api_catalog.@<>) '{ "a.b.c" : { "min" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1230" } ], "max" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1240" } ], "minInclusive" : true, "maxInclusive" : true } }'::documentdb_core.bson)
-(12 rows)
+               Index Cond: (collection.document OPERATOR(documentdb_api_catalog.@<>) '{ "a.b.c" : { "min" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1230" } ], "max" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1240" } ], "minInclusive" : true, "maxInclusive" : true } }'::documentdb_core.bson)
+(10 rows)
 
 SELECT document FROM documentdb_api.collection('db', 'wildcard_index_truncation_tests_single_field') WHERE document @@ '{ "a.b.c": 1 }';
                                                                   document                                                                  
@@ -3072,12 +3070,10 @@ EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM documentdb_api.collection('
    ->  Task
          Query: SELECT document FROM documentdb_data.documents_6404_640074 collection WHERE ((document OPERATOR(documentdb_api_catalog.#>=) '{ "a" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1230" } ] }'::documentdb_core.bsonquery) AND (document OPERATOR(documentdb_api_catalog.#<=) '{ "a" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1240" } ] }'::documentdb_core.bsonquery) AND (shard_key_value OPERATOR(pg_catalog.=) '6404'::bigint))
          Node: host=localhost port=58070 dbname=regression
-         ->  Bitmap Heap Scan on documentdb_data.documents_6404_640074 collection
+         ->  Index Scan using wkey_3 on documentdb_data.documents_6404_640074 collection
                Output: document
-               Recheck Cond: (collection.document OPERATOR(documentdb_api_catalog.@<>) '{ "a" : { "min" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1230" } ], "max" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1240" } ], "minInclusive" : true, "maxInclusive" : true } }'::documentdb_core.bson)
-               ->  Bitmap Index Scan on wkey_3
-                     Index Cond: (collection.document OPERATOR(documentdb_api_catalog.@<>) '{ "a" : { "min" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1230" } ], "max" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1240" } ], "minInclusive" : true, "maxInclusive" : true } }'::documentdb_core.bson)
-(12 rows)
+               Index Cond: (collection.document OPERATOR(documentdb_api_catalog.@<>) '{ "a" : { "min" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1230" } ], "max" : [ { "$numberInt" : "2345" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1234" }, { "$numberInt" : "1240" } ], "minInclusive" : true, "maxInclusive" : true } }'::documentdb_core.bson)
+(10 rows)
 
 SELECT document FROM documentdb_api.collection('db', 'wildcard_index_truncation_tests_wildcard_projection') WHERE document @@ '{ "a.l.j": 1 }';
                                                       document                                                      

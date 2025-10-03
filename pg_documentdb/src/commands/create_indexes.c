@@ -378,14 +378,6 @@ IsUniqueIndex(IndexDef *indexDef)
 
 
 inline static bool
-IsWildCardIndex(IndexDef *indexDef)
-{
-	return indexDef->wildcardProjectionTree != NULL || indexDef->key->isWildcard ||
-		   indexDef->wildcardProjectionDocument != NULL;
-}
-
-
-inline static bool
 IsSinglePathIndex(IndexDef *indexDef)
 {
 	return indexDef->key->keyPathList != NULL &&
@@ -412,6 +404,19 @@ inline static bool
 IsTextIndex(IndexDef *indexDef)
 {
 	return indexDef->key->hasTextIndexes;
+}
+
+
+inline static bool
+IsWildCardIndex(IndexDef *indexDef)
+{
+	if (IsTextIndex(indexDef))
+	{
+		return false;
+	}
+
+	return indexDef->wildcardProjectionTree != NULL || indexDef->key->isWildcard ||
+		   indexDef->wildcardProjectionDocument != NULL;
 }
 
 
