@@ -801,7 +801,7 @@ SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "pr
 SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "projection": { "a": 1, "newField": { "$gte": ["$a", "CAT"] } }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "en", "strength" : 1} }');
 SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "projection": { "a": 1, "newField": { "$gte": ["$a", "CAT"] } }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "en", "strength" : 3} }');
 
--- test $find auto $$NOW generation
+-- test $find without auto variables ($$NOW) generation
 BEGIN;
 SET LOCAL documentdb.enableNowSystemVariable='off';
 SELECT document FROM bson_aggregation_find('db', '{ "find": "coll_agg_proj", "projection": { "a": 1, "newField": { "$gte": ["$a", "CAT"] } }, "sort": { "_id": 1 }, "skip": 0, "limit": 5, "collation": { "locale": "en", "strength" : 3} }');
@@ -1297,6 +1297,76 @@ ROLLBACK;
 
 SELECT documentdb_api.drop_collection('db', 'coll_delete');
 SELECT documentdb_api.drop_collection('db', 'coll_delete_sort');
+
+-- find with positional queries
+SELECT documentdb_api.insert_one('db', 'coll_find_positional', '{"_id":1, "a":"cat", "b":[{"a":"cat"},{"a":"caT"}], "c": ["cat"]}', NULL);
+SELECT documentdb_api.insert_one('db', 'coll_find_positional', '{"_id":2, "a":"dog", "b":[{"a":"dog"},{"a":"doG"}], "c": ["dog"]}', NULL);
+SELECT documentdb_api.insert_one('db', 'coll_find_positional', '{"_id":3, "a":"caT", "b":[{"a":"caT"},{"a":"cat"}], "c": ["caT"]}', NULL);
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 3}
+}');
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 1 }
+}');
+
+EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 1 }
+}');
+
+-- sharded: find with positional queries
+SELECT documentdb_api.shard_collection('db', 'coll_find_positional', '{ "a": "hashed" }', false);
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 3}
+}');
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 1 }
+}');
+
+EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_find('db', '{
+  "find": "coll_find_positional",
+  "filter": { "a": "CAT", "b": { "$elemMatch": { "a": "CAT" } } },
+  "projection": { "_id": 1, "b.$": 1 },
+  "sort": { "_id": 1 },
+  "skip": 0,
+  "limit": 5,
+  "collation": { "locale": "en", "strength" : 1 }
+}');
+
+SELECT documentdb_api.drop_collection('db', 'coll_find_positional');
 
 ALTER SYSTEM SET documentdb_core.enablecollation='off';
 SELECT pg_reload_conf();
