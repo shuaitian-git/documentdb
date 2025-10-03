@@ -119,7 +119,8 @@ List * CreateQualsFromQueryDocIterator(bson_iter_t *queryDocIterator,
 									   BsonQueryOperatorContext *context);
 Node * EvaluateBoundParameters(Node *expression, ParamListInfo boundParams);
 
-List * CreateQualsForBsonValueTopLevelQueryIter(bson_iter_t *queryIter);
+List * CreateQualsForBsonValueTopLevelQueryIter(bson_iter_t *queryIter,
+												const char *collationString);
 Expr * CreateQualForBsonValueExpression(const bson_value_t *expression, const
 										char *collationString);
 Expr * CreateQualForBsonValueArrayExpression(const bson_value_t *expression);
