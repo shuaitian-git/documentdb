@@ -51,6 +51,9 @@ extern bool EnableUsersInfoPrivileges;
 /* GUC that controls whether native authentication is enabled*/
 extern bool IsNativeAuthEnabled;
 
+/* GUC that controls whether the DB admin check is enabled*/
+extern bool EnableUsersAdminDBCheck;
+
 PG_FUNCTION_INFO_V1(documentdb_extension_create_user);
 PG_FUNCTION_INFO_V1(documentdb_extension_drop_user);
 PG_FUNCTION_INFO_V1(documentdb_extension_update_user);
@@ -250,10 +253,10 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 	bson_iter_t createIter;
 	PgbsonInitIterator(createSpec, &createIter);
 
-	bool has_user = false;
-	bool has_pwd = false;
-	bool has_roles = false;
-
+	bool hasUser = false;
+	bool hasPwd = false;
+	bool hasRoles = false;
+	bool dbFound = false;
 	while (bson_iter_next(&createIter))
 	{
 		const char *key = bson_iter_key(&createIter);
@@ -276,7 +279,7 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 								errmsg("Invalid username, use a different username.")));
 			}
 
-			has_user = true;
+			hasUser = true;
 		}
 		else if (strcmp(key, "pwd") == 0)
 		{
@@ -290,7 +293,7 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 									"The password field must not be left empty.")));
 			}
 
-			has_pwd = true;
+			hasPwd = true;
 		}
 		else if (strcmp(key, "roles") == 0)
 		{
@@ -312,7 +315,21 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 
 			/* Check if it's in the right format */
 			spec->pgRole = ValidateAndObtainUserRole(&spec->roles);
-			has_roles = true;
+			hasRoles = true;
+		}
+		else if (strcmp(key, "$db") == 0 && EnableUsersAdminDBCheck)
+		{
+			EnsureTopLevelFieldType(key, &createIter, BSON_TYPE_UTF8);
+			uint32_t strLength = 0;
+			const char *db_name = bson_iter_utf8(&createIter, &strLength);
+
+			dbFound = true;
+			if (strcmp(db_name, "admin") != 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"CreateUser must be called from 'admin' database.")));
+			}
 		}
 		else if (strcmp(key, "customData") == 0)
 		{
@@ -349,22 +366,32 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 				}
 			}
 		}
-		else if (!IsCommonSpecIgnoredField(key))
+		else if (IsCommonSpecIgnoredField(key))
+		{
+			continue;
+		}
+		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 							errmsg("Unsupported field specified : '%s'.", key)));
 		}
 	}
 
+	if (!dbFound && EnableUsersAdminDBCheck)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("The required $db property is missing.")));
+	}
+
 	if (spec->has_identity_provider)
 	{
-		if (!has_user || !has_roles)
+		if (!hasUser || !hasRoles)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
 								"'createUser' and 'roles' are required fields.")));
 		}
 
-		if (has_pwd)
+		if (hasPwd)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
 								"Password is not allowed when using an external identity provider.")));
@@ -372,7 +399,7 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 	}
 	else
 	{
-		if (!has_user || !has_roles || !has_pwd)
+		if (!hasUser || !hasRoles || !hasPwd)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
 								"'createUser', 'roles' and 'pwd' are required fields.")));
@@ -516,6 +543,7 @@ ParseDropUserSpec(pgbson *dropSpec)
 	PgbsonInitIterator(dropSpec, &dropIter);
 
 	char *dropUser = NULL;
+	bool dbFound = false;
 	while (bson_iter_next(&dropIter))
 	{
 		const char *key = bson_iter_key(&dropIter);
@@ -539,7 +567,21 @@ ParseDropUserSpec(pgbson *dropSpec)
 								errmsg("Invalid username.")));
 			}
 		}
-		else if (strcmp(key, "lsid") == 0 || strcmp(key, "$db") == 0)
+		else if (strcmp(key, "$db") == 0 && EnableUsersAdminDBCheck)
+		{
+			EnsureTopLevelFieldType(key, &dropIter, BSON_TYPE_UTF8);
+			uint32_t strLength = 0;
+			const char *db_name = bson_iter_utf8(&dropIter, &strLength);
+
+			dbFound = true;
+			if (strcmp(db_name, "admin") != 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"DropUser must be called from 'admin' database.")));
+			}
+		}
+		else if (IsCommonSpecIgnoredField(key))
 		{
 			continue;
 		}
@@ -548,6 +590,12 @@ ParseDropUserSpec(pgbson *dropSpec)
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 							errmsg("The specified field '%s' is not supported.", key)));
 		}
+	}
+
+	if (!dbFound && EnableUsersAdminDBCheck)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("The required $db property is missing.")));
 	}
 
 	if (dropUser == NULL)
@@ -675,8 +723,8 @@ ParseUpdateUserSpec(pgbson *updateSpec, UpdateUserSpec *spec)
 	bson_iter_t updateIter;
 	PgbsonInitIterator(updateSpec, &updateIter);
 
-	bool has_user = false;
-
+	bool hasUser = false;
+	bool dbFound = false;
 	while (bson_iter_next(&updateIter))
 	{
 		const char *key = bson_iter_key(&updateIter);
@@ -692,7 +740,7 @@ ParseUpdateUserSpec(pgbson *updateSpec, UpdateUserSpec *spec)
 									"'updateUser' is a required field.")));
 			}
 
-			has_user = true;
+			hasUser = true;
 		}
 		else if (strcmp(key, "pwd") == 0)
 		{
@@ -700,7 +748,21 @@ ParseUpdateUserSpec(pgbson *updateSpec, UpdateUserSpec *spec)
 			uint32_t strLength = 0;
 			spec->pwd = bson_iter_utf8(&updateIter, &strLength);
 		}
-		else if (strcmp(key, "lsid") == 0 || strcmp(key, "$db") == 0)
+		else if (strcmp(key, "$db") == 0 && EnableUsersAdminDBCheck)
+		{
+			EnsureTopLevelFieldType(key, &updateIter, BSON_TYPE_UTF8);
+			uint32_t strLength = 0;
+			const char *db_name = bson_iter_utf8(&updateIter, &strLength);
+
+			dbFound = true;
+			if (strcmp(db_name, "admin") != 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"UpdateUser must be called from 'admin' database.")));
+			}
+		}
+		else if (IsCommonSpecIgnoredField(key))
 		{
 			continue;
 		}
@@ -716,7 +778,13 @@ ParseUpdateUserSpec(pgbson *updateSpec, UpdateUserSpec *spec)
 		}
 	}
 
-	if (!has_user)
+	if (!dbFound && EnableUsersAdminDBCheck)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("The required $db property is missing.")));
+	}
+
+	if (!hasUser)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 						errmsg("'updateUser' is a required field.")));
@@ -877,13 +945,14 @@ ParseGetUserSpec(pgbson *getSpec, GetUserSpec *spec)
 		0
 	};
 	spec->showPrivileges = false;
-	bool requiredFieldFound = false;
+	bool getUsersFieldFound = false;
+	bool dbFound = false;
 	while (bson_iter_next(&getIter))
 	{
 		const char *key = bson_iter_key(&getIter);
 		if (strcmp(key, "usersInfo") == 0)
 		{
-			requiredFieldFound = true;
+			getUsersFieldFound = true;
 			if (bson_iter_type(&getIter) == BSON_TYPE_INT32)
 			{
 				if (bson_iter_as_int64(&getIter) != 1)
@@ -915,7 +984,7 @@ ParseGetUserSpec(pgbson *getSpec, GetUserSpec *spec)
 		}
 		else if (strcmp(key, "forAllDBs") == 0)
 		{
-			requiredFieldFound = true;
+			getUsersFieldFound = true;
 			if (bson_iter_type(&getIter) == BSON_TYPE_BOOL)
 			{
 				if (bson_iter_as_bool(&getIter) != true)
@@ -933,7 +1002,7 @@ ParseGetUserSpec(pgbson *getSpec, GetUserSpec *spec)
 		}
 		else if (strcmp(key, "getUser") == 0)
 		{
-			requiredFieldFound = true;
+			getUsersFieldFound = true;
 			EnsureTopLevelFieldType(key, &getIter, BSON_TYPE_UTF8);
 			uint32_t strLength = 0;
 			const char *userString = bson_iter_utf8(&getIter, &strLength);
@@ -955,7 +1024,21 @@ ParseGetUserSpec(pgbson *getSpec, GetUserSpec *spec)
 									"'showPrivileges' must be a boolean value")));
 			}
 		}
-		else if (strcmp(key, "lsid") == 0 || strcmp(key, "$db") == 0)
+		else if (strcmp(key, "$db") == 0 && EnableUsersAdminDBCheck)
+		{
+			EnsureTopLevelFieldType(key, &getIter, BSON_TYPE_UTF8);
+			uint32_t strLength = 0;
+			const char *db_name = bson_iter_utf8(&getIter, &strLength);
+
+			dbFound = true;
+			if (strcmp(db_name, "admin") != 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"UsersInfo must be called from 'admin' database.")));
+			}
+		}
+		else if (IsCommonSpecIgnoredField(key))
 		{
 			continue;
 		}
@@ -966,7 +1049,13 @@ ParseGetUserSpec(pgbson *getSpec, GetUserSpec *spec)
 		}
 	}
 
-	if (!requiredFieldFound)
+	if (!dbFound && EnableUsersAdminDBCheck)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("The required $db property is missing.")));
+	}
+
+	if (!getUsersFieldFound)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
 							"'usersInfo' or 'forAllDBs' must be provided.")));
@@ -994,6 +1083,13 @@ connection_status(pgbson *showPrivilegesSpec)
 
 	bool returnDocuments = false;
 	Datum userInfoDatum = GetSingleUserInfo(currentUser, returnDocuments);
+
+	if (userInfoDatum == (Datum) 0)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
+						errmsg(
+							"Cannot find logged-in user")));
+	}
 
 	const char *parentRole = text_to_cstring(DatumGetTextP(userInfoDatum));
 	if (parentRole == NULL)
@@ -1065,14 +1161,15 @@ ParseConnectionStatusSpec(pgbson *connectionStatusSpec)
 	PgbsonInitIterator(connectionStatusSpec, &connectionIter);
 
 	bool showPrivileges = false;
-	bool requiredFieldFound = false;
+	bool connectionStatusFound = false;
+	bool dbFound = false;
 	while (bson_iter_next(&connectionIter))
 	{
 		const char *key = bson_iter_key(&connectionIter);
 
 		if (strcmp(key, "connectionStatus") == 0)
 		{
-			requiredFieldFound = true;
+			connectionStatusFound = true;
 			if (bson_iter_type(&connectionIter) == BSON_TYPE_INT32)
 			{
 				if (bson_iter_as_int64(&connectionIter) != 1)
@@ -1101,7 +1198,13 @@ ParseConnectionStatusSpec(pgbson *connectionStatusSpec)
 								errmsg("'showPrivileges' must be a boolean value")));
 			}
 		}
-		else if (strcmp(key, "lsid") == 0 || strcmp(key, "$db") == 0)
+		else if (strcmp(key, "$db") == 0 && EnableUsersAdminDBCheck)
+		{
+			EnsureTopLevelFieldType(key, &connectionIter, BSON_TYPE_UTF8);
+
+			dbFound = true;
+		}
+		else if (IsCommonSpecIgnoredField(key))
 		{
 			continue;
 		}
@@ -1112,7 +1215,13 @@ ParseConnectionStatusSpec(pgbson *connectionStatusSpec)
 		}
 	}
 
-	if (!requiredFieldFound)
+	if (!dbFound && EnableUsersAdminDBCheck)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg("The required $db property is missing.")));
+	}
+
+	if (!connectionStatusFound)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
 							"'connectionStatus' must be provided.")));
@@ -1478,10 +1587,19 @@ GetSingleUserInfo(const char *userName, bool returnDocuments)
 
 	bool readOnly = true;
 	bool isNull = false;
-	return ExtensionExecuteQueryWithArgsViaSPI(cmdStr, argCount,
-											   argTypes, argValues, NULL,
-											   readOnly, SPI_OK_SELECT,
-											   &isNull);
+
+	Datum result = ExtensionExecuteQueryWithArgsViaSPI(cmdStr, argCount,
+													   argTypes, argValues, NULL,
+													   readOnly, SPI_OK_SELECT,
+													   &isNull);
+	if (isNull)
+	{
+		return (Datum) 0;
+	}
+	else
+	{
+		return result;
+	}
 }
 
 

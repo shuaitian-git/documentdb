@@ -4,6 +4,8 @@ SET documentdb.maxUserLimit TO 10;
 \set VERBOSITY TERSE
 -- Enable role CRUD operations for testing
 SET documentdb.enableRoleCrud TO ON;
+-- Enable db admin requirement for testing
+SET documentdb.enableRolesAdminDBCheck TO ON;
 -- Create a custom role for testing rolesInfo with a custom role
 SELECT documentdb_api.create_role('{"createRole":"test_custom_role", "roles":["documentdb_readonly_role"], "$db":"admin"}');
             create_role            
@@ -96,7 +98,7 @@ SELECT documentdb_api.roles_info('{"rolesInfo":"pg_signal_backend", "$db":"admin
 (1 row)
 
 -- Test a user role with oid >= FirstNormalObjectId. Create a user then try to fetch it
-SELECT documentdb_api.create_user('{"createUser":"test_user", "pwd":"test_password", "roles":[{"role":"readAnyDatabase","db":"admin"}]}');
+SELECT documentdb_api.create_user('{"createUser":"test_user", "pwd":"test_password", "roles":[{"role":"readAnyDatabase","db":"admin"}], "$db":"admin"}');
             create_user            
 -----------------------------------
  { "ok" : { "$numberInt" : "1" } }
@@ -134,6 +136,12 @@ ERROR:  'db' field must be a string.
 -- Test rolesInfo with bson document with unknown field, which is not allowed
 SELECT documentdb_api.roles_info('{"rolesInfo":{"role":"readAnyDatabase", "db":"admin", "unknownField":"value"}, "$db":"admin"}');
 ERROR:  Unknown property 'unknownField' in role document.
+-- Test rolesInfo with non-admin database, should fail
+SELECT documentdb_api.roles_info('{"rolesInfo":{"role":"readAnyDatabase", "db":"admin"}, "$db":"nonAdminDatabase"}');
+ERROR:  RolesInfo must be called from 'admin' database.
+-- Test rolesInfo with no database, should fail
+SELECT documentdb_api.roles_info('{"rolesInfo":{"role":"readAnyDatabase", "db":"admin"}}');
+ERROR:  The required $db property is missing.
 -- ********* Test rolesInfo with array *********
 -- Test rolesInfo with empty array
 SELECT documentdb_api.roles_info('{"rolesInfo":[], "$db":"admin"}');
@@ -168,7 +176,24 @@ SET documentdb.enableRoleCrud TO OFF;
 SELECT documentdb_api.roles_info('{"rolesInfo":1, "$db":"admin"}');
 ERROR:  RolesInfo command is not supported.
 SET documentdb.enableRoleCrud TO ON;
+-- Test rolesInfo with non-admin database when admin DB check is disabled, should succeed
+SET documentdb.enableRolesAdminDBCheck TO OFF;
+SELECT documentdb_api.roles_info('{"rolesInfo":1, "$db":"nonAdminDatabase"}');
+                                                                                                           roles_info                                                                                                           
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ { "roles" : [ { "_id" : "admin.test_custom_role", "role" : "test_custom_role", "db" : "admin", "isBuiltIn" : false, "roles" : [ { "role" : "documentdb_readonly_role", "db" : "admin" } ] } ], "ok" : { "$numberInt" : "1" } }
+(1 row)
+
+-- Test rolesInfo with no database when admin DB check is disabled
+SELECT documentdb_api.roles_info('{"rolesInfo":1}');
+                                                                                                           roles_info                                                                                                           
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ { "roles" : [ { "_id" : "admin.test_custom_role", "role" : "test_custom_role", "db" : "admin", "isBuiltIn" : false, "roles" : [ { "role" : "documentdb_readonly_role", "db" : "admin" } ] } ], "ok" : { "$numberInt" : "1" } }
+(1 row)
+
+SET documentdb.enableRolesAdminDBCheck TO ON;
 -- Clean up test roles created for rolesInfo testing
 DROP ROLE IF EXISTS "test_custom_role";
 -- Reset settings
 RESET documentdb.enableRoleCrud;
+RESET documentdb.enableRolesAdminDBCheck;
