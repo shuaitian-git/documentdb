@@ -71,6 +71,7 @@ typedef RumPageOpaqueData *RumPageOpaque;
 #define RUM_LIST (1 << 4)
 #define RUM_LIST_FULLROW (1 << 5)       /* makes sense only on RUM_LIST page */
 #define RUM_HALF_DEAD (1 << 6)
+#define RUM_INCOMPLETE_SPLIT (1 << 7)   /* page was split, but parent not updated */
 
 /* Page numbers of fixed-location pages */
 #define RUM_METAPAGE_BLKNO (0)
@@ -156,6 +157,9 @@ typedef struct RumMetaPageData
 #define RumPageIsHalfDead(page) ((RumPageGetOpaque(page)->flags & RUM_HALF_DEAD) != 0)
 #define RumPageSetHalfDead(page) (RumPageGetOpaque(page)->flags |= RUM_HALF_DEAD)
 #define RumPageSetNonHalfDead(page) (RumPageGetOpaque(page)->flags &= ~RUM_HALF_DEAD)
+
+#define RumPageIsIncompleteSplit(page) ((RumPageGetOpaque(page)->flags & \
+										 RUM_INCOMPLETE_SPLIT) != 0)
 
 /*
  * Set the XMIN based of the half-dead page based on maxoff and freespace (these are only
@@ -560,6 +564,7 @@ typedef struct RumBtreeData
 	void (*placeToPage)(RumBtree, Page, OffsetNumber);
 	Page (*splitPage)(RumBtree, Buffer, Buffer, Page, Page, OffsetNumber);
 	void (*fillRoot)(RumBtree, Buffer, Buffer, Buffer, Page, Page, Page);
+	void (*fillBtreeForIncompleteSplit)(RumBtree, RumBtreeStack *, Buffer);
 
 	bool isData;
 	bool searchMode;
@@ -924,6 +929,9 @@ extern IndexBulkDeleteResult * rumvacuumcleanup(IndexVacuumInfo *info,
 /* rumvalidate.c */
 extern bool rumvalidate(Oid opclassoid);
 
+/* rumvacuum.c */
+extern void rumVacuumPruneEmptyEntries(Relation indexRel);
+
 /* rumbulk.c */
 #if PG_VERSION_NUM <= 100006 || PG_VERSION_NUM == 110000
 typedef RBNode RBTNode;
@@ -1007,6 +1015,9 @@ typedef enum SimilarityType
 #define RUM_DEFAULT_ENABLE_SKIP_INTERMEDIATE_ENTRY true
 #define RUM_DEFAULT_VACUUM_ENTRY_ITEMS true
 #define RUM_DEFAULT_USE_NEW_ITEM_PTR_DECODING true
+#define RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT true
+#define RUM_DEFAULT_FIX_INCOMPLETE_SPLIT true
+#define RUM_DEFAULT_ENABLE_INJECT_PAGE_SPLIT_INCOMPLETE false
 
 /* GUC parameters */
 extern int RumFuzzySearchLimit;
@@ -1022,6 +1033,9 @@ extern bool RumPreferOrderedIndexScan;
 extern bool RumEnableSkipIntermediateEntry;
 extern bool RumVacuumEntryItems;
 extern bool RumUseNewItemPtrDecoding;
+extern bool RumTrackIncompleteSplit;
+extern bool RumFixIncompleteSplit;
+extern bool RumInjectPageSplitIncomplete;
 
 /*
  * Functions for reading ItemPointers with additional information. Used in

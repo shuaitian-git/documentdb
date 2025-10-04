@@ -16,7 +16,6 @@
 
 #include "postgres.h"
 
-#include "miscadmin.h"
 #include "access/htup_details.h"
 #include "miscadmin.h"
 #include "storage/indexfsm.h"
@@ -116,6 +115,12 @@ RumPageFlagsToString(Page page)
 	if (RumPageIsHalfDead(page))
 	{
 		appendStringInfo(flagsStr, "%sHALFDEAD", separator);
+		separator = "|";
+	}
+
+	if (RumPageIsIncompleteSplit(page))
+	{
+		appendStringInfo(flagsStr, "%sINCOMPLETE_SPLIT", separator);
 		separator = "|";
 	}
 
