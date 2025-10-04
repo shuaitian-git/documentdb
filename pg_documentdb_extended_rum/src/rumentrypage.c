@@ -622,6 +622,20 @@ rumEntryFillRoot(RumBtree btree, Buffer root, Buffer lbuf, Buffer rbuf,
 }
 
 
+static void
+rumEntryFillBtreeForIncompleteSplit(RumBtree btree, RumBtreeStack *stack, Buffer buffer)
+{
+	IndexTuple itup;
+	Page page = BufferGetPage(buffer);
+
+	/* Fill rightblkno to ensure we're tracking the split page */
+	btree->rightblkno = RumPageGetOpaque(page)->rightlink;
+
+	itup = rumEntryGetRightMostTuple(page);
+	btree->entry = RumFormInteriorTuple(btree, itup, page, BufferGetBlockNumber(buffer));
+}
+
+
 /*
  * Set up RumBtree for entry page access
  *
@@ -647,6 +661,7 @@ rumPrepareEntryScan(RumBtree btree, OffsetNumber attnum,
 	btree->placeToPage = entryPlaceToPage;
 	btree->splitPage = entrySplitPage;
 	btree->fillRoot = rumEntryFillRoot;
+	btree->fillBtreeForIncompleteSplit = rumEntryFillBtreeForIncompleteSplit;
 
 	btree->isData = false;
 	btree->searchMode = false;

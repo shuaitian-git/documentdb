@@ -1563,6 +1563,30 @@ rumDataFillRoot(RumBtree btree, Buffer root, Buffer lbuf, Buffer rbuf,
 }
 
 
+static void
+rumDataFillBtreeForIncompleteSplit(RumBtree btree, RumBtreeStack *stack, Buffer buffer)
+{
+	Page page = BufferGetPage(buffer);
+
+	/* Fill rightblkno to ensure we're tracking the split page */
+	btree->rightblkno = RumPageGetOpaque(page)->rightlink;
+
+	/* Set the posting item */
+	if (RumPageIsLeaf(page))
+	{
+		btree->pitem.item = *RumDataPageGetRightBound(page);
+	}
+	else
+	{
+		btree->pitem.item = ((RumPostingItem *)
+							 RumDataPageGetItem(page, RumPageGetOpaque(
+													page)->maxoff))->item;
+	}
+
+	PostingItemSetBlockNumber(&btree->pitem, BufferGetBlockNumber(buffer));
+}
+
+
 void
 rumPrepareDataScan(RumBtree btree, Relation index, OffsetNumber attnum,
 				   RumState *rumstate)
@@ -1581,6 +1605,7 @@ rumPrepareDataScan(RumBtree btree, Relation index, OffsetNumber attnum,
 	btree->placeToPage = dataPlaceToPage;
 	btree->splitPage = dataSplitPage;
 	btree->fillRoot = rumDataFillRoot;
+	btree->fillBtreeForIncompleteSplit = rumDataFillBtreeForIncompleteSplit;
 
 	btree->isData = true;
 	btree->searchMode = false;

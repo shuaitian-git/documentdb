@@ -675,7 +675,7 @@ rumVacuumPostingTreeNew(RumVacuumState *gvs, OffsetNumber attnum, BlockNumber ro
 		UnlockReleaseBuffer(buffer);
 	}
 
-	ereport(DEBUG2, (errmsg("[RUM] Vacuum posting tree void pages %d, deleted pages %d",
+	ereport(DEBUG1, (errmsg("[RUM] Vacuum posting tree void pages %d, deleted pages %d",
 							numVoidPages, numDeletedPages)));
 	return nonVoidPageCount == 0;
 }
@@ -728,6 +728,7 @@ rumVacuumEntryPage(RumVacuumState *gvs, Buffer buffer, BlockNumber *roots,
 	OffsetNumber i,
 				 maxoff = PageGetMaxOffsetNumber(origpage);
 	bool hasEmptyEntries = false;
+	*isEmptyPage = true;
 	tmppage = origpage;
 
 	*nroot = 0;
@@ -849,40 +850,13 @@ rumVacuumEntryPage(RumVacuumState *gvs, Buffer buffer, BlockNumber *roots,
 }
 
 
-IndexBulkDeleteResult *
-rumbulkdelete(IndexVacuumInfo *info,
-			  IndexBulkDeleteResult *stats, IndexBulkDeleteCallback callback,
-			  void *callback_state)
+static Buffer
+rumFindLeftMostLeafPage(Relation index, BlockNumber blkno,
+						BufferAccessStrategy strategy)
 {
-	Relation index = info->index;
-	BlockNumber blkno = RUM_ROOT_BLKNO;
-	RumVacuumState gvs;
 	Buffer buffer;
-	BlockNumber rootOfPostingTree[BLCKSZ / (sizeof(IndexTupleData) + sizeof(ItemId))];
-	OffsetNumber attnumOfPostingTree[BLCKSZ / (sizeof(IndexTupleData) + sizeof(ItemId))];
-	uint32 nRoot;
-	uint32 numEmptyPages = 0, numEmptyEntries = 0, numEmptyPostingTrees = 0,
-		   numPrunedEntries = 0, numPrunedPages = 0, prunedEmptyPostingRoots = 0;
-
-	gvs.index = index;
-	gvs.callback = callback;
-	gvs.callback_state = callback_state;
-	gvs.strategy = info->strategy;
-	initRumState(&gvs.rumstate, index);
-
-	/* Is this the first time running through? */
-	if (stats == NULL)
-	{
-		/* Yes, so initialize stats to zeroes */
-		stats = (IndexBulkDeleteResult *) palloc0(sizeof(IndexBulkDeleteResult));
-	}
-
-	/* we'll re-count the tuples each time */
-	stats->num_index_tuples = 0;
-	gvs.result = stats;
-
 	buffer = ReadBufferExtended(index, MAIN_FORKNUM, blkno,
-								RBM_NORMAL, info->strategy);
+								RBM_NORMAL, strategy);
 
 	/* find leaf page */
 	for (;;)
@@ -915,8 +889,46 @@ rumbulkdelete(IndexVacuumInfo *info,
 
 		UnlockReleaseBuffer(buffer);
 		buffer = ReadBufferExtended(index, MAIN_FORKNUM, blkno,
-									RBM_NORMAL, info->strategy);
+									RBM_NORMAL, strategy);
 	}
+
+	return buffer;
+}
+
+
+IndexBulkDeleteResult *
+rumbulkdelete(IndexVacuumInfo *info,
+			  IndexBulkDeleteResult *stats, IndexBulkDeleteCallback callback,
+			  void *callback_state)
+{
+	Relation index = info->index;
+	BlockNumber blkno = RUM_ROOT_BLKNO;
+	RumVacuumState gvs;
+	Buffer buffer;
+	BlockNumber rootOfPostingTree[BLCKSZ / (sizeof(IndexTupleData) + sizeof(ItemId))];
+	OffsetNumber attnumOfPostingTree[BLCKSZ / (sizeof(IndexTupleData) + sizeof(ItemId))];
+	uint32 nRoot;
+	uint32 numEmptyPages = 0, numEmptyEntries = 0, numEmptyPostingTrees = 0,
+		   numPrunedEntries = 0, numPrunedPages = 0, prunedEmptyPostingRoots = 0;
+
+	gvs.index = index;
+	gvs.callback = callback;
+	gvs.callback_state = callback_state;
+	gvs.strategy = info->strategy;
+	initRumState(&gvs.rumstate, index);
+
+	/* Is this the first time running through? */
+	if (stats == NULL)
+	{
+		/* Yes, so initialize stats to zeroes */
+		stats = (IndexBulkDeleteResult *) palloc0(sizeof(IndexBulkDeleteResult));
+	}
+
+	/* we'll re-count the tuples each time */
+	stats->num_index_tuples = 0;
+	gvs.result = stats;
+
+	buffer = rumFindLeftMostLeafPage(index, blkno, gvs.strategy);
 
 	/* right now we found leftmost page in entry's BTree */
 
@@ -994,6 +1006,130 @@ rumbulkdelete(IndexVacuumInfo *info,
 	}
 
 	return gvs.result;
+}
+
+
+static Page
+rumPruneEmptyEntriesInEntryPage(Buffer buffer, RumState *rumState, bool *isEmptyPage,
+								uint32 *numEmptyEntries, uint32 *numPrunedEntries)
+{
+	Page origpage = BufferGetPage(buffer),
+		 tmppage;
+	OffsetNumber i,
+				 maxoff = PageGetMaxOffsetNumber(origpage);
+	bool hasEmptyEntries = false;
+	*isEmptyPage = true;
+	tmppage = origpage;
+
+	for (i = FirstOffsetNumber; i <= maxoff; i++)
+	{
+		IndexTuple itup = (IndexTuple) PageGetItem(tmppage, PageGetItemId(tmppage, i));
+		if (RumIsPostingTree(itup))
+		{
+			/* Just assume we won't prune pages here */
+			*isEmptyPage = false;
+		}
+		else if (RumGetNPosting(itup) > 0)
+		{
+			*isEmptyPage = false;
+		}
+		else if (RumGetNPosting(itup) == 0)
+		{
+			(*numEmptyEntries)++;
+			hasEmptyEntries = true;
+		}
+	}
+
+	/* Check if we can lock the page for cleanup - note we can't
+	 * cleanup this page if the page is pinned at all since a
+	 * regular query may be holding it mid-scan.
+	 * IsBufferCleanupOK will ensure we have a single Pin on the buffer
+	 * which means we're the only ones interested in this buffer.
+	 */
+	if (RumVacuumEntryItems &&
+		hasEmptyEntries &&
+		IsBufferCleanupOK(buffer))
+	{
+		if (tmppage == origpage)
+		{
+			/*
+			 * On first difference we create temporary page in memory
+			 * and copies content in to it.
+			 */
+			tmppage = PageGetTempPageCopy(origpage);
+		}
+
+		rumCleanupEmptyEntries(tmppage, numPrunedEntries);
+	}
+
+	return (tmppage == origpage) ? NULL : tmppage;
+}
+
+
+void
+rumVacuumPruneEmptyEntries(Relation index)
+{
+	BlockNumber blkno = RUM_ROOT_BLKNO;
+	Buffer buffer;
+	RumState rumState;
+	uint32 numEmptyPages = 0, numEmptyEntries = 0, numPrunedEntries = 0, numPrunedPages =
+		0,
+		   prunedEmptyPostingRoots = 0;
+
+	initRumState(&rumState, index);
+
+	buffer = rumFindLeftMostLeafPage(index, blkno, NULL);
+
+	/* right now we found leftmost page in entry's BTree */
+	for (;;)
+	{
+		Page page = BufferGetPage(buffer);
+		Page resPage;
+		bool isEmptyPage = true;
+
+		CHECK_FOR_INTERRUPTS();
+
+		Assert(!RumPageIsData(page));
+		resPage = rumPruneEmptyEntriesInEntryPage(buffer, &rumState, &isEmptyPage,
+												  &numEmptyEntries,
+												  &numPrunedEntries);
+
+		blkno = RumPageGetOpaque(page)->rightlink;
+
+		if (resPage)
+		{
+			GenericXLogState *state;
+
+			state = GenericXLogStart(index);
+			page = GenericXLogRegisterBuffer(state, buffer, 0);
+			PageRestoreTempPage(resPage, page);
+			GenericXLogFinish(state);
+			UnlockReleaseBuffer(buffer);
+		}
+		else
+		{
+			UnlockReleaseBuffer(buffer);
+		}
+
+		if (isEmptyPage)
+		{
+			numEmptyPages++;
+		}
+
+		if (blkno == InvalidBlockNumber)        /* rightmost page */
+		{
+			break;
+		}
+
+		buffer = ReadBufferExtended(index, MAIN_FORKNUM, blkno,
+									RBM_NORMAL, NULL);
+		LockBuffer(buffer, RUM_EXCLUSIVE);
+	}
+
+	elog(INFO,
+		 "Vacuum found %u empty pages, %u empty entries, %u pruned entries, %u pruned pages, %u pruned posting trees",
+		 numEmptyPages, numEmptyEntries, numPrunedEntries, numPrunedPages,
+		 prunedEmptyPostingRoots);
 }
 
 
