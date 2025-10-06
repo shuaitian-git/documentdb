@@ -1,5 +1,7 @@
 SET search_path TO documentdb_core,documentdb_api,documentdb_api_catalog,documentdb_api_internal;
 
+SELECT documentdb_api.drop_collection('lookupdb', 'planes'), documentdb_api.drop_collection('lookupdb', 'gate_availability');
+
 -- Insert data
 SELECT documentdb_api.insert_one('lookupdb','planes',' { "_id" : 1, "model" : "A380", "price" : 280, "quantity" : 20 }', NULL);
 SELECT documentdb_api.insert_one('lookupdb','planes','{ "_id" : 2, "model" : "A340", "price" : 140, "quantity" : 1 }', NULL);
@@ -18,11 +20,20 @@ SELECT documentdb_api_internal.create_indexes_non_concurrently('lookupdb', '{ "c
 SELECT documentdb_api_internal.create_indexes_non_concurrently('lookupdb', '{ "createIndexes": "gate_availability", "indexes": [ { "key": { "plane_model": 1 }, "name": "plane_model_1" } ] }', TRUE);
 
 -- Remove primary key
-ALTER TABLE documentdb_data.documents_7311 DROP CONSTRAINT collection_pk_7311;
-ALTER TABLE documentdb_data.documents_7312 DROP CONSTRAINT collection_pk_7312;
+SELECT collection_id AS planes_id FROM documentdb_api_catalog.collections WHERE database_name = 'lookupdb' AND collection_name = 'planes' \gset
+SELECT collection_id AS gate_availability_id FROM documentdb_api_catalog.collections WHERE database_name = 'lookupdb' AND collection_name = 'gate_availability' \gset
 
-ANALYZE documentdb_data.documents_7311;
-ANALYZE documentdb_data.documents_7312;
+
+SELECT 'ALTER TABLE documentdb_data.documents_' || :'planes_id' || ' DROP CONSTRAINT collection_pk_' || :'planes_id' \gexec
+SELECT 'ALTER TABLE documentdb_data.documents_' || :'gate_availability_id' || ' DROP CONSTRAINT collection_pk_' || :'gate_availability_id' \gexec
+
+SELECT 'ANALYZE documentdb_data.documents_' || :'planes_id' \gexec
+SELECT 'ANALYZE documentdb_data.documents_' || :'gate_availability_id' \gexec
+
+-- check indexes (ordered or not)
+SELECT documentdb_api_catalog.bson_dollar_unwind(cursorpage, '$cursor.firstBatch') FROM documentdb_api.list_indexes_cursor_first_page('lookupdb', '{ "listIndexes": "planes" }') ORDER BY 1;
+SELECT documentdb_api_catalog.bson_dollar_unwind(cursorpage, '$cursor.firstBatch') FROM documentdb_api.list_indexes_cursor_first_page('lookupdb', '{ "listIndexes": "gate_availability" }') ORDER BY 1;
+
 BEGIN;
 set local documentdb.forceBitmapScanForLookup to off;
 set local documentdb.enableLookupInnerJoin to off;
@@ -97,8 +108,10 @@ EXPLAIN (SUMMARY OFF, COSTS OFF) SELECT document FROM bson_aggregation_pipeline(
 ROLLBACK;
 
 -- Cleanup
-SELECT documentdb_api.drop_collection('lookupdb', 'planes');
-SELECT documentdb_api.drop_collection('lookupdb', 'gate_availability');
+SELECT documentdb_api.drop_collection('lookupdb', 'planes'), documentdb_api.drop_collection('lookupdb', 'gate_availability');
+
+-- reset state
+SELECT documentdb_api.drop_collection('lookupdb', 'Dishes'), documentdb_api.drop_collection('lookupdb', 'Ingredients'), documentdb_api.drop_collection('lookupdb', 'Shops');
 
 -- lookup with point read where inner plan depends on external param crash fix scenario
 SELECT documentdb_api.insert_one('lookupdb','Dishes',' { "_id" : 1, "dishId" : 1, "ingredients": [1, 2, 3, 4] }', NULL);

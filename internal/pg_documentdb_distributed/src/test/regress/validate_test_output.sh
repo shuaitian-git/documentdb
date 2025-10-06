@@ -113,6 +113,14 @@ for validationFile in $(ls $scriptDir/expected/*.out); do
     done
 
     if [ "$findResult" == "" ]; then
+        for macro in "" "!PG16_OR_HIGHER!" "!PG17_OR_HIGHER!"; do
+            fileNameMod=$(echo "$fileNameBase" | sed -E "s/_tests/_tests${macro}/g")
+            findResult=$(grep "$fileNameMod" basic_schedule_core || true)
+            [ -n "$findResult" ] && break
+        done
+    fi
+
+    if [ "$findResult" == "" ]; then
         if [[ "$fileNameBase" =~ "pg15" ]] || [[ "$fileNameBase" =~ "pg16" ]] || [[ "$fileNameBase" =~ "pg17" ]] || [[ "$fileNameBase" =~ "_explain" ]]; then
             echo "Skipping schedule existence check for $fileNameBase"
         else
@@ -121,11 +129,21 @@ for validationFile in $(ls $scriptDir/expected/*.out); do
         fi
     fi
 
+    isSimpleIncludeTest=false
+    if [[ "$sqlFile" =~ _pg[0-9]+ ]]; then
+        lineCount=$(cat $scriptDir/sql/$sqlFile | wc -l)
+        if [ $lineCount -eq 0 ]; then
+            isSimpleIncludeTest="true"
+        fi
+    fi
+
     # Extract the actual collection ID (we'll use this to check for uniqueness).
     collectionIdOutput=$(grep -m 1 'documentdb.next_collection_id' $validationFile || true)
 
     # Fail if not found.
-    if [ "$collectionIdOutput" == "" ]; then
+    if [ "$isSimpleIncludeTest" == "true" ]; then
+        echo "Skipping test file prefix validation on '${sqlFile}' due to it being a simple test"
+    elif [ "$collectionIdOutput" == "" ]; then
         echo "Test file prefix Validation failed on '${sqlFile}': Please ensure test files set documentdb.next_collection_id";
         exit 1;
     fi;

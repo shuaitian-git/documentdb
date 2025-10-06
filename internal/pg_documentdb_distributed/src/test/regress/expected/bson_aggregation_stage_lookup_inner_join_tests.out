@@ -1,11 +1,17 @@
 SET citus.next_shard_id TO 731000;
 SET documentdb.next_collection_id TO 7310;
 SET documentdb.next_collection_index_id TO 7310;
-\i sql/bson_aggregation_tests_lookup_inner_join_core.sql
+\i sql/bson_aggregation_stage_lookup_inner_join_core.sql
 SET search_path TO documentdb_core,documentdb_api,documentdb_api_catalog,documentdb_api_internal;
+SELECT documentdb_api.drop_collection('lookupdb', 'planes'), documentdb_api.drop_collection('lookupdb', 'gate_availability');
+ drop_collection | drop_collection 
+---------------------------------------------------------------------
+ f               | f
+(1 row)
+
 -- Insert data
 SELECT documentdb_api.insert_one('lookupdb','planes',' { "_id" : 1, "model" : "A380", "price" : 280, "quantity" : 20 }', NULL);
-psql:sql/bson_aggregation_tests_lookup_inner_join_core.sql:4: NOTICE:  creating collection
+psql:sql/bson_aggregation_stage_lookup_inner_join_core.sql:6: NOTICE:  creating collection
                               insert_one                              
 ---------------------------------------------------------------------
  { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
@@ -30,7 +36,7 @@ SELECT documentdb_api.insert_one('lookupdb','planes',' { "_id" : 4, "model" : "7
 (1 row)
 
 SELECT documentdb_api.insert_one('lookupdb','gate_availability',' { "_id" : 1, "plane_model" : "A330", "gates" : 30 }', NULL);
-psql:sql/bson_aggregation_tests_lookup_inner_join_core.sql:9: NOTICE:  creating collection
+psql:sql/bson_aggregation_stage_lookup_inner_join_core.sql:11: NOTICE:  creating collection
                               insert_one                              
 ---------------------------------------------------------------------
  { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
@@ -74,10 +80,31 @@ SELECT documentdb_api_internal.create_indexes_non_concurrently('lookupdb', '{ "c
 (1 row)
 
 -- Remove primary key
-ALTER TABLE documentdb_data.documents_7311 DROP CONSTRAINT collection_pk_7311;
-ALTER TABLE documentdb_data.documents_7312 DROP CONSTRAINT collection_pk_7312;
-ANALYZE documentdb_data.documents_7311;
-ANALYZE documentdb_data.documents_7312;
+SELECT collection_id AS planes_id FROM documentdb_api_catalog.collections WHERE database_name = 'lookupdb' AND collection_name = 'planes' \gset
+SELECT collection_id AS gate_availability_id FROM documentdb_api_catalog.collections WHERE database_name = 'lookupdb' AND collection_name = 'gate_availability' \gset
+SELECT 'ALTER TABLE documentdb_data.documents_' || :'planes_id' || ' DROP CONSTRAINT collection_pk_' || :'planes_id' \gexec
+ALTER TABLE documentdb_data.documents_7311 DROP CONSTRAINT collection_pk_7311
+SELECT 'ALTER TABLE documentdb_data.documents_' || :'gate_availability_id' || ' DROP CONSTRAINT collection_pk_' || :'gate_availability_id' \gexec
+ALTER TABLE documentdb_data.documents_7312 DROP CONSTRAINT collection_pk_7312
+SELECT 'ANALYZE documentdb_data.documents_' || :'planes_id' \gexec
+ANALYZE documentdb_data.documents_7311
+SELECT 'ANALYZE documentdb_data.documents_' || :'gate_availability_id' \gexec
+ANALYZE documentdb_data.documents_7312
+-- check indexes (ordered or not)
+SELECT documentdb_api_catalog.bson_dollar_unwind(cursorpage, '$cursor.firstBatch') FROM documentdb_api.list_indexes_cursor_first_page('lookupdb', '{ "listIndexes": "planes" }') ORDER BY 1;
+                                                                                                            bson_dollar_unwind                                                                                                             
+---------------------------------------------------------------------
+ { "cursor" : { "id" : { "$numberLong" : "0" }, "ns" : "lookupdb.planes", "firstBatch" : { "v" : { "$numberInt" : "2" }, "key" : { "_id" : { "$numberInt" : "1" } }, "name" : "_id_" } }, "ok" : { "$numberDouble" : "1.0" } }
+ { "cursor" : { "id" : { "$numberLong" : "0" }, "ns" : "lookupdb.planes", "firstBatch" : { "v" : { "$numberInt" : "2" }, "key" : { "model" : { "$numberInt" : "1" } }, "name" : "planes_model_1" } }, "ok" : { "$numberDouble" : "1.0" } }
+(2 rows)
+
+SELECT documentdb_api_catalog.bson_dollar_unwind(cursorpage, '$cursor.firstBatch') FROM documentdb_api.list_indexes_cursor_first_page('lookupdb', '{ "listIndexes": "gate_availability" }') ORDER BY 1;
+                                                                                                                    bson_dollar_unwind                                                                                                                     
+---------------------------------------------------------------------
+ { "cursor" : { "id" : { "$numberLong" : "0" }, "ns" : "lookupdb.gate_availability", "firstBatch" : { "v" : { "$numberInt" : "2" }, "key" : { "_id" : { "$numberInt" : "1" } }, "name" : "_id_" } }, "ok" : { "$numberDouble" : "1.0" } }
+ { "cursor" : { "id" : { "$numberLong" : "0" }, "ns" : "lookupdb.gate_availability", "firstBatch" : { "v" : { "$numberInt" : "2" }, "key" : { "plane_model" : { "$numberInt" : "1" } }, "name" : "plane_model_1" } }, "ok" : { "$numberDouble" : "1.0" } }
+(2 rows)
+
 BEGIN;
 set local documentdb.forceBitmapScanForLookup to off;
 set local documentdb.enableLookupInnerJoin to off;
@@ -240,28 +267,29 @@ EXPLAIN (SUMMARY OFF, COSTS OFF) SELECT document FROM bson_aggregation_pipeline(
 
 ROLLBACK;
 -- Cleanup
-SELECT documentdb_api.drop_collection('lookupdb', 'planes');
- drop_collection 
+SELECT documentdb_api.drop_collection('lookupdb', 'planes'), documentdb_api.drop_collection('lookupdb', 'gate_availability');
+ drop_collection | drop_collection 
 ---------------------------------------------------------------------
- t
+ t               | t
 (1 row)
 
-SELECT documentdb_api.drop_collection('lookupdb', 'gate_availability');
- drop_collection 
+-- reset state
+SELECT documentdb_api.drop_collection('lookupdb', 'Dishes'), documentdb_api.drop_collection('lookupdb', 'Ingredients'), documentdb_api.drop_collection('lookupdb', 'Shops');
+ drop_collection | drop_collection | drop_collection 
 ---------------------------------------------------------------------
- t
+ f               | f               | f
 (1 row)
 
 -- lookup with point read where inner plan depends on external param crash fix scenario
 SELECT documentdb_api.insert_one('lookupdb','Dishes',' { "_id" : 1, "dishId" : 1, "ingredients": [1, 2, 3, 4] }', NULL);
-psql:sql/bson_aggregation_tests_lookup_inner_join_core.sql:104: NOTICE:  creating collection
+psql:sql/bson_aggregation_stage_lookup_inner_join_core.sql:117: NOTICE:  creating collection
                               insert_one                              
 ---------------------------------------------------------------------
  { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
 (1 row)
 
 SELECT documentdb_api.insert_one('lookupdb','Ingredients',' { "_id" : 1, "shopId" : 101, "name": "Salt" }', NULL);
-psql:sql/bson_aggregation_tests_lookup_inner_join_core.sql:105: NOTICE:  creating collection
+psql:sql/bson_aggregation_stage_lookup_inner_join_core.sql:118: NOTICE:  creating collection
                               insert_one                              
 ---------------------------------------------------------------------
  { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
@@ -286,7 +314,7 @@ SELECT documentdb_api.insert_one('lookupdb','Ingredients',' { "_id" : 4, "shopId
 (1 row)
 
 SELECT documentdb_api.insert_one('lookupdb','Shops',' { "_id" : 101, "name": "ABC Mart" }', NULL);
-psql:sql/bson_aggregation_tests_lookup_inner_join_core.sql:109: NOTICE:  creating collection
+psql:sql/bson_aggregation_stage_lookup_inner_join_core.sql:122: NOTICE:  creating collection
                               insert_one                              
 ---------------------------------------------------------------------
  { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
