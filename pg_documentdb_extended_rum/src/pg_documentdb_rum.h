@@ -1018,6 +1018,7 @@ typedef enum SimilarityType
 #define RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT true
 #define RUM_DEFAULT_FIX_INCOMPLETE_SPLIT true
 #define RUM_DEFAULT_ENABLE_INJECT_PAGE_SPLIT_INCOMPLETE false
+#define RUM_ENABLE_PARALLEL_VACUUM_FLAGS true
 
 /* GUC parameters */
 extern int RumFuzzySearchLimit;
@@ -1036,6 +1037,7 @@ extern bool RumUseNewItemPtrDecoding;
 extern bool RumTrackIncompleteSplit;
 extern bool RumFixIncompleteSplit;
 extern bool RumInjectPageSplitIncomplete;
+extern bool RumEnableParallelVacuumFlags;
 
 /*
  * Functions for reading ItemPointers with additional information. Used in

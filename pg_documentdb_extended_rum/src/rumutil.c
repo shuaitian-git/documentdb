@@ -28,6 +28,7 @@
 #include "utils/syscache.h"
 #include "utils/typcache.h"
 #include "commands/progress.h"
+#include "commands/vacuum.h"
 
 #include "pg_documentdb_rum.h"
 
@@ -47,6 +48,7 @@ rum_format_log_hook rum_unredacted_log_emit_hook = NULL;
 
 bool RumThrowErrorOnInvalidDataPage = RUM_DEFAULT_THROW_ERROR_ON_INVALID_DATA_PAGE;
 bool RumUseNewItemPtrDecoding = RUM_DEFAULT_USE_NEW_ITEM_PTR_DECODING;
+bool RumEnableParallelVacuumFlags = RUM_ENABLE_PARALLEL_VACUUM_FLAGS;
 
 /*
  * Module load callback
@@ -190,6 +192,15 @@ _PG_init(void)
 		PGC_USERSET, 0,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		DOCUMENTDB_RUM_GUC_PREFIX ".enable_set_vacuum_parallel_flags",
+		"Enables setting the parallel vacuum flags in Postgres",
+		NULL,
+		&RumEnableParallelVacuumFlags,
+		RUM_ENABLE_PARALLEL_VACUUM_FLAGS,
+		PGC_USERSET, 0,
+		NULL, NULL, NULL);
+
 	MarkGUCPrefixReserved(DOCUMENTDB_RUM_GUC_PREFIX);
 	rum_relopt_kind = add_reloption_kind();
 
@@ -247,6 +258,13 @@ documentdb_rumhandler(PG_FUNCTION_ARGS)
 	amroutine->amcanbuildparallel = RumEnableParallelIndexBuild;
 #endif
 	amroutine->amkeytype = InvalidOid;
+
+	if (RumEnableParallelVacuumFlags)
+	{
+		amroutine->amusemaintenanceworkmem = true;
+		amroutine->amparallelvacuumoptions =
+			VACUUM_OPTION_PARALLEL_BULKDEL | VACUUM_OPTION_PARALLEL_CLEANUP;
+	}
 
 	amroutine->ambuild = rumbuild;
 	amroutine->ambuildempty = rumbuildempty;
