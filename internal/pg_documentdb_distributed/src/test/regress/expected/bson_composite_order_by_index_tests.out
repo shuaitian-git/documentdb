@@ -120,6 +120,14 @@ EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bs
          Order By: (document |-<> '{ "a" : { "$numberInt" : "1" } }'::bson)
 (10 rows)
 
+-- point read on _id with order by was broken initially and was fixed in 108 
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_find('comp_db', '{ "find": "query_orderby", "filter": { "_id": 1}, "sort": { "_id": 1 } }');
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------
+ Index Scan using _id_ on documents_68001_680002 collection (actual rows=1 loops=1)
+   Index Cond: ((shard_key_value = '68001'::bigint) AND (object_id = '{ "" : { "$numberInt" : "1" } }'::bson))
+(2 rows)
+
 -- do a reverse walk
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_find('comp_db', '{ "find": "query_orderby", "filter": { "a": { "$exists": true }}, "sort": { "a": -1 } }');
                                        QUERY PLAN                                        

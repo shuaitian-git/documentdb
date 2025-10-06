@@ -38,6 +38,9 @@ EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bs
 SET documentdb.enableIndexOrderbyPushdown to on;
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_find('comp_db', '{ "find": "query_orderby", "filter": { "a": { "$exists": true }}, "sort": { "a": 1 } }');
 
+-- point read on _id with order by was broken initially and was fixed in 108 
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_find('comp_db', '{ "find": "query_orderby", "filter": { "_id": 1}, "sort": { "_id": 1 } }');
+
 -- do a reverse walk
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_find('comp_db', '{ "find": "query_orderby", "filter": { "a": { "$exists": true }}, "sort": { "a": -1 } }');
 
