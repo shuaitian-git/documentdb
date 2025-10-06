@@ -171,7 +171,9 @@ typedef struct
 	int compositePathSpec;
 } BsonGinCompositePathOptions;
 
-
+bool ValidateIndexForQualifierElement(bytea *indexOptions,
+									  pgbsonelement *queryelement,
+									  BsonIndexStrategy strategy);
 bool ValidateIndexForQualifierValue(bytea *indexOptions, Datum queryValue,
 									BsonIndexStrategy
 									strategy);

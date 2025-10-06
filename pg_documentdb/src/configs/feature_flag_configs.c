@@ -126,6 +126,12 @@ bool EnableInsertCustomPlan = DEFAULT_ENABLE_INSERT_CUSTOM_PLAN;
 #define DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING true
 bool EnableIndexPriorityOrdering = DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING;
 
+#define DEFAULT_ENABLE_EXPR_LOOKUP_INDEX_PUSHDOWN true
+bool EnableExprLookupIndexPushdown = DEFAULT_ENABLE_EXPR_LOOKUP_INDEX_PUSHDOWN;
+
+#define DEFAULT_ENABLE_UNIFY_PFE_ON_INDEXINFO true
+bool EnableUnifyPfeOnIndexInfo = DEFAULT_ENABLE_UNIFY_PFE_ON_INDEXINFO;
+
 
 /*
  * SECTION: Aggregation & Query feature flags
@@ -538,6 +544,20 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to delay holding the portal until we know there is more data to be fetched."),
 		NULL, &EnableDelayedHoldPortal, DEFAULT_ENABLE_DELAYED_HOLD_PORTAL,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableExprLookupIndexPushdown", newGucPrefix),
+		gettext_noop(
+			"Whether to expr and lookup pushdown to the index."),
+		NULL, &EnableExprLookupIndexPushdown, DEFAULT_ENABLE_EXPR_LOOKUP_INDEX_PUSHDOWN,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.unifyPfeOnIndexInfo", newGucPrefix),
+		gettext_noop(
+			"Whether to unify partial filter expressions on index expressions."),
+		NULL, &EnableUnifyPfeOnIndexInfo, DEFAULT_ENABLE_UNIFY_PFE_ON_INDEXINFO,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

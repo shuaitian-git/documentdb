@@ -117,7 +117,7 @@ IsDollarRangeFullScan(List *args)
 	PgbsonToSinglePgbsonElement(
 		DatumGetPgBson(secondConst->constvalue), &dollarElement);
 	DollarRangeParams rangeParams = { 0 };
-	InitializeQueryDollarRange(&dollarElement, &rangeParams);
+	InitializeQueryDollarRange(&dollarElement.bsonValue, &rangeParams);
 	return rangeParams.isFullScan;
 }
 
@@ -231,7 +231,7 @@ GetStatisticsNoStatsData(List *args, Oid selectivityOpExpr, double defaultExprSe
 			 * half the selectivity of each $gt/$lt.
 			 */
 			DollarRangeParams rangeParams = { 0 };
-			InitializeQueryDollarRange(&dollarElement, &rangeParams);
+			InitializeQueryDollarRange(&dollarElement.bsonValue, &rangeParams);
 			if (rangeParams.isFullScan)
 			{
 				return 1.0;
