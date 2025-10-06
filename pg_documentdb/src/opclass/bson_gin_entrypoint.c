@@ -37,6 +37,7 @@
 #include "metadata/metadata_cache.h"
 #include "collation/collation.h"
 
+extern bool EnableExprLookupIndexPushdown;
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -887,6 +888,14 @@ ValidateIndexForQualifierValue(bytea *indexOptions, Datum queryValue, BsonIndexS
 		PgbsonToSinglePgbsonElement(queryBson, &filterElement);
 	}
 
+	return ValidateIndexForQualifierElement(indexOptions, &filterElement, strategy);
+}
+
+
+bool
+ValidateIndexForQualifierElement(bytea *indexOptions, pgbsonelement *filterElement,
+								 BsonIndexStrategy strategy)
+{
 	BsonGinIndexOptionsBase *options = (BsonGinIndexOptionsBase *) indexOptions;
 
 	IndexTraverseOption traverse = IndexTraverse_Invalid;
@@ -906,8 +915,8 @@ ValidateIndexForQualifierValue(bytea *indexOptions, Datum queryValue, BsonIndexS
 			uint32_t indexPathLength;
 			const char *indexPath;
 			Get_Index_Path_Option(option, path, indexPath, indexPathLength);
-			if (indexPathLength == filterElement.pathLength &&
-				strncmp(indexPath, filterElement.path, indexPathLength) == 0)
+			if (indexPathLength == filterElement->pathLength &&
+				strncmp(indexPath, filterElement->path, indexPathLength) == 0)
 			{
 				/* this is an exact match on the path. */
 				traverse = IndexTraverse_Match;
@@ -926,7 +935,8 @@ ValidateIndexForQualifierValue(bytea *indexOptions, Datum queryValue, BsonIndexS
 
 			if (singlePathOptions->isWildcard)
 			{
-				StringView fieldPathName = CreateStringViewFromString(filterElement.path);
+				StringView fieldPathName = CreateStringViewFromString(
+					filterElement->path);
 
 				if (StringViewEndsWith(&fieldPathName, '.'))
 				{
@@ -940,8 +950,8 @@ ValidateIndexForQualifierValue(bytea *indexOptions, Datum queryValue, BsonIndexS
 				/* currently we don't yet support pushing down paths with fields that have
 				 * purely numbers as their paths. TODO: We need to lift this requirement.
 				 */
-				if (QueryPathHasDigits(filterElement.path,
-									   filterElement.pathLength))
+				if (QueryPathHasDigits(filterElement->path,
+									   filterElement->pathLength))
 				{
 					/* Don't push down */
 					traverse = IndexTraverse_Invalid;
@@ -950,9 +960,10 @@ ValidateIndexForQualifierValue(bytea *indexOptions, Datum queryValue, BsonIndexS
 			}
 
 			traverse = GetSinglePathIndexTraverseOption(options,
-														filterElement.path,
-														filterElement.pathLength,
-														filterElement.bsonValue.value_type);
+														filterElement->path,
+														filterElement->pathLength,
+														filterElement->bsonValue.
+														value_type);
 			break;
 		}
 
@@ -961,9 +972,9 @@ ValidateIndexForQualifierValue(bytea *indexOptions, Datum queryValue, BsonIndexS
 			int32_t compositeColumnIgnore;
 			traverse = GetCompositePathIndexTraverseOption(
 				strategy, options,
-				filterElement.path,
-				filterElement.pathLength,
-				&filterElement.bsonValue,
+				filterElement->path,
+				filterElement->pathLength,
+				&filterElement->bsonValue,
 				&compositeColumnIgnore);
 			break;
 		}
@@ -978,18 +989,18 @@ ValidateIndexForQualifierValue(bytea *indexOptions, Datum queryValue, BsonIndexS
 			}
 
 			traverse = GetHashIndexTraverseOption(options,
-												  filterElement.path,
-												  filterElement.pathLength);
+												  filterElement->path,
+												  filterElement->pathLength);
 			break;
 		}
 
 		case IndexOptionsType_Wildcard:
 		{
 			traverse = GetWildcardProjectionPathIndexTraverseOption(options,
-																	filterElement.path,
-																	filterElement.
+																	filterElement->path,
+																	filterElement->
 																	pathLength,
-																	filterElement.
+																	filterElement->
 																	bsonValue.value_type);
 			break;
 		}
@@ -1086,8 +1097,20 @@ ValidateIndexForQualifierPathForDollarIn(bytea *indexOptions, const StringView *
 
 		case IndexOptionsType_Composite:
 		{
-			/* TODO: Support $lookup pushdown to composite index */
-			traverse = IndexTraverse_Invalid;
+			if (!EnableExprLookupIndexPushdown)
+			{
+				traverse = IndexTraverse_Invalid;
+				break;
+			}
+
+			int32_t compositeColumnIgnore;
+			bson_value_t unspecifiedValue = { 0 };
+			traverse = GetCompositePathIndexTraverseOption(
+				BSON_INDEX_STRATEGY_DOLLAR_IN, options,
+				queryPath->string,
+				queryPath->length,
+				&unspecifiedValue,
+				&compositeColumnIgnore);
 			break;
 		}
 

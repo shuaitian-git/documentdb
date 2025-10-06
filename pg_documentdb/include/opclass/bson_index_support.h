@@ -153,4 +153,8 @@ void WalkRestrictionPathsForIndexOperations(List *restrictInfo,
 
 bool IsBtreePrimaryKeyIndex(struct IndexOptInfo *indexInfo);
 bool InMatchIsEquvalentTo(ScalarArrayOpExpr *opExpr, const bson_value_t *arrayValue);
+
+OpExpr * GetOpExprClauseFromIndexOperator(const
+										  MongoIndexOperatorInfo *operator, List *args,
+										  bytea *indexOptions);
 #endif

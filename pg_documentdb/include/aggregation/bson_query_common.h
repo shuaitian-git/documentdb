@@ -34,6 +34,7 @@ typedef struct DollarRangeParams
 
 DollarRangeParams * ParseQueryDollarRange(pgbsonelement *filterElement);
 
-void InitializeQueryDollarRange(pgbsonelement *filterElement, DollarRangeParams *params);
+void InitializeQueryDollarRange(const bson_value_t *rangeValue,
+								DollarRangeParams *params);
 
 #endif
