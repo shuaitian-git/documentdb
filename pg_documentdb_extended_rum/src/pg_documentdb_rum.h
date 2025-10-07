@@ -56,8 +56,7 @@ typedef struct RumPageOpaqueData
 	OffsetNumber maxoff;        /* number entries on RUM_DATA page: number of
 	                             * heap ItemPointers on RUM_DATA|RUM_LEAF page
 	                             * or number of PostingItems on RUM_DATA &
-	                             * ~RUM_LEAF page. On RUM_LIST page, number of
-	                             * heap tuples. */
+	                             * ~RUM_LEAF page. */
 	OffsetNumber freespace;
 	uint16 flags;               /* see bit definitions below */
 }   RumPageOpaqueData;
@@ -68,8 +67,9 @@ typedef RumPageOpaqueData *RumPageOpaque;
 #define RUM_LEAF (1 << 1)
 #define RUM_DELETED (1 << 2)
 #define RUM_META (1 << 3)
-#define RUM_LIST (1 << 4)
-#define RUM_LIST_FULLROW (1 << 5)       /* makes sense only on RUM_LIST page */
+
+/* DEPRECATED (REUSABLE): #define RUM_LIST (1 << 4) */
+/* DEPRECATED (REUSABLE): #define RUM_LIST_FULLROW (1 << 5) */
 #define RUM_HALF_DEAD (1 << 6)
 #define RUM_INCOMPLETE_SPLIT (1 << 7)   /* page was split, but parent not updated */
 
@@ -99,9 +99,7 @@ typedef struct RumMetaPageData
 	uint32 rumVersion;
 
 	/*
-	 * Pointers to head and tail of pending list, which consists of RUM_LIST
-	 * pages.  These store fast-inserted entries that haven't yet been moved
-	 * into the regular RUM structure.
+	 * Pointers to head and tail of pending list (unused).
 	 * XXX unused - pending list is removed.
 	 */
 	BlockNumber head;
@@ -143,10 +141,6 @@ typedef struct RumMetaPageData
 #define RumPageSetNonLeaf(page) (RumPageGetOpaque(page)->flags &= ~RUM_LEAF)
 #define RumPageIsData(page) ((RumPageGetOpaque(page)->flags & RUM_DATA) != 0)
 #define RumPageSetData(page) (RumPageGetOpaque(page)->flags |= RUM_DATA)
-#define RumPageIsList(page) ((RumPageGetOpaque(page)->flags & RUM_LIST) != 0)
-#define RumPageSetList(page) (RumPageGetOpaque(page)->flags |= RUM_LIST)
-#define RumPageHasFullRow(page) ((RumPageGetOpaque(page)->flags & RUM_LIST_FULLROW) != 0)
-#define RumPageSetFullRow(page) (RumPageGetOpaque(page)->flags |= RUM_LIST_FULLROW)
 
 #define RumPageIsDeleted(page) ((RumPageGetOpaque(page)->flags & RUM_DELETED) != 0)
 #define RumPageIsNotDeleted(page) ((RumPageGetOpaque(page)->flags & RUM_DELETED) == 0)

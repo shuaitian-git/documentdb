@@ -1210,7 +1210,7 @@ rumvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 		{
 			idxStat.nDataPages++;
 		}
-		else if (!RumPageIsList(page))
+		else
 		{
 			idxStat.nEntryPages++;
 

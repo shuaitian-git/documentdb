@@ -44,7 +44,7 @@ BsonIndexAmEntry RumIndexAmEntry = {
 	.am_name = "rum",
 	.get_opclass_catalog_schema = GetRumCatalogSchema,
 	.get_opclass_internal_catalog_schema = GetRumInternalSchemaV2,
-	.get_multikey_status = RumGetMultikeyStatus,
+	.get_multikey_status = NULL,
 	.get_truncation_status = RumGetTruncationStatus,
 };
 
