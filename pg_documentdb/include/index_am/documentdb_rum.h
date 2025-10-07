@@ -54,13 +54,10 @@ typedef enum RumLibraryLoadOptions
 } RumLibraryLoadOptions;
 
 
-/* Registers an extensibility that handles index array deduplication */
-void RegisterIndexArrayStateFuncs(const RumIndexArrayStateFuncs *funcs);
 typedef bool (*CanOrderInIndexScan)(IndexScanDesc scan);
 
 extern RumLibraryLoadOptions DocumentDBRumLibraryLoadOption;
 void LoadRumRoutine(void);
-IndexAmRoutine *GetRumIndexHandler(PG_FUNCTION_ARGS);
 
 IndexScanDesc extension_rumbeginscan_core(Relation rel, int nkeys, int norderbys,
 										  IndexAmRoutine *coreRoutine);
@@ -100,8 +97,6 @@ bool extension_ruminsert_core(Relation indexRelation,
 							  IndexAmRoutine *coreRoutine,
 							  UpdateMultikeyStatusFunc updateMultikeyStatus);
 
-void RumUpdateMultiKeyStatus(Relation index);
-bool RumGetMultikeyStatus(Relation indexRelation);
 bool RumGetTruncationStatus(Relation indexRelation);
 
 struct ExplainState;
