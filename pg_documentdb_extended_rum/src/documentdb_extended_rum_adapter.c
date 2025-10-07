@@ -39,6 +39,9 @@ static Oid DocumentDBExtendedRumCompositePathOpFamilyOid(void);
 static const char * GetDocumentDBCatalogSchema(void);
 static void LoadBaseIndexAmRoutine(void);
 
+extern PGDLLEXPORT bool rum_get_multi_key_status(Relation indexRelation);
+extern PGDLLEXPORT void rum_update_multi_key_status(Relation indexRelation);
+
 /* Static Globals */
 static BsonIndexAmEntry DocumentDBIndexAmEntry = {
 	.is_single_path_index_supported = true,
@@ -60,7 +63,7 @@ static BsonIndexAmEntry DocumentDBIndexAmEntry = {
 	.am_name = "extended_rum",
 	.get_opclass_catalog_schema = GetDocumentDBCatalogSchema,
 	.get_opclass_internal_catalog_schema = GetDocumentDBCatalogSchema,
-	.get_multikey_status = RumGetMultikeyStatus,
+	.get_multikey_status = rum_get_multi_key_status,
 	.get_truncation_status = RumGetTruncationStatus,
 };
 static DocumentDBRumOidCacheData Cache = { 0 };
@@ -125,7 +128,7 @@ extension_documentdb_extended_rumrescan(IndexScanDesc scan, ScanKey scankey, int
 	EnsureDocumentDBExtendedRumLib();
 	extension_rumrescan_core(scan, scankey, nscankeys,
 							 orderbys, norderbys, &core_rum_routine,
-							 RumGetMultikeyStatus, can_rum_index_scan_ordered);
+							 rum_get_multi_key_status, can_rum_index_scan_ordered);
 }
 
 
@@ -154,7 +157,7 @@ extension_documentdb_extended_rumbuild(Relation heapRelation,
 	bool amCanBuildParallel = false;
 	return extension_rumbuild_core(heapRelation, indexRelation,
 								   indexInfo, &core_rum_routine,
-								   RumUpdateMultiKeyStatus,
+								   rum_update_multi_key_status,
 								   amCanBuildParallel);
 }
 
@@ -173,7 +176,7 @@ extension_documentdb_extended_ruminsert(Relation indexRelation,
 									heap_tid, heapRelation, checkUnique,
 									indexUnchanged, indexInfo,
 									&core_rum_routine,
-									RumUpdateMultiKeyStatus);
+									rum_update_multi_key_status);
 }
 
 
@@ -274,4 +277,53 @@ documentdb_extended_rumhandler(PG_FUNCTION_ARGS)
 	amroutine->aminsert = extension_documentdb_extended_ruminsert;
 	amroutine->amcostestimate = extension_rumcostestimate;
 	PG_RETURN_POINTER(amroutine);
+}
+
+
+PGDLLEXPORT bool
+rum_get_multi_key_status(Relation indexRelation)
+{
+	Buffer metabuffer;
+	Page metapage;
+	RumMetaPageData *metadata;
+	bool hasMultiKeyPaths = false;
+
+	metabuffer = ReadBuffer(indexRelation, RUM_METAPAGE_BLKNO);
+	LockBuffer(metabuffer, RUM_SHARE);
+	metapage = BufferGetPage(metabuffer);
+	metadata = RumPageGetMeta(metapage);
+	hasMultiKeyPaths = metadata->nPendingHeapTuples > 0;
+	UnlockReleaseBuffer(metabuffer);
+
+	return hasMultiKeyPaths;
+}
+
+
+PGDLLEXPORT void
+rum_update_multi_key_status(Relation index)
+{
+	/* First do a get to see if we even need to update */
+	bool isMultiKey = rum_get_multi_key_status(index);
+	if (isMultiKey)
+	{
+		return;
+	}
+
+	Buffer metaBuffer;
+	Page metapage;
+	RumMetaPageData *metadata;
+	GenericXLogState *state;
+
+	metaBuffer = ReadBuffer(index, RUM_METAPAGE_BLKNO);
+	LockBuffer(metaBuffer, RUM_EXCLUSIVE);
+
+	state = GenericXLogStart(index);
+	metapage = GenericXLogRegisterBuffer(state, metaBuffer, 0);
+	metadata = RumPageGetMeta(metapage);
+
+	/* Set pending heap tuples to 1 to indicate this is a multi-key index */
+	metadata->nPendingHeapTuples = 1;
+
+	GenericXLogFinish(state);
+	UnlockReleaseBuffer(metaBuffer);
 }
