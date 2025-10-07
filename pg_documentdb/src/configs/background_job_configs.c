@@ -50,10 +50,10 @@ bool RepeatPurgeIndexesForTTLTask = DEFAULT_REPEAT_PURGE_INDEXES_FOR_TTL_TASK;
 #define DEFAULT_ENABLE_TTL_DESC_SORT false
 bool EnableTTLDescSort = DEFAULT_ENABLE_TTL_DESC_SORT;
 
-#define DEFAULT_ENABLE_BG_WORKER false
+#define DEFAULT_ENABLE_BG_WORKER true
 bool EnableBackgroundWorker = DEFAULT_ENABLE_BG_WORKER;
 
-#define DEFAULT_ENABLE_BG_WORKER_JOBS false
+#define DEFAULT_ENABLE_BG_WORKER_JOBS true
 bool EnableBackgroundWorkerJobs = DEFAULT_ENABLE_BG_WORKER_JOBS;
 
 #define DEFAULT_BG_WORKER_JOB_TIMEOUT_THRESHOLD_SEC 300
@@ -218,13 +218,13 @@ InitializeBackgroundJobConfigurations(const char *prefix, const char *newGucPref
 		psprintf("%s.enableBackgroundWorker", newGucPrefix),
 		gettext_noop("Enable the extension Background worker."),
 		NULL, &EnableBackgroundWorker, DEFAULT_ENABLE_BG_WORKER,
-		PGC_SUSET, 0, NULL, NULL, NULL);
+		PGC_POSTMASTER, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		psprintf("%s.enableBackgroundWorkerJobs", newGucPrefix),
 		gettext_noop("Enable the execution of the pre-defined background worker jobs."),
 		NULL, &EnableBackgroundWorkerJobs, DEFAULT_ENABLE_BG_WORKER_JOBS,
-		PGC_SUSET, 0, NULL, NULL, NULL);
+		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		psprintf("%s.backgroundWorkerJobTimeoutThresholdSec", newGucPrefix),
