@@ -23,6 +23,7 @@
 #include "index_am/index_am_exports.h"
 #include "index_am/documentdb_rum.h"
 
+
 PG_MODULE_MAGIC;
 
 void _PG_init(void);
@@ -35,6 +36,7 @@ typedef struct DocumentDBRumOidCacheData
 	Oid BsonDocumentDBRumCompositePathOperatorFamilyId;
 } DocumentDBRumOidCacheData;
 
+extern bool EnableCompositeIndexPlanner;
 
 /* Method Declarations */
 static Oid DocumentDBExtendedRumIndexAmId(void);
@@ -268,6 +270,24 @@ DocumentDBExtendedRumCompositePathOpFamilyOid(void)
 }
 
 
+static void
+extension_documentdb_extended_rumcostestimate(PlannerInfo *root, IndexPath *path,
+											  double loop_count,
+											  Cost *indexStartupCost,
+											  Cost *indexTotalCost,
+											  Selectivity *indexSelectivity,
+											  double *indexCorrelation,
+											  double *indexPages)
+{
+	/* Do not force index cost to zero unless explicitly requested */
+	bool forceIndexCostToZero = !EnableCompositeIndexPlanner;
+	extension_rumcostestimate_core(root, path, loop_count, indexStartupCost,
+								   indexTotalCost, indexSelectivity, indexCorrelation,
+								   indexPages, &core_rum_routine,
+								   forceIndexCostToZero);
+}
+
+
 PGDLLEXPORT Datum
 documentdb_extended_rumhandler(PG_FUNCTION_ARGS)
 {
@@ -287,7 +307,7 @@ documentdb_extended_rumhandler(PG_FUNCTION_ARGS)
 	amroutine->amgettuple = extension_documentdb_extended_rumgettuple;
 	amroutine->ambuild = extension_documentdb_extended_rumbuild;
 	amroutine->aminsert = extension_documentdb_extended_ruminsert;
-	amroutine->amcostestimate = extension_rumcostestimate;
+	amroutine->amcostestimate = extension_documentdb_extended_rumcostestimate;
 	PG_RETURN_POINTER(amroutine);
 }
 

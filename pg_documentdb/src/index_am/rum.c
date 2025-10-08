@@ -42,6 +42,8 @@
 extern bool ForceUseIndexIfAvailable;
 extern bool EnableIndexOrderbyPushdown;
 extern bool EnableIndexOnlyScan;
+extern bool EnableCompositeIndexPlanner;
+
 extern const RumIndexArrayStateFuncs RoaringStateFuncs;
 
 bool RumHasMultiKeyPaths = false;
@@ -123,6 +125,13 @@ static bool extension_ruminsert(Relation indexRelation,
 								IndexUniqueCheck checkUnique,
 								bool indexUnchanged,
 								struct IndexInfo *indexInfo);
+
+static void extension_rumcostestimate(PlannerInfo *root, IndexPath *path,
+									  double loop_count,
+									  Cost *indexStartupCost, Cost *indexTotalCost,
+									  Selectivity *indexSelectivity,
+									  double *indexCorrelation,
+									  double *indexPages);
 static IndexAmRoutine * GetRumIndexHandler(PG_FUNCTION_ARGS);
 
 static bool RumGetMultiKeyStatusSlow(Relation relation);
@@ -446,11 +455,27 @@ LoadRumRoutine(void)
  * build_index_paths). In this case, we need to check that at least one predicate matches the
  * index for the index to be considered.
  */
-void
+static void
 extension_rumcostestimate(PlannerInfo *root, IndexPath *path, double loop_count,
 						  Cost *indexStartupCost, Cost *indexTotalCost,
 						  Selectivity *indexSelectivity, double *indexCorrelation,
 						  double *indexPages)
+{
+	bool forceIndexPushdownCostToZero = !EnableCompositeIndexPlanner &&
+										ForceUseIndexIfAvailable;
+	extension_rumcostestimate_core(root, path, loop_count, indexStartupCost,
+								   indexTotalCost,
+								   indexSelectivity, indexCorrelation, indexPages,
+								   &rum_index_routine, forceIndexPushdownCostToZero);
+}
+
+
+void
+extension_rumcostestimate_core(PlannerInfo *root, IndexPath *path, double loop_count,
+							   Cost *indexStartupCost, Cost *indexTotalCost,
+							   Selectivity *indexSelectivity, double *indexCorrelation,
+							   double *indexPages, IndexAmRoutine *coreRoutine,
+							   bool forceIndexPushdownCostToZero)
 {
 	if (!IsIndexIsValidForQuery(path))
 	{
@@ -483,12 +508,17 @@ extension_rumcostestimate(PlannerInfo *root, IndexPath *path, double loop_count,
 		}
 	}
 
-	/* Index is valid - pick the cost estimate for rum (which currently is the gin cost estimate) */
-	gincostestimate(root, path, loop_count, indexStartupCost, indexTotalCost,
-					indexSelectivity, indexCorrelation, indexPages);
+	coreRoutine->amcostestimate(
+		root, path, loop_count, indexStartupCost, indexTotalCost,
+		indexSelectivity, indexCorrelation, indexPages);
 
 	/* Do a pass to check for text indexes (We force push down with cost == 0) */
-	if (ForceUseIndexIfAvailable || IsTextIndexMatch(path))
+	if (IsTextIndexMatch(path))
+	{
+		*indexTotalCost = 0;
+		*indexStartupCost = 0;
+	}
+	else if (forceIndexPushdownCostToZero)
 	{
 		*indexTotalCost = 0;
 		*indexStartupCost = 0;

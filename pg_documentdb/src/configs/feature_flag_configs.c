@@ -80,6 +80,9 @@ bool EnableVectorCalculateDefaultSearchParameter =
 #define DEFAULT_USE_NEW_COMPOSITE_INDEX_OPCLASS false
 bool DefaultUseCompositeOpClass = DEFAULT_USE_NEW_COMPOSITE_INDEX_OPCLASS;
 
+#define DEFAULT_ENABLE_COMPOSITE_INDEX_PLANNER false
+bool EnableCompositeIndexPlanner = DEFAULT_ENABLE_COMPOSITE_INDEX_PLANNER;
+
 #define DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN true
 bool EnableIndexOrderbyPushdown = DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN;
 
@@ -472,8 +475,15 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 	DefineCustomBoolVariable(
 		psprintf("%s.defaultUseCompositeOpClass", newGucPrefix),
 		gettext_noop(
-			"Whether to enable the new experimental composite index opclass for default index creates"),
+			"Whether to enable the new ordered index opclass for default index creates"),
 		NULL, &DefaultUseCompositeOpClass, DEFAULT_USE_NEW_COMPOSITE_INDEX_OPCLASS,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableCompositeIndexPlanner", newGucPrefix),
+		gettext_noop(
+			"Whether to enable the new ordered index opclass planner improvements"),
+		NULL, &EnableCompositeIndexPlanner, DEFAULT_ENABLE_COMPOSITE_INDEX_PLANNER,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
