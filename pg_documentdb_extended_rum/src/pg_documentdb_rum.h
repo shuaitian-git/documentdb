@@ -3,6 +3,7 @@
  * rum.h
  *	  Exported definitions for RUM index.
  *
+ * Portions Copyright (c) Microsoft Corporation.  All rights reserved.
  * Portions Copyright (c) 2015-2022, Postgres Professional
  * Portions Copyright (c) 2006-2022, PostgreSQL Global Development Group
  *

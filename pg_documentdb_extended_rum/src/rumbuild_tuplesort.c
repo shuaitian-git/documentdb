@@ -8,6 +8,7 @@
  *
  * Note: In order to support parallel sort, portions of this file are taken from
  * gininsert.c in postgres
+ * Portions Copyright (c) Microsoft Corporation.  All rights reserved.
  * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *-------------------------------------------------------------------------
