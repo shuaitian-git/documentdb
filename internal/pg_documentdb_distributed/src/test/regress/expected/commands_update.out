@@ -151,7 +151,7 @@ rollback;
 -- update multi with a replace is not supported
 begin;
 select documentdb_api.update('db', '{"update":"updateme", "updates":[{"q":{"a":{"$lte":3}},"u":{"b":0},"multi":true}]}');
-                                                                                                                                                                    update                                                                                                                                                                     
+                                                                                                                                                               update                                                                                                                                                               
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""50331677"" }, ""errmsg"" : ""multi=true and replace-style updates cannot be used together."" } ] }",f)
 (1 row)
@@ -175,7 +175,7 @@ select documentdb_api.update('db', '{"update":"notexists", "updates":[{"q":{},"u
 
 -- query syntax errors are added the response
 select documentdb_api.update('db', '{"update":"updateme", "updates":[{"q":{"a":{"$ltr":5}},"u":{"$set":{"b":0}},"multi":true}]}');
-                                                                                                                                           update                                                                                                                                            
+                                                                                                                                                   update                                                                                                                                                   
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""16777245"" }, ""errmsg"" : ""Unrecognized operator specified: $ltr"" } ] }",f)
 (1 row)
@@ -560,7 +560,7 @@ rollback;
 begin;
 set local citus.log_remote_commands to on;
 select documentdb_api.update('db', '{"update":"updateme", "updates":[{"q":{"a":{"$eq":5}},"u":{"$set":{"b":0}},"multi":true}]}');
-NOTICE:  executing the command locally: WITH u AS (UPDATE documentdb_data.documents_6490_649022 documents_6490 SET document = (SELECT COALESCE(bson_update_document.newdocument, documents_6490.document) AS "coalesce" FROM documentdb_api_internal.bson_update_document(documents_6490.document, ($1)::documentdb_core.bson, $2::documentdb_core.bson, ($3)::documentdb_core.bson, false, $4::documentdb_core.bson) bson_update_document(newdocument, updatedesc) WHERE true) WHERE ((documents_6490.document OPERATOR(documentdb_api_catalog.#=) '{ "a" : { "$numberInt" : "5" } }'::documentdb_core.bsonquery) AND (documents_6490.shard_key_value OPERATOR(pg_catalog.=) $6)) RETURNING documentdb_api_internal.bson_update_returned_value(documents_6490.shard_key_value) AS updated) SELECT count(*) AS count, sum(updated) AS sum FROM u WHERE true
+NOTICE:  executing the command locally: WITH u AS (UPDATE documentdb_data.documents_6490_649022 documents_6490 SET document = COALESCE(documentdb_api_internal.update_bson_document(documents_6490.document, ($1)::documentdb_core.bson, $2::documentdb_core.bson, ($3)::documentdb_core.bson, $4::documentdb_core.bson, NULL::text), documents_6490.document) WHERE ((documents_6490.document OPERATOR(documentdb_api_catalog.#=) '{ "a" : { "$numberInt" : "5" } }'::documentdb_core.bsonquery) AND (documents_6490.shard_key_value OPERATOR(pg_catalog.=) $6)) RETURNING documentdb_api_internal.bson_update_returned_value(documents_6490.shard_key_value) AS updated) SELECT count(*) AS count, sum(updated) AS sum FROM u WHERE true
                                                                update                                                               
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""1"" }, ""n"" : { ""$numberInt"" : ""1"" } }",t)
@@ -583,7 +583,7 @@ rollback;
 begin;
 set local citus.log_remote_commands to on;
 select documentdb_api.update('db', '{"update":"updateme", "updates":[{"q":{"$and":[{"a":5},{"a":{"$gt":0}}]},"u":{"$set":{"b":0}},"multi":true}]}');
-NOTICE:  executing the command locally: WITH u AS (UPDATE documentdb_data.documents_6490_649022 documents_6490 SET document = (SELECT COALESCE(bson_update_document.newdocument, documents_6490.document) AS "coalesce" FROM documentdb_api_internal.bson_update_document(documents_6490.document, ($1)::documentdb_core.bson, $2::documentdb_core.bson, ($3)::documentdb_core.bson, false, $4::documentdb_core.bson) bson_update_document(newdocument, updatedesc) WHERE true) WHERE (((documents_6490.document OPERATOR(documentdb_api_catalog.#=) '{ "a" : { "$numberInt" : "5" } }'::documentdb_core.bsonquery) AND (documents_6490.document OPERATOR(documentdb_api_catalog.#>) '{ "a" : { "$numberInt" : "0" } }'::documentdb_core.bsonquery)) AND (documents_6490.shard_key_value OPERATOR(pg_catalog.=) $6)) RETURNING documentdb_api_internal.bson_update_returned_value(documents_6490.shard_key_value) AS updated) SELECT count(*) AS count, sum(updated) AS sum FROM u WHERE true
+NOTICE:  executing the command locally: WITH u AS (UPDATE documentdb_data.documents_6490_649022 documents_6490 SET document = COALESCE(documentdb_api_internal.update_bson_document(documents_6490.document, ($1)::documentdb_core.bson, $2::documentdb_core.bson, ($3)::documentdb_core.bson, $4::documentdb_core.bson, NULL::text), documents_6490.document) WHERE (((documents_6490.document OPERATOR(documentdb_api_catalog.#=) '{ "a" : { "$numberInt" : "5" } }'::documentdb_core.bsonquery) AND (documents_6490.document OPERATOR(documentdb_api_catalog.#>) '{ "a" : { "$numberInt" : "0" } }'::documentdb_core.bsonquery)) AND (documents_6490.shard_key_value OPERATOR(pg_catalog.=) $6)) RETURNING documentdb_api_internal.bson_update_returned_value(documents_6490.shard_key_value) AS updated) SELECT count(*) AS count, sum(updated) AS sum FROM u WHERE true
                                                                update                                                               
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""1"" }, ""n"" : { ""$numberInt"" : ""1"" } }",t)
@@ -965,7 +965,7 @@ select count(*) from documentdb_api.collection('db', 'updateme') where document 
 
 set local citus.log_remote_commands to on;
 select documentdb_api.update('db', '{"update":"updateme", "updates":[{"q":{"_id":33, "a": 10 },"u":{"$set":{"b":2}},"multi":true,"upsert":true}]}');
-NOTICE:  executing the command locally: WITH u AS (UPDATE documentdb_data.documents_6490_649023 documents_6490 SET document = (SELECT COALESCE(bson_update_document.newdocument, documents_6490.document) AS "coalesce" FROM documentdb_api_internal.bson_update_document(documents_6490.document, ($1)::documentdb_core.bson, $2::documentdb_core.bson, ($3)::documentdb_core.bson, false, $4::documentdb_core.bson) bson_update_document(newdocument, updatedesc) WHERE true) WHERE (((documents_6490.document OPERATOR(documentdb_api_catalog.#=) '{ "_id" : { "$numberInt" : "33" } }'::documentdb_core.bsonquery) AND (documents_6490.document OPERATOR(documentdb_api_catalog.#=) '{ "a" : { "$numberInt" : "10" } }'::documentdb_core.bsonquery)) AND (documents_6490.shard_key_value OPERATOR(pg_catalog.=) $6) AND (documents_6490.object_id OPERATOR(documentdb_core.=) ($7)::documentdb_core.bson)) RETURNING documentdb_api_internal.bson_update_returned_value(documents_6490.shard_key_value) AS updated) SELECT count(*) AS count, sum(updated) AS sum FROM u WHERE true
+NOTICE:  executing the command locally: WITH u AS (UPDATE documentdb_data.documents_6490_649023 documents_6490 SET document = COALESCE(documentdb_api_internal.update_bson_document(documents_6490.document, ($1)::documentdb_core.bson, $2::documentdb_core.bson, ($3)::documentdb_core.bson, $4::documentdb_core.bson, NULL::text), documents_6490.document) WHERE (((documents_6490.document OPERATOR(documentdb_api_catalog.#=) '{ "_id" : { "$numberInt" : "33" } }'::documentdb_core.bsonquery) AND (documents_6490.document OPERATOR(documentdb_api_catalog.#=) '{ "a" : { "$numberInt" : "10" } }'::documentdb_core.bsonquery)) AND (documents_6490.shard_key_value OPERATOR(pg_catalog.=) $6) AND (documents_6490.object_id OPERATOR(documentdb_core.=) ($7)::documentdb_core.bson)) RETURNING documentdb_api_internal.bson_update_returned_value(documents_6490.shard_key_value) AS updated) SELECT count(*) AS count, sum(updated) AS sum FROM u WHERE true
                                                                update                                                               
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""1"" }, ""n"" : { ""$numberInt"" : ""1"" } }",t)
@@ -1553,43 +1553,43 @@ NOTICE:  creating collection
 
 --upsert with $expr
 select documentdb_api.update('update', '{"update":"single", "updates":[{"q":{"$and" : [{"$expr" : {"$eq": ["$a",1]}}]},"u":{},"upsert":true}]}');
-                                                                                                                                                             update                                                                                                                                                             
+                                                                                                                                                                               update                                                                                                                                                                                
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""50593821"" }, ""errmsg"" : ""Use of the $expr operator is not permitted within the query predicate for an upsert operation."" } ] }",f)
 (1 row)
 
 select documentdb_api.update('update', '{"update":"single", "updates":[{"q":{"$or" : [{"$expr" : {"$gt": ["$b",1]}}, {"x": 2}]},"u":{"$set" : {"a": 10}},"upsert":true}]}');
-                                                                                                                                                             update                                                                                                                                                             
+                                                                                                                                                                               update                                                                                                                                                                                
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""50593821"" }, ""errmsg"" : ""Use of the $expr operator is not permitted within the query predicate for an upsert operation."" } ] }",f)
 (1 row)
 
 select documentdb_api.update('update', '{"update":"single", "updates":[{"q":{"$or" : [{"$expr" : {"$gte": ["$c", 100]}}]},"u":{"$set": {"a" :10}},"upsert":true}]}');
-                                                                                                                                                             update                                                                                                                                                             
+                                                                                                                                                                               update                                                                                                                                                                                
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""50593821"" }, ""errmsg"" : ""Use of the $expr operator is not permitted within the query predicate for an upsert operation."" } ] }",f)
 (1 row)
 
 select documentdb_api.update('update', '{"update":"single", "updates":[{"q":{"$or" : [{"$or" : [{"$expr" : {"$gte": ["$c", 100]}}]}]},"u":{"$set": {"a" :10}},"upsert":true}]}');
-                                                                                                                                                             update                                                                                                                                                             
+                                                                                                                                                                               update                                                                                                                                                                                
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""50593821"" }, ""errmsg"" : ""Use of the $expr operator is not permitted within the query predicate for an upsert operation."" } ] }",f)
 (1 row)
 
 select documentdb_api.update('update', '{"update":"single", "updates":[{"q":{"$and" : [{"$or" : [{"x": 10},{"$expr" : {"$gte": ["$c", 100]}}, {"y": 10}]}]},"u":{"$set": {"a" :10}},"upsert":true}]}');
-                                                                                                                                                             update                                                                                                                                                             
+                                                                                                                                                                               update                                                                                                                                                                                
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""50593821"" }, ""errmsg"" : ""Use of the $expr operator is not permitted within the query predicate for an upsert operation."" } ] }",f)
 (1 row)
 
 select documentdb_api.update('update', '{"update":"single", "updates":[{"q":{"$expr": {"$gt" : ["$x",10]}},"u":{},"upsert":true}]}');
-                                                                                                                                                             update                                                                                                                                                             
+                                                                                                                                                                               update                                                                                                                                                                                
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""50593821"" }, ""errmsg"" : ""Use of the $expr operator is not permitted within the query predicate for an upsert operation."" } ] }",f)
 (1 row)
 
 select documentdb_api.update('update', '{"update":"single", "updates":[{"q":{"$and" : [{"a": 10}, {"$or" : [{"x": 10},{"$expr" : {"$gte": ["$c", 100]}}, {"y": 10}]}, {"b":11} ]},"u":{"$set": {"a" :10}},"upsert":true}]}');
-                                                                                                                                                             update                                                                                                                                                             
+                                                                                                                                                                               update                                                                                                                                                                                
 ---------------------------------------------------------------------
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""50593821"" }, ""errmsg"" : ""Use of the $expr operator is not permitted within the query predicate for an upsert operation."" } ] }",f)
 (1 row)
