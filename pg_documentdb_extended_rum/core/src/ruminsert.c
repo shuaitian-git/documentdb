@@ -42,7 +42,8 @@
 bool RumEnableParallelIndexBuild = RUM_DEFAULT_ENABLE_PARALLEL_INDEX_BUILD;
 int RumParallelIndexWorkersOverride = RUM_DEFAULT_PARALLEL_INDEX_WORKERS_OVERRIDE;
 
-extern PGDLLEXPORT void rum_parallel_build_main(dsm_segment *seg, shm_toc *toc);
+extern PGDLLEXPORT void documentdb_rum_parallel_build_main(dsm_segment *seg,
+														   shm_toc *toc);
 
 /* Magic numbers for parallel state sharing */
 #define PARALLEL_KEY_RUM_SHARED UINT64CONST(0xB000000000000001)
@@ -1949,7 +1950,8 @@ _rum_begin_parallel(RumBuildState *buildstate, Relation heap, Relation index,
 	 */
 	EnterParallelMode();
 	Assert(request > 0);
-	pcxt = CreateParallelContext("rum", "rum_parallel_build_main",
+	pcxt = CreateParallelContext("pg_documentdb_extended_rum_core",
+								 "documentdb_rum_parallel_build_main",
 								 request);
 
 	scantuplesortstates = leaderparticipates ? request + 1 : request;
@@ -2575,7 +2577,7 @@ ruminsert(Relation index, Datum *values, bool *isnull,
 
 
 PGDLLEXPORT void
-rum_parallel_build_main(dsm_segment *seg, shm_toc *toc)
+documentdb_rum_parallel_build_main(dsm_segment *seg, shm_toc *toc)
 {
 	bool progress = false;
 	char *sharedquery;

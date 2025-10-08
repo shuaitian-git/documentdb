@@ -87,10 +87,6 @@ typedef struct DocumentDBRumIndexState
 
 
 const char *DocumentdbRumCorePath = "$libdir/pg_documentdb_extended_rum_core";
-const char *RumIndexExplainFuncSymbol = "try_explain_rum_index";
-const char *RumIndexOrderedScanInquiryFuncSymbol = "can_rum_index_scan_ordered";
-const char *RumGetMultiKeyStatusFunctionName = "rum_get_multi_key_status";
-const char *RumUpdateMultiKeyStatusFunctionName = "rum_update_multi_key_status";
 
 typedef const RumIndexArrayStateFuncs *(*GetIndexArrayStateFuncsFunc)(void);
 
@@ -158,6 +154,62 @@ EnsureRumLibLoaded(void)
 }
 
 
+typedef enum RumFunctionCatalog
+{
+	RumFunction_AmHandler = 0,
+	RumFunction_ExtractTsQuery,
+	RumFunction_TsQueryConsistent,
+	RumFunction_Tsvector_Config,
+	RumFunction_Tsquery_PreConsistent,
+	RumFunction_Tsquery_Distance,
+	RumFunction_Ts_Join_Pos,
+	RumFunction_Extract_Tsvector,
+	RumFunction_TryExplainRumIndex,
+	RumFunction_CanRumIndexScanOrdered,
+	RumFunction_RumGetMultiKeyStatus,
+	RumFunction_RumUpdateMultiKeyStatus,
+	RumFunction_SetUnredactedLogHook,
+	RumFunction_Max,
+} RumFunctionCatalog;
+
+
+static const char *RumFunctionArray[RumFunction_Max] =
+{
+	[RumFunction_AmHandler] = "rumhandler",
+	[RumFunction_ExtractTsQuery] = "rum_extract_tsquery",
+	[RumFunction_TsQueryConsistent] = "rum_tsquery_consistent",
+	[RumFunction_Tsvector_Config] = "rum_tsvector_config",
+	[RumFunction_Tsquery_PreConsistent] = "rum_tsquery_pre_consistent",
+	[RumFunction_Tsquery_Distance] = "rum_tsquery_distance",
+	[RumFunction_Ts_Join_Pos] = "rum_ts_join_pos",
+	[RumFunction_Extract_Tsvector] = "rum_extract_tsvector",
+	[RumFunction_TryExplainRumIndex] = "try_explain_rum_index",
+	[RumFunction_CanRumIndexScanOrdered] = "can_rum_index_scan_ordered",
+	[RumFunction_RumGetMultiKeyStatus] = "rum_get_multi_key_status",
+	[RumFunction_RumUpdateMultiKeyStatus] = "rum_update_multi_key_status",
+	[RumFunction_SetUnredactedLogHook] = "SetRumUnredactedLogEmitHook"
+};
+
+
+static const char *DocumentDBRumFunctionArray[RumFunction_Max] =
+{
+	[RumFunction_AmHandler] = "documentdb_rumhandler",
+	[RumFunction_ExtractTsQuery] = "documentdb_extended_rum_extract_tsquery",
+	[RumFunction_TsQueryConsistent] = "documentdb_extended_rum_tsquery_consistent",
+	[RumFunction_Tsvector_Config] = "documentdb_extended_rum_tsvector_config",
+	[RumFunction_Tsquery_PreConsistent] =
+		"documentdb_extended_rum_tsquery_pre_consistent",
+	[RumFunction_Tsquery_Distance] = "documentdb_extended_rum_tsquery_distance",
+	[RumFunction_Ts_Join_Pos] = "documentdb_extended_rum_ts_join_pos",
+	[RumFunction_Extract_Tsvector] = "documentdb_extended_rum_extract_tsvector",
+	[RumFunction_TryExplainRumIndex] = "try_explain_documentdb_rum_index",
+	[RumFunction_CanRumIndexScanOrdered] = "can_documentdb_rum_index_scan_ordered",
+	[RumFunction_RumGetMultiKeyStatus] = "documentdb_rum_get_multi_key_status",
+	[RumFunction_RumUpdateMultiKeyStatus] = "documentdb_rum_update_multi_key_status",
+	[RumFunction_SetUnredactedLogHook] = "DocumentDBSetRumUnredactedLogEmitHook",
+};
+
+
 /* --------------------------------------------------------- */
 /* Top level exports */
 /* --------------------------------------------------------- */
@@ -169,6 +221,12 @@ PG_FUNCTION_INFO_V1(documentdb_rum_tsquery_pre_consistent);
 PG_FUNCTION_INFO_V1(documentdb_rum_tsquery_distance);
 PG_FUNCTION_INFO_V1(documentdb_rum_ts_join_pos);
 PG_FUNCTION_INFO_V1(documentdb_rum_extract_tsvector);
+
+
+extern void SetDocumentDBFunctionNames(const char *explainRumIndexFunc, const
+									   char *canRumIndexScanOrdered,
+									   const char *getMultiKeyStatus, const
+									   char *updateMultiKeyStatus);
 
 
 /*
@@ -243,6 +301,19 @@ documentdb_rum_extract_tsvector(PG_FUNCTION_ARGS)
 }
 
 
+void
+SetDocumentDBFunctionNames(const char *explainRumIndexFunc, const
+						   char *canRumIndexScanOrdered,
+						   const char *getMultiKeyStatus, const
+						   char *updateMultiKeyStatus)
+{
+	RumFunctionArray[RumFunction_TryExplainRumIndex] = explainRumIndexFunc;
+	RumFunctionArray[RumFunction_CanRumIndexScanOrdered] = canRumIndexScanOrdered;
+	RumFunctionArray[RumFunction_RumGetMultiKeyStatus] = getMultiKeyStatus;
+	RumFunctionArray[RumFunction_RumUpdateMultiKeyStatus] = updateMultiKeyStatus;
+}
+
+
 static IndexAmRoutine *
 GetRumIndexHandler(PG_FUNCTION_ARGS)
 {
@@ -295,13 +366,40 @@ LoadRumRoutine(void)
 
 	ereport(LOG, (errmsg("Loading RUM handler with DocumentDBRumLibraryLoadOption: %d",
 						 DocumentDBRumLibraryLoadOption)));
+
+	StaticAssertExpr(RumFunction_Max == sizeof(RumFunctionArray) /
+					 sizeof(RumFunctionArray[0]),
+					 "Mismatch between RumFunctionCatalog enum and RumFunctionArray size");
+	StaticAssertExpr(RumFunction_Max == sizeof(DocumentDBRumFunctionArray) /
+					 sizeof(DocumentDBRumFunctionArray[0]),
+					 "Mismatch between RumFunctionCatalog enum and DocumentDBRumFunctionArray size");
+	for (int i = 0; i < RumFunction_Max; i++)
+	{
+		if (DocumentDBRumFunctionArray[i] == NULL ||
+			strlen(DocumentDBRumFunctionArray[i]) == 0)
+		{
+			ereport(PANIC, (errmsg(
+								"DocumentDBRum Function must be defined for for index %d",
+								i)));
+		}
+
+		if (RumFunctionArray[i] == NULL ||
+			strlen(RumFunctionArray[i]) == 0)
+		{
+			ereport(PANIC, (errmsg("Rum Function must be defined for for index %d", i)));
+		}
+	}
+
+	const char **functionCatalog;
 	switch (DocumentDBRumLibraryLoadOption)
 	{
 		case RumLibraryLoadOption_RequireDocumentDBRum:
 		{
 			rumLibPath = DocumentdbRumCorePath;
+			functionCatalog = DocumentDBRumFunctionArray;
 			rumhandler = load_external_function(rumLibPath,
-												"documentdb_rumhandler", !missingOk,
+												functionCatalog[RumFunction_AmHandler],
+												!missingOk,
 												ignoreLibFileHandle);
 			ereport(LOG, (errmsg(
 							  "Loaded documentdb_rumhandler successfully via pg_documentdb_extended_rum")));
@@ -311,14 +409,18 @@ LoadRumRoutine(void)
 		case RumLibraryLoadOption_PreferDocumentDBRum:
 		{
 			rumLibPath = DocumentdbRumCorePath;
+			functionCatalog = DocumentDBRumFunctionArray;
 			rumhandler = load_external_function(rumLibPath,
-												"documentdb_rumhandler", missingOk,
+												functionCatalog[RumFunction_AmHandler],
+												missingOk,
 												ignoreLibFileHandle);
 
 			if (rumhandler == NULL)
 			{
 				rumLibPath = "$libdir/rum";
-				rumhandler = load_external_function(rumLibPath, "rumhandler",
+				functionCatalog = RumFunctionArray;
+				rumhandler = load_external_function(rumLibPath,
+													functionCatalog[RumFunction_AmHandler],
 													!missingOk,
 													ignoreLibFileHandle);
 				ereport(LOG,
@@ -338,7 +440,10 @@ LoadRumRoutine(void)
 		case RumLibraryLoadOption_None:
 		{
 			rumLibPath = "$libdir/rum";
-			rumhandler = load_external_function(rumLibPath, "rumhandler", !missingOk,
+			functionCatalog = RumFunctionArray;
+			rumhandler = load_external_function(rumLibPath,
+												functionCatalog[RumFunction_AmHandler],
+												!missingOk,
 												ignoreLibFileHandle);
 			ereport(LOG, (errmsg("Loaded documentdb_rum handler successfully via rum")));
 			break;
@@ -360,32 +465,41 @@ LoadRumRoutine(void)
 
 	/* Load required C functions */
 	rum_extract_tsquery_func =
-		load_external_function(rumLibPath, "rum_extract_tsquery", !missingOk,
+		load_external_function(rumLibPath, functionCatalog[RumFunction_ExtractTsQuery],
+							   !missingOk,
 							   ignoreLibFileHandle);
 	rum_tsquery_consistent_func =
-		load_external_function(rumLibPath, "rum_tsquery_consistent", !missingOk,
+		load_external_function(rumLibPath, functionCatalog[RumFunction_TsQueryConsistent],
+							   !missingOk,
 							   ignoreLibFileHandle);
 	rum_tsvector_config_func =
-		load_external_function(rumLibPath, "rum_tsvector_config", !missingOk,
+		load_external_function(rumLibPath, functionCatalog[RumFunction_Tsvector_Config],
+							   !missingOk,
 							   ignoreLibFileHandle);
 	rum_tsquery_pre_consistent_func =
-		load_external_function(rumLibPath, "rum_tsquery_pre_consistent", !missingOk,
+		load_external_function(rumLibPath,
+							   functionCatalog[RumFunction_Tsquery_PreConsistent],
+							   !missingOk,
 							   ignoreLibFileHandle);
 	rum_tsquery_distance_func =
-		load_external_function(rumLibPath, "rum_tsquery_distance", !missingOk,
+		load_external_function(rumLibPath, functionCatalog[RumFunction_Tsquery_Distance],
+							   !missingOk,
 							   ignoreLibFileHandle);
 	rum_ts_join_pos_func =
-		load_external_function(rumLibPath, "rum_ts_join_pos", !missingOk,
+		load_external_function(rumLibPath, functionCatalog[RumFunction_Ts_Join_Pos],
+							   !missingOk,
 							   ignoreLibFileHandle);
 	rum_extract_tsvector_func =
-		load_external_function(rumLibPath, "rum_extract_tsvector", !missingOk,
+		load_external_function(rumLibPath, functionCatalog[RumFunction_Extract_Tsvector],
+							   !missingOk,
 							   ignoreLibFileHandle);
 
 	/* Load optional explain function */
 	missingOk = true;
 	TryExplainIndexFunc explain_index_func =
 		load_external_function(rumLibPath,
-							   RumIndexExplainFuncSymbol, !missingOk,
+							   functionCatalog[RumFunction_TryExplainRumIndex],
+							   !missingOk,
 							   ignoreLibFileHandle);
 
 	if (explain_index_func != NULL)
@@ -395,7 +509,8 @@ LoadRumRoutine(void)
 
 	CanOrderInIndexScan scanOrderedFunc =
 		load_external_function(rumLibPath,
-							   RumIndexOrderedScanInquiryFuncSymbol, !missingOk,
+							   functionCatalog[RumFunction_CanRumIndexScanOrdered],
+							   !missingOk,
 							   ignoreLibFileHandle);
 	if (scanOrderedFunc != NULL)
 	{
@@ -405,7 +520,8 @@ LoadRumRoutine(void)
 	void (*setRumUnredactedLogEmitHookFunc)(format_log_hook hook) = NULL;
 	setRumUnredactedLogEmitHookFunc =
 		load_external_function(rumLibPath,
-							   "SetRumUnredactedLogEmitHook", !missingOk,
+							   functionCatalog[RumFunction_SetUnredactedLogHook],
+							   !missingOk,
 							   ignoreLibFileHandle);
 
 	if (setRumUnredactedLogEmitHookFunc != NULL)
@@ -415,7 +531,8 @@ LoadRumRoutine(void)
 
 	rum_index_multi_key_get_func =
 		load_external_function(rumLibPath,
-							   RumGetMultiKeyStatusFunctionName, !missingOk,
+							   functionCatalog[RumFunction_RumGetMultiKeyStatus],
+							   !missingOk,
 							   ignoreLibFileHandle);
 	if (rum_index_multi_key_get_func != NULL)
 	{
@@ -431,7 +548,8 @@ LoadRumRoutine(void)
 
 	rum_index_multi_key_update_func =
 		load_external_function(rumLibPath,
-							   RumUpdateMultiKeyStatusFunctionName, !missingOk,
+							   functionCatalog[RumFunction_RumUpdateMultiKeyStatus],
+							   !missingOk,
 							   ignoreLibFileHandle);
 
 	ereport(LOG, (errmsg("rum library has update func %d, get func %d",
