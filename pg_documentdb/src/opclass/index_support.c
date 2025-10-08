@@ -305,6 +305,7 @@ extern bool UseNewElemMatchIndexPushdown;
 extern bool UseNewElemMatchIndexOperatorOnPushdown;
 extern bool DisableDollarSupportFuncSelectivity;
 extern bool EnableNewOperatorSelectivityMode;
+extern bool EnableCompositeIndexPlanner;
 extern bool EnableIndexHintSupport;
 extern bool LowSelectivityForLookup;
 extern bool EnableIndexOrderbyPushdown;
@@ -365,7 +366,8 @@ dollar_support(PG_FUNCTION_ARGS)
 	else if (IsA(supportRequest, SupportRequestSelectivity))
 	{
 		SupportRequestSelectivity *req = (SupportRequestSelectivity *) supportRequest;
-		if (!DisableDollarSupportFuncSelectivity && EnableNewOperatorSelectivityMode)
+		if (!DisableDollarSupportFuncSelectivity &&
+			(EnableNewOperatorSelectivityMode || EnableCompositeIndexPlanner))
 		{
 			const MongoIndexOperatorInfo *indexOperator =
 				GetMongoIndexOperatorInfoByPostgresFuncId(req->funcid);
