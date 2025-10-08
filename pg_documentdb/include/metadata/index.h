@@ -314,7 +314,8 @@ IndexCmdStatus GetIndexBuildStatusFromIndexQueue(int indexId);
 IndexCmdRequest * GetRequestFromIndexQueue(uint64 collectionId,
 										   MemoryContext mcxt);
 IndexCmdRequest * GetSkippableRequestFromIndexQueue(int expireTimeInSeconds,
-													List *skipCollections);
+													List *skipCollections,
+													MemoryContext mcxt);
 uint64 * GetCollectionIdsForIndexBuild(List *excludeCollectionIds);
 void AddRequestInIndexQueue(char *createIndexCmd, int indexId, uint64 collectionId, char
 							cmd_type, Oid userOid);
