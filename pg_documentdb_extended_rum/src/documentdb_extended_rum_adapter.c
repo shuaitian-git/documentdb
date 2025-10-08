@@ -23,6 +23,10 @@
 #include "index_am/index_am_exports.h"
 #include "index_am/documentdb_rum.h"
 
+PG_MODULE_MAGIC;
+
+void _PG_init(void);
+
 /* Data Type declarations */
 typedef struct DocumentDBRumOidCacheData
 {
@@ -69,11 +73,19 @@ static BsonIndexAmEntry DocumentDBIndexAmEntry = {
 static DocumentDBRumOidCacheData Cache = { 0 };
 static bool has_custom_routine = false;
 static IndexAmRoutine core_rum_routine = { 0 };
+static void InitializeDocumentDBRum(void);
 
 /* Top level method exports */
 PG_FUNCTION_INFO_V1(documentdb_extended_rumhandler);
 
-void
+PGDLLEXPORT void
+_PG_init(void)
+{
+	InitializeDocumentDBRum();
+}
+
+
+static void
 InitializeDocumentDBRum(void)
 {
 	if (!process_shared_preload_libraries_in_progress)
