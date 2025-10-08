@@ -5,6 +5,12 @@ PGFILEDESC = "DocumentDB Extended RUM index access method"
 
 OSS_SRC_DIR = ../
 
+
+RUM_CORE_SOURCES=$(wildcard core/**/*.c)
+RUM_CORE_LIB_NAME=pg_documentdb_extended_rum_core.so
+RUM_CORE_LIB_DIR=$(CURDIR)/core/
+RUM_CORE_LIB=$(CORE_LIB_DIR)/$(CORE_SCHEMA_NAME)
+
 SOURCES = $(wildcard src/*.c)
 OBJS = $(patsubst %.c,%.o,$(SOURCES)) $(WIN32RES)
 
@@ -18,8 +24,6 @@ sql_file_inputs = $(wildcard sql/**/*.sql)
 
 OSS_COMMON_SQL_HEADER = $(wildcard $(OSS_SRC_DIR)/common_header.sql)
 
-PG_CPPFLAGS += -I$(OSS_SRC_DIR)/pg_documentdb_core/include/ -I$(OSS_SRC_DIR)/pg_documentdb/include/
-
 # INCLUDES = rum.h rumsort.h
 RELATIVE_INCLUDES = $(addprefix src/, $(INCLUDES))
 
@@ -31,6 +35,9 @@ CORE_SCHEMA_NAME=documentdb_core
 EXTENSION_OBJECT_PREFIX=documentdb_extended
 include $(OSS_SRC_DIR)/Makefile.cflags
 
+PG_LDFLAGS += -l:$(RUM_CORE_LIB_NAME) -L$(RUM_CORE_LIB_DIR)
+
+PG_CPPFLAGS += -I $(CURDIR)/core/src/
 PG_CFLAGS += -Wno-sign-compare -Wno-type-limits
 
 include $(OSS_SRC_DIR)/Makefile.global
@@ -40,10 +47,23 @@ override LDFLAGS_SL += -fvisibility=hidden -DHAVE_VISIBILITY_ATTRIBUTE=1
 override CFLAGS += -fvisibility=hidden  -DHAVE_VISIBILITY_ATTRIBUTE=1
 override CXXFLAGS += -fvisibility=hidden  -DHAVE_VISIBILITY_ATTRIBUTE=1
 
+$(RUM_CORE_LIB): $(RUM_CORE_SOURCES)
+	$(MAKE) -C $(RUM_CORE_LIB_DIR)
+
+$(MODULE_big)$(DLSUFFIX): $(RUM_CORE_LIB)
+
+clean_core:
+	$(MAKE) -C $(RUM_CORE_LIB_DIR) clean
+
+clean: clean_core
+
+install_core:
+	$(MAKE) -C $(RUM_CORE_LIB_DIR) install
+
+install: install_core
 
 clean-sql:
 	rm -rf .deps/ build/
-
 
 build-sql: $(generated_sql_files)
 

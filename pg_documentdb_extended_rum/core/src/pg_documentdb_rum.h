@@ -1556,8 +1556,6 @@ extern PGDLLEXPORT void try_explain_rum_index(IndexScanDesc scan,
 											  struct ExplainState *es);
 extern PGDLLEXPORT bool can_rum_index_scan_ordered(IndexScanDesc scan);
 
-void InitializeDocumentDBRum(void);
-
 #define UNREDACTED_RUM_LOG_CODE MAKE_SQLSTATE('R', 'Z', 'Z', 'Z', 'Z')
 typedef int (*rum_format_log_hook)(const char *fmt, ...) pg_attribute_printf (1, 2);
 extern rum_format_log_hook rum_unredacted_log_emit_hook;

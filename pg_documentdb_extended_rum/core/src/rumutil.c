@@ -56,8 +56,6 @@ bool RumEnableParallelVacuumFlags = RUM_ENABLE_PARALLEL_VACUUM_FLAGS;
 PGDLLEXPORT void
 _PG_init(void)
 {
-	InitializeDocumentDBRum();
-
 #define RUM_GUC_PREFIX "documentdb_rum"
 #define DOCUMENTDB_RUM_GUC_PREFIX "documentdb_rum"
 
