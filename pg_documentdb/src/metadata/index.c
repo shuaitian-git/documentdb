@@ -1458,7 +1458,7 @@ AddRequestInIndexQueue(char *createIndexCmd, int indexId, uint64 collectionId, c
  */
 IndexCmdRequest *
 GetSkippableRequestFromIndexQueue(int expireTimeInSeconds,
-								  List *skipCollections)
+								  List *skipCollections, MemoryContext mcxt)
 {
 	StringInfo cmdStr = makeStringInfo();
 
@@ -1514,6 +1514,7 @@ GetSkippableRequestFromIndexQueue(int expireTimeInSeconds,
 		userOid = DatumGetObjectId(results[6]);
 	}
 
+	MemoryContext old = MemoryContextSwitchTo(mcxt);
 	IndexCmdRequest *request = palloc(sizeof(IndexCmdRequest));
 	request->indexId = indexId;
 	request->collectionId = collectionId;
@@ -1524,6 +1525,8 @@ GetSkippableRequestFromIndexQueue(int expireTimeInSeconds,
 	request->status = status;
 	request->userOid = userOid;
 	request->cmdType = cmdTypeData[0];
+	MemoryContextSwitchTo(old);
+
 	return request;
 }
 
