@@ -84,7 +84,7 @@ typedef struct DocumentDBRumIndexState
 } DocumentDBRumIndexState;
 
 
-const char *DocumentdbRumPath = "$libdir/pg_documentdb_extended_rum";
+const char *DocumentdbRumCorePath = "$libdir/pg_documentdb_extended_rum_core";
 const char *RumIndexExplainFuncSymbol = "try_explain_rum_index";
 const char *RumIndexOrderedScanInquiryFuncSymbol = "can_rum_index_scan_ordered";
 const char *RumGetMultiKeyStatusFunctionName = "rum_get_multi_key_status";
@@ -290,7 +290,7 @@ LoadRumRoutine(void)
 	{
 		case RumLibraryLoadOption_RequireDocumentDBRum:
 		{
-			rumLibPath = DocumentdbRumPath;
+			rumLibPath = DocumentdbRumCorePath;
 			rumhandler = load_external_function(rumLibPath,
 												"documentdb_rumhandler", !missingOk,
 												ignoreLibFileHandle);
@@ -301,7 +301,7 @@ LoadRumRoutine(void)
 
 		case RumLibraryLoadOption_PreferDocumentDBRum:
 		{
-			rumLibPath = DocumentdbRumPath;
+			rumLibPath = DocumentdbRumCorePath;
 			rumhandler = load_external_function(rumLibPath,
 												"documentdb_rumhandler", missingOk,
 												ignoreLibFileHandle);
