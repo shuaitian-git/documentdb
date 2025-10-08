@@ -73,12 +73,13 @@ bool extension_rumgettuple_core(IndexScanDesc scan, ScanDirection direction,
 								IndexAmRoutine *coreRoutine);
 
 
-void extension_rumcostestimate(PlannerInfo *root, IndexPath *path, double
-							   loop_count,
-							   Cost *indexStartupCost, Cost *indexTotalCost,
-							   Selectivity *indexSelectivity,
-							   double *indexCorrelation,
-							   double *indexPages);
+void extension_rumcostestimate_core(PlannerInfo *root, IndexPath *path, double
+									loop_count,
+									Cost *indexStartupCost, Cost *indexTotalCost,
+									Selectivity *indexSelectivity,
+									double *indexCorrelation,
+									double *indexPages, IndexAmRoutine *coreRoutine,
+									bool forceIndexPushdownCostToZero);
 
 IndexBuildResult * extension_rumbuild_core(Relation heapRelation, Relation indexRelation,
 										   struct IndexInfo *indexInfo,

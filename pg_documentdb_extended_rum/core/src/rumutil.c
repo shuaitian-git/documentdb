@@ -199,6 +199,15 @@ _PG_init(void)
 		PGC_USERSET, 0,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		DOCUMENTDB_RUM_GUC_PREFIX ".enable_custom_cost_estimate",
+		"Temporary flag to enable using the custom rum cost estimate logic",
+		NULL,
+		&RumEnableCustomCostEstimate,
+		RUM_DEFAULT_ENABLE_CUSTOM_COST_ESTIMATE,
+		PGC_USERSET, 0,
+		NULL, NULL, NULL);
+
 	MarkGUCPrefixReserved(DOCUMENTDB_RUM_GUC_PREFIX);
 	rum_relopt_kind = add_reloption_kind();
 
@@ -270,7 +279,7 @@ documentdb_rumhandler(PG_FUNCTION_ARGS)
 	amroutine->ambulkdelete = rumbulkdelete;
 	amroutine->amvacuumcleanup = rumvacuumcleanup;
 	amroutine->amcanreturn = NULL;
-	amroutine->amcostestimate = gincostestimate;
+	amroutine->amcostestimate = documentdb_rum_costestimate;
 	amroutine->amoptions = rumoptions;
 	amroutine->amproperty = rumproperty;
 	amroutine->amvalidate = rumvalidate;

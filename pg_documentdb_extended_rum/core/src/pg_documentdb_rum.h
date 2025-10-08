@@ -932,6 +932,13 @@ extern void rumVacuumPruneEmptyEntries(Relation indexRel);
 typedef RBNode RBTNode;
 #endif
 
+/* rumselfuncs.c */
+void documentdb_rum_costestimate(struct PlannerInfo *root, struct IndexPath *path, double
+								 loop_count,
+								 Cost *indexStartupCost, Cost *indexTotalCost,
+								 Selectivity *indexSelectivity, double *indexCorrelation,
+								 double *indexPages);
+
 typedef struct RumEntryAccumulator
 {
 	RBTNode rbnode;
@@ -1014,6 +1021,7 @@ typedef enum SimilarityType
 #define RUM_DEFAULT_FIX_INCOMPLETE_SPLIT true
 #define RUM_DEFAULT_ENABLE_INJECT_PAGE_SPLIT_INCOMPLETE false
 #define RUM_ENABLE_PARALLEL_VACUUM_FLAGS true
+#define RUM_DEFAULT_ENABLE_CUSTOM_COST_ESTIMATE true
 
 /* GUC parameters */
 extern int RumFuzzySearchLimit;
@@ -1033,6 +1041,7 @@ extern bool RumTrackIncompleteSplit;
 extern bool RumFixIncompleteSplit;
 extern bool RumInjectPageSplitIncomplete;
 extern bool RumEnableParallelVacuumFlags;
+extern bool RumEnableCustomCostEstimate;
 
 /*
  * Functions for reading ItemPointers with additional information. Used in
