@@ -45,8 +45,8 @@ static Oid DocumentDBExtendedRumCompositePathOpFamilyOid(void);
 static const char * GetDocumentDBCatalogSchema(void);
 static void LoadBaseIndexAmRoutine(void);
 
-extern PGDLLEXPORT bool rum_get_multi_key_status(Relation indexRelation);
-extern PGDLLEXPORT void rum_update_multi_key_status(Relation indexRelation);
+extern PGDLLEXPORT bool documentdb_rum_get_multi_key_status(Relation indexRelation);
+extern PGDLLEXPORT void documentdb_rum_update_multi_key_status(Relation indexRelation);
 
 /* Static Globals */
 static BsonIndexAmEntry DocumentDBIndexAmEntry = {
@@ -65,11 +65,11 @@ static BsonIndexAmEntry DocumentDBIndexAmEntry = {
 	.get_text_path_op_family_oid = NULL,
 	.get_unique_path_op_family_oid = NULL,
 	.get_hashed_path_op_family_oid = NULL,
-	.add_explain_output = try_explain_rum_index,
+	.add_explain_output = try_explain_documentdb_rum_index,
 	.am_name = "extended_rum",
 	.get_opclass_catalog_schema = GetDocumentDBCatalogSchema,
 	.get_opclass_internal_catalog_schema = GetDocumentDBCatalogSchema,
-	.get_multikey_status = rum_get_multi_key_status,
+	.get_multikey_status = documentdb_rum_get_multi_key_status,
 	.get_truncation_status = RumGetTruncationStatus,
 };
 static DocumentDBRumOidCacheData Cache = { 0 };
@@ -142,7 +142,8 @@ extension_documentdb_extended_rumrescan(IndexScanDesc scan, ScanKey scankey, int
 	EnsureDocumentDBExtendedRumLib();
 	extension_rumrescan_core(scan, scankey, nscankeys,
 							 orderbys, norderbys, &core_rum_routine,
-							 rum_get_multi_key_status, can_rum_index_scan_ordered);
+							 documentdb_rum_get_multi_key_status,
+							 can_documentdb_rum_index_scan_ordered);
 }
 
 
@@ -171,7 +172,7 @@ extension_documentdb_extended_rumbuild(Relation heapRelation,
 	bool amCanBuildParallel = false;
 	return extension_rumbuild_core(heapRelation, indexRelation,
 								   indexInfo, &core_rum_routine,
-								   rum_update_multi_key_status,
+								   documentdb_rum_update_multi_key_status,
 								   amCanBuildParallel);
 }
 
@@ -190,7 +191,7 @@ extension_documentdb_extended_ruminsert(Relation indexRelation,
 									heap_tid, heapRelation, checkUnique,
 									indexUnchanged, indexInfo,
 									&core_rum_routine,
-									rum_update_multi_key_status);
+									documentdb_rum_update_multi_key_status);
 }
 
 
@@ -313,7 +314,7 @@ documentdb_extended_rumhandler(PG_FUNCTION_ARGS)
 
 
 PGDLLEXPORT bool
-rum_get_multi_key_status(Relation indexRelation)
+documentdb_rum_get_multi_key_status(Relation indexRelation)
 {
 	Buffer metabuffer;
 	Page metapage;
@@ -332,10 +333,10 @@ rum_get_multi_key_status(Relation indexRelation)
 
 
 PGDLLEXPORT void
-rum_update_multi_key_status(Relation index)
+documentdb_rum_update_multi_key_status(Relation index)
 {
 	/* First do a get to see if we even need to update */
-	bool isMultiKey = rum_get_multi_key_status(index);
+	bool isMultiKey = documentdb_rum_get_multi_key_status(index);
 	if (isMultiKey)
 	{
 		return;

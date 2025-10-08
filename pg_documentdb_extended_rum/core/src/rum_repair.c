@@ -33,8 +33,8 @@
 #include "pg_documentdb_rum.h"
 
 
-PG_FUNCTION_INFO_V1(rum_prune_empty_entries_on_index);
-PG_FUNCTION_INFO_V1(rum_repair_incomplete_split_on_index);
+PG_FUNCTION_INFO_V1(documentdb_rum_prune_empty_entries_on_index);
+PG_FUNCTION_INFO_V1(documentdb_rum_repair_incomplete_split_on_index);
 
 
 static void rumRepairLostPathOnIndex(Relation index, bool trackDataPages, bool
@@ -57,7 +57,7 @@ static void CheckTreeAtLevel(RumState *rumState, BlockNumber blockNumber, int le
  * That is still delegated to vacuum.
  */
 Datum
-rum_prune_empty_entries_on_index(PG_FUNCTION_ARGS)
+documentdb_rum_prune_empty_entries_on_index(PG_FUNCTION_ARGS)
 {
 	Relation indrel;
 	Oid indexRelId = PG_GETARG_OID(0);
@@ -86,7 +86,7 @@ rum_prune_empty_entries_on_index(PG_FUNCTION_ARGS)
  * consistent state.
  */
 Datum
-rum_repair_incomplete_split_on_index(PG_FUNCTION_ARGS)
+documentdb_rum_repair_incomplete_split_on_index(PG_FUNCTION_ARGS)
 {
 	Relation indrel;
 	Oid indexRelId = PG_GETARG_OID(0);

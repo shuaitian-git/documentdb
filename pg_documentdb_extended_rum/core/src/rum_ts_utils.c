@@ -64,24 +64,24 @@ typedef enum
 typedef RumTernaryValue (*RumExecuteCallbackTernary) (void *arg, QueryOperand *val,
 													  ExecPhraseData *data);
 
-PG_FUNCTION_INFO_V1(rum_extract_tsvector);
-PG_FUNCTION_INFO_V1(rum_extract_tsvector_hash);
-PG_FUNCTION_INFO_V1(rum_extract_tsquery);
-PG_FUNCTION_INFO_V1(rum_extract_tsquery_hash);
-PG_FUNCTION_INFO_V1(rum_tsvector_config);
-PG_FUNCTION_INFO_V1(rum_tsquery_pre_consistent);
-PG_FUNCTION_INFO_V1(rum_tsquery_consistent);
-PG_FUNCTION_INFO_V1(rum_tsquery_timestamp_consistent);
-PG_FUNCTION_INFO_V1(rum_tsquery_distance);
-PG_FUNCTION_INFO_V1(rum_ts_distance_tt);
-PG_FUNCTION_INFO_V1(rum_ts_distance_ttf);
-PG_FUNCTION_INFO_V1(rum_ts_distance_td);
-PG_FUNCTION_INFO_V1(rum_ts_score_tt);
-PG_FUNCTION_INFO_V1(rum_ts_score_ttf);
-PG_FUNCTION_INFO_V1(rum_ts_score_td);
-PG_FUNCTION_INFO_V1(rum_ts_join_pos);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_extract_tsvector);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_extract_tsvector_hash);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_extract_tsquery);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_extract_tsquery_hash);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_tsvector_config);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_tsquery_pre_consistent);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_tsquery_consistent);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_tsquery_timestamp_consistent);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_tsquery_distance);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_ts_distance_tt);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_ts_distance_ttf);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_ts_distance_td);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_ts_score_tt);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_ts_score_ttf);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_ts_score_td);
+PG_FUNCTION_INFO_V1(documentdb_extended_rum_ts_join_pos);
 
-PG_FUNCTION_INFO_V1(tsquery_to_distance_query);
+PG_FUNCTION_INFO_V1(documentdb_tsquery_to_distance_query);
 
 static unsigned int count_pos(char *ptr, int len);
 static char * decompress_pos(char *ptr, WordEntryPos *pos);
@@ -230,7 +230,7 @@ pre_checkcondition_rum(void *checkval, QueryOperand *val, ExecPhraseData *data)
 
 
 PGDLLEXPORT Datum
-rum_tsquery_pre_consistent(PG_FUNCTION_ARGS)
+documentdb_extended_rum_tsquery_pre_consistent(PG_FUNCTION_ARGS)
 {
 	bool *check = (bool *) PG_GETARG_POINTER(0);
 	TSQuery query = PG_GETARG_TSQUERY(2);
@@ -978,7 +978,7 @@ rum_TS_execute(QueryItem *curitem, void *arg, uint32 flags,
 
 
 PGDLLEXPORT Datum
-rum_tsquery_consistent(PG_FUNCTION_ARGS)
+documentdb_extended_rum_tsquery_consistent(PG_FUNCTION_ARGS)
 {
 	bool *check = (bool *) PG_GETARG_POINTER(0);
 
@@ -1027,7 +1027,7 @@ rum_tsquery_consistent(PG_FUNCTION_ARGS)
 
 
 Datum
-rum_tsquery_timestamp_consistent(PG_FUNCTION_ARGS)
+documentdb_extended_rum_tsquery_timestamp_consistent(PG_FUNCTION_ARGS)
 {
 	bool *check = (bool *) PG_GETARG_POINTER(0);
 
@@ -1357,7 +1357,7 @@ build_tsvector_hash_entry(TSVector vector, WordEntry *we)
  * Extracts lexemes from tsvector with additional information.
  */
 PGDLLEXPORT Datum
-rum_extract_tsvector(PG_FUNCTION_ARGS)
+documentdb_extended_rum_extract_tsvector(PG_FUNCTION_ARGS)
 {
 	TSVector vector = PG_GETARG_TSVECTOR(0);
 	int32 *nentries = (int32 *) PG_GETARG_POINTER(1);
@@ -1377,7 +1377,7 @@ rum_extract_tsvector(PG_FUNCTION_ARGS)
  * Extracts hashed lexemes from tsvector with additional information.
  */
 Datum
-rum_extract_tsvector_hash(PG_FUNCTION_ARGS)
+documentdb_extended_rum_extract_tsvector_hash(PG_FUNCTION_ARGS)
 {
 	TSVector vector = PG_GETARG_TSVECTOR(0);
 	int32 *nentries = (int32 *) PG_GETARG_POINTER(1);
@@ -1525,7 +1525,7 @@ build_tsquery_hash_entry(TSQuery query, QueryOperand *operand)
  * Extracts lexemes from tsquery with information about prefix search syntax.
  */
 PGDLLEXPORT Datum
-rum_extract_tsquery(PG_FUNCTION_ARGS)
+documentdb_extended_rum_extract_tsquery(PG_FUNCTION_ARGS)
 {
 	TSQuery query = PG_GETARG_TSQUERY(0);
 	int32 *nentries = (int32 *) PG_GETARG_POINTER(1);
@@ -1553,7 +1553,7 @@ rum_extract_tsquery(PG_FUNCTION_ARGS)
  * syntax.
  */
 Datum
-rum_extract_tsquery_hash(PG_FUNCTION_ARGS)
+documentdb_extended_rum_extract_tsquery_hash(PG_FUNCTION_ARGS)
 {
 	TSQuery query = PG_GETARG_TSQUERY(0);
 	int32 *nentries = (int32 *) PG_GETARG_POINTER(1);
@@ -2263,7 +2263,7 @@ calc_score(float4 *arrdata, TSVector txt, TSQuery query, int method)
  * positions.
  */
 PGDLLEXPORT Datum
-rum_tsquery_distance(PG_FUNCTION_ARGS)
+documentdb_extended_rum_tsquery_distance(PG_FUNCTION_ARGS)
 {
 	bool *check = (bool *) PG_GETARG_POINTER(0);
 
@@ -2294,7 +2294,7 @@ rum_tsquery_distance(PG_FUNCTION_ARGS)
  * Implementation of <=> operator. Uses default normalization method.
  */
 Datum
-rum_ts_distance_tt(PG_FUNCTION_ARGS)
+documentdb_extended_rum_ts_distance_tt(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
 	TSQuery query = PG_GETARG_TSQUERY(1);
@@ -2319,7 +2319,7 @@ rum_ts_distance_tt(PG_FUNCTION_ARGS)
  * Implementation of <=> operator. Uses specified normalization method.
  */
 Datum
-rum_ts_distance_ttf(PG_FUNCTION_ARGS)
+documentdb_extended_rum_ts_distance_ttf(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
 	TSQuery query = PG_GETARG_TSQUERY(1);
@@ -2384,7 +2384,7 @@ calc_score_parse_opt(TSVector txt, HeapTupleHeader d)
  * Implementation of <=> operator. Uses specified normalization method.
  */
 Datum
-rum_ts_distance_td(PG_FUNCTION_ARGS)
+documentdb_extended_rum_ts_distance_td(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
 	HeapTupleHeader d = PG_GETARG_HEAPTUPLEHEADER(1);
@@ -2410,7 +2410,7 @@ rum_ts_distance_td(PG_FUNCTION_ARGS)
  * Calculate score (inverted distance). Uses default normalization method.
  */
 Datum
-rum_ts_score_tt(PG_FUNCTION_ARGS)
+documentdb_extended_rum_ts_score_tt(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
 	TSQuery query = PG_GETARG_TSQUERY(1);
@@ -2429,7 +2429,7 @@ rum_ts_score_tt(PG_FUNCTION_ARGS)
  * Calculate score (inverted distance). Uses specified normalization method.
  */
 Datum
-rum_ts_score_ttf(PG_FUNCTION_ARGS)
+documentdb_extended_rum_ts_score_ttf(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
 	TSQuery query = PG_GETARG_TSQUERY(1);
@@ -2449,7 +2449,7 @@ rum_ts_score_ttf(PG_FUNCTION_ARGS)
  * Calculate score (inverted distance). Uses specified normalization method.
  */
 Datum
-rum_ts_score_td(PG_FUNCTION_ARGS)
+documentdb_extended_rum_ts_score_td(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
 	HeapTupleHeader d = PG_GETARG_HEAPTUPLEHEADER(1);
@@ -2468,7 +2468,7 @@ rum_ts_score_td(PG_FUNCTION_ARGS)
  * Casts tsquery to rum_distance_query type.
  */
 Datum
-tsquery_to_distance_query(PG_FUNCTION_ARGS)
+documentdb_tsquery_to_distance_query(PG_FUNCTION_ARGS)
 {
 	TSQuery query = PG_GETARG_TSQUERY(0);
 
@@ -2499,7 +2499,7 @@ tsquery_to_distance_query(PG_FUNCTION_ARGS)
  * Specifies additional information type for operator class.
  */
 PGDLLEXPORT Datum
-rum_tsvector_config(PG_FUNCTION_ARGS)
+documentdb_extended_rum_tsvector_config(PG_FUNCTION_ARGS)
 {
 	RumConfig *config = (RumConfig *) PG_GETARG_POINTER(0);
 
@@ -2511,7 +2511,7 @@ rum_tsvector_config(PG_FUNCTION_ARGS)
 
 
 PGDLLEXPORT Datum
-rum_ts_join_pos(PG_FUNCTION_ARGS)
+documentdb_extended_rum_ts_join_pos(PG_FUNCTION_ARGS)
 {
 	Datum addInfo1 = PG_GETARG_DATUM(0);
 	Datum addInfo2 = PG_GETARG_DATUM(1);
