@@ -985,7 +985,7 @@ rumrestrpos(PG_FUNCTION_ARGS)
 
 
 PGDLLEXPORT bool
-can_rum_index_scan_ordered(IndexScanDesc scan)
+can_documentdb_rum_index_scan_ordered(IndexScanDesc scan)
 {
 	RumScanOpaque so = (RumScanOpaque) scan->opaque;
 	bool isSupportedOrderedScan = scan->numberOfKeys > 0;
@@ -1013,7 +1013,7 @@ can_rum_index_scan_ordered(IndexScanDesc scan)
 
 
 extern PGDLLEXPORT void
-try_explain_rum_index(IndexScanDesc scan, ExplainState *es)
+try_explain_documentdb_rum_index(IndexScanDesc scan, ExplainState *es)
 {
 	/* This function is called from explain.c */
 	int i, j;

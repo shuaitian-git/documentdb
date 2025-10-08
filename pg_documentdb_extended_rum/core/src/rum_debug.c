@@ -37,14 +37,14 @@ static Page get_page_from_raw(bytea *raw_page);
 static Jsonb * RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid);
 static Jsonb * RumPrintDataPageLineToJsonB(Page page, uint64 counter);
 
-PG_FUNCTION_INFO_V1(rum_get_meta_page_info);
-PG_FUNCTION_INFO_V1(rum_page_get_stats);
-PG_FUNCTION_INFO_V1(rum_page_get_entries);
-PG_FUNCTION_INFO_V1(rum_page_get_data_items);
+PG_FUNCTION_INFO_V1(documentdb_rum_get_meta_page_info);
+PG_FUNCTION_INFO_V1(documentdb_rum_page_get_stats);
+PG_FUNCTION_INFO_V1(documentdb_rum_page_get_entries);
+PG_FUNCTION_INFO_V1(documentdb_rum_page_get_data_items);
 
 
 Datum
-rum_get_meta_page_info(PG_FUNCTION_ARGS)
+documentdb_rum_get_meta_page_info(PG_FUNCTION_ARGS)
 {
 	bytea *page = PG_GETARG_BYTEA_P(0);
 
@@ -129,7 +129,7 @@ RumPageFlagsToString(Page page)
 
 
 Datum
-rum_page_get_stats(PG_FUNCTION_ARGS)
+documentdb_rum_page_get_stats(PG_FUNCTION_ARGS)
 {
 	bytea *raw_page = PG_GETARG_BYTEA_P(0);
 	Page page = get_page_from_raw(raw_page);
@@ -189,7 +189,7 @@ rum_page_get_stats(PG_FUNCTION_ARGS)
 
 
 Datum
-rum_page_get_entries(PG_FUNCTION_ARGS)
+documentdb_rum_page_get_entries(PG_FUNCTION_ARGS)
 {
 	Oid entryTypeOid = PG_GETARG_OID(1);
 	FuncCallContext *fctx;
@@ -230,7 +230,7 @@ rum_page_get_entries(PG_FUNCTION_ARGS)
 
 
 Datum
-rum_page_get_data_items(PG_FUNCTION_ARGS)
+documentdb_rum_page_get_data_items(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *fctx;
 	Page page;

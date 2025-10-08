@@ -37,7 +37,7 @@ PG_MODULE_MAGIC;
 void _PG_init(void);
 
 PG_FUNCTION_INFO_V1(documentdb_rumhandler);
-PGDLLEXPORT void SetRumUnredactedLogEmitHook(rum_format_log_hook hook);
+PGDLLEXPORT void DocumentDBSetRumUnredactedLogEmitHook(rum_format_log_hook hook);
 
 static char * rumbuildphasename(int64 phasenum);
 
@@ -305,7 +305,7 @@ documentdb_rumhandler(PG_FUNCTION_ARGS)
 
 
 PGDLLEXPORT void
-SetRumUnredactedLogEmitHook(rum_format_log_hook hook)
+DocumentDBSetRumUnredactedLogEmitHook(rum_format_log_hook hook)
 {
 	rum_unredacted_log_emit_hook = hook;
 }
