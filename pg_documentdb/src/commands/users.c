@@ -1332,7 +1332,7 @@ WriteSingleUserDocument(UserRoleHashEntry *userEntry, bool showPrivileges,
 	if (EnableUsersInfoPrivileges && showPrivileges && userEntry->roles != NULL)
 	{
 		pgbson_array_writer privilegesArrayWriter;
-		PgbsonWriterStartArray(&userWriter, "privileges", 10,
+		PgbsonWriterStartArray(&userWriter, "inheritedPrivileges", 19,
 							   &privilegesArrayWriter);
 		WriteMultipleRolePrivileges(userEntry->roles, &privilegesArrayWriter);
 		PgbsonWriterEndArray(&userWriter, &privilegesArrayWriter);
