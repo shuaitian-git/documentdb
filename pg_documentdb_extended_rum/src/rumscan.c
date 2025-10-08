@@ -3,7 +3,7 @@
  * rumscan.c
  *	  routines to manage scans of inverted index relations
  *
- *
+ * Portions Copyright (c) Microsoft Corporation.  All rights reserved.
  * Portions Copyright (c) 2015-2022, Postgres Professional
  * Portions Copyright (c) 1996-2016, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
