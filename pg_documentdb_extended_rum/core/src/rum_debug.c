@@ -43,7 +43,7 @@ PG_FUNCTION_INFO_V1(documentdb_rum_page_get_entries);
 PG_FUNCTION_INFO_V1(documentdb_rum_page_get_data_items);
 
 
-Datum
+PGDLLEXPORT Datum
 documentdb_rum_get_meta_page_info(PG_FUNCTION_ARGS)
 {
 	bytea *page = PG_GETARG_BYTEA_P(0);
@@ -128,7 +128,7 @@ RumPageFlagsToString(Page page)
 }
 
 
-Datum
+PGDLLEXPORT Datum
 documentdb_rum_page_get_stats(PG_FUNCTION_ARGS)
 {
 	bytea *raw_page = PG_GETARG_BYTEA_P(0);
@@ -188,7 +188,7 @@ documentdb_rum_page_get_stats(PG_FUNCTION_ARGS)
 }
 
 
-Datum
+PGDLLEXPORT Datum
 documentdb_rum_page_get_entries(PG_FUNCTION_ARGS)
 {
 	Oid entryTypeOid = PG_GETARG_OID(1);
@@ -229,7 +229,7 @@ documentdb_rum_page_get_entries(PG_FUNCTION_ARGS)
 }
 
 
-Datum
+PGDLLEXPORT Datum
 documentdb_rum_page_get_data_items(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *fctx;

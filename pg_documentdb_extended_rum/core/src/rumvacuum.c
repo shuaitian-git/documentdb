@@ -30,8 +30,8 @@
 	vacuum_delay_point();
 #endif
 
-bool RumSkipRetryOnDeletePage = RUM_DEFAULT_SKIP_RETRY_ON_DELETE_PAGE;
-bool RumVacuumEntryItems = RUM_DEFAULT_VACUUM_ENTRY_ITEMS;
+PGDLLEXPORT bool RumSkipRetryOnDeletePage = RUM_DEFAULT_SKIP_RETRY_ON_DELETE_PAGE;
+PGDLLEXPORT bool RumVacuumEntryItems = RUM_DEFAULT_VACUUM_ENTRY_ITEMS;
 
 typedef struct
 {

@@ -39,8 +39,9 @@
 #include "pg_documentdb_rum.h"
 #include "rumbuild_tuplesort.h"
 
-bool RumEnableParallelIndexBuild = RUM_DEFAULT_ENABLE_PARALLEL_INDEX_BUILD;
-int RumParallelIndexWorkersOverride = RUM_DEFAULT_PARALLEL_INDEX_WORKERS_OVERRIDE;
+PGDLLEXPORT bool RumEnableParallelIndexBuild = RUM_DEFAULT_ENABLE_PARALLEL_INDEX_BUILD;
+PGDLLEXPORT int RumParallelIndexWorkersOverride =
+	RUM_DEFAULT_PARALLEL_INDEX_WORKERS_OVERRIDE;
 
 extern PGDLLEXPORT void documentdb_rum_parallel_build_main(dsm_segment *seg,
 														   shm_toc *toc);

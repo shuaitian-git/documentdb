@@ -25,7 +25,7 @@
 
 #include "pg_documentdb_rum.h"
 
-bool RumEnableCustomCostEstimate = RUM_DEFAULT_ENABLE_CUSTOM_COST_ESTIMATE;
+PGDLLEXPORT bool RumEnableCustomCostEstimate = RUM_DEFAULT_ENABLE_CUSTOM_COST_ESTIMATE;
 
 #define DEFAULT_PAGE_CPU_MULTIPLIER 50.0
 
@@ -60,7 +60,7 @@ static bool gincost_scalararrayopexpr(PlannerInfo *root,
  * Cost estimate logic for documentdb_extended_rum. Implements logic handling
  * how to cost pushdown to the index.
  */
-void
+PGDLLEXPORT void
 documentdb_rum_costestimate(PlannerInfo *root, IndexPath *path, double loop_count,
 							Cost *indexStartupCost, Cost *indexTotalCost,
 							Selectivity *indexSelectivity, double *indexCorrelation,

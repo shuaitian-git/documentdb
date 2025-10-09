@@ -5,11 +5,10 @@ PGFILEDESC = "DocumentDB Extended RUM index access method"
 
 OSS_SRC_DIR = ../
 
-
 RUM_CORE_SOURCES=$(wildcard core/**/*.c)
 RUM_CORE_LIB_NAME=pg_documentdb_extended_rum_core.so
 RUM_CORE_LIB_DIR=$(CURDIR)/core/
-RUM_CORE_LIB=$(CORE_LIB_DIR)/$(CORE_SCHEMA_NAME)
+RUM_CORE_LIB=$(RUM_CORE_LIB_DIR)/$(RUM_CORE_LIB_NAME)
 
 SOURCES = $(wildcard src/*.c)
 OBJS = $(patsubst %.c,%.o,$(SOURCES)) $(WIN32RES)
@@ -64,6 +63,11 @@ install: install_core
 
 clean-sql:
 	rm -rf .deps/ build/
+
+uninstall_core:
+	$(MAKE) -C $(RUM_CORE_LIB_DIR) uninstall
+
+uninstall: uninstall_core
 
 build-sql: $(generated_sql_files)
 
