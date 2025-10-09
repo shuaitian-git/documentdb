@@ -19,9 +19,10 @@
 
 #include "pg_documentdb_rum.h"
 
-bool RumTrackIncompleteSplit = RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT;
-bool RumFixIncompleteSplit = RUM_DEFAULT_FIX_INCOMPLETE_SPLIT;
-bool RumInjectPageSplitIncomplete = RUM_DEFAULT_ENABLE_INJECT_PAGE_SPLIT_INCOMPLETE;
+PGDLLEXPORT bool RumTrackIncompleteSplit = RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT;
+PGDLLEXPORT bool RumFixIncompleteSplit = RUM_DEFAULT_FIX_INCOMPLETE_SPLIT;
+PGDLLEXPORT bool RumInjectPageSplitIncomplete =
+	RUM_DEFAULT_ENABLE_INJECT_PAGE_SPLIT_INCOMPLETE;
 
 static void rumFinishOldSplit(RumBtree btree, RumBtreeStack *stack, BlockNumber rootBlkno,
 							  RumStatsData *buildStats, int access);

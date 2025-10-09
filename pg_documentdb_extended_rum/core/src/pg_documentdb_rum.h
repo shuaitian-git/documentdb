@@ -481,7 +481,7 @@ typedef struct RumState
 #endif
 
 /* rumutil.c */
-extern bytea * rumoptions(Datum reloptions, bool validate);
+extern PGDLLEXPORT bytea * documentdb_rumoptions(Datum reloptions, bool validate);
 extern bool rumproperty(Oid index_oid, int attno,
 						IndexAMProperty prop, const char *propname,
 						bool *res, bool *isnull);
@@ -933,11 +933,14 @@ typedef RBNode RBTNode;
 #endif
 
 /* rumselfuncs.c */
-void documentdb_rum_costestimate(struct PlannerInfo *root, struct IndexPath *path, double
-								 loop_count,
-								 Cost *indexStartupCost, Cost *indexTotalCost,
-								 Selectivity *indexSelectivity, double *indexCorrelation,
-								 double *indexPages);
+extern PGDLLEXPORT void documentdb_rum_costestimate(struct PlannerInfo *root, struct
+													IndexPath *path, double
+													loop_count,
+													Cost *indexStartupCost,
+													Cost *indexTotalCost,
+													Selectivity *indexSelectivity,
+													double *indexCorrelation,
+													double *indexPages);
 
 typedef struct RumEntryAccumulator
 {
@@ -997,16 +1000,7 @@ extern RumItem * rumGetBAEntry(BuildAccumulator *accum,
 /* NProcs changes for documentdb from 10 to 12 */
 #define RUMNProcs 12
 
-/* rum_arr_utils.c */
-typedef enum SimilarityType
-{
-	SMT_COSINE = 1,
-	SMT_JACCARD = 2,
-	SMT_OVERLAP = 3
-} SimilarityType;
 
-#define RUM_SIMILARITY_FUNCTION_DEFAULT SMT_COSINE
-#define RUM_SIMILARITY_THRESHOLD_DEFAULT 0.5
 #define RUM_DEFAULT_THROW_ERROR_ON_INVALID_DATA_PAGE false
 #define RUM_DEFAULT_DISABLE_FAST_SCAN false
 #define RUM_DEFAULT_ENABLE_PARALLEL_INDEX_BUILD true
@@ -1024,24 +1018,23 @@ typedef enum SimilarityType
 #define RUM_DEFAULT_ENABLE_CUSTOM_COST_ESTIMATE true
 
 /* GUC parameters */
-extern int RumFuzzySearchLimit;
-extern bool RumUseNewVacuumScan;
-extern int RumDataPageIntermediateSplitSize;
-extern bool RumThrowErrorOnInvalidDataPage;
-extern bool RumDisableFastScan;
-extern bool RumEnableParallelIndexBuild;
-extern int RumParallelIndexWorkersOverride;
-extern bool RumSkipRetryOnDeletePage;
-extern bool RumForceOrderedIndexScan;
-extern bool RumPreferOrderedIndexScan;
-extern bool RumEnableSkipIntermediateEntry;
-extern bool RumVacuumEntryItems;
-extern bool RumUseNewItemPtrDecoding;
-extern bool RumTrackIncompleteSplit;
-extern bool RumFixIncompleteSplit;
-extern bool RumInjectPageSplitIncomplete;
-extern bool RumEnableParallelVacuumFlags;
-extern bool RumEnableCustomCostEstimate;
+extern PGDLLEXPORT int RumFuzzySearchLimit;
+extern PGDLLEXPORT int RumDataPageIntermediateSplitSize;
+extern PGDLLEXPORT bool RumThrowErrorOnInvalidDataPage;
+extern PGDLLEXPORT bool RumDisableFastScan;
+extern PGDLLEXPORT bool RumEnableParallelIndexBuild;
+extern PGDLLEXPORT int RumParallelIndexWorkersOverride;
+extern PGDLLEXPORT bool RumSkipRetryOnDeletePage;
+extern PGDLLEXPORT bool RumForceOrderedIndexScan;
+extern PGDLLEXPORT bool RumPreferOrderedIndexScan;
+extern PGDLLEXPORT bool RumEnableSkipIntermediateEntry;
+extern PGDLLEXPORT bool RumVacuumEntryItems;
+extern PGDLLEXPORT bool RumUseNewItemPtrDecoding;
+extern PGDLLEXPORT bool RumTrackIncompleteSplit;
+extern PGDLLEXPORT bool RumFixIncompleteSplit;
+extern PGDLLEXPORT bool RumInjectPageSplitIncomplete;
+extern PGDLLEXPORT bool RumEnableParallelVacuumFlags;
+extern PGDLLEXPORT bool RumEnableCustomCostEstimate;
 
 /*
  * Functions for reading ItemPointers with additional information. Used in
@@ -1567,7 +1560,7 @@ extern PGDLLEXPORT bool can_documentdb_rum_index_scan_ordered(IndexScanDesc scan
 
 #define UNREDACTED_RUM_LOG_CODE MAKE_SQLSTATE('R', 'Z', 'Z', 'Z', 'Z')
 typedef int (*rum_format_log_hook)(const char *fmt, ...) pg_attribute_printf (1, 2);
-extern rum_format_log_hook rum_unredacted_log_emit_hook;
+extern PGDLLEXPORT rum_format_log_hook rum_unredacted_log_emit_hook;
 
 #define errmsg_unredacted(...) \
 	(rum_unredacted_log_emit_hook ? \

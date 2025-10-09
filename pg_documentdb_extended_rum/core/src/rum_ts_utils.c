@@ -1026,7 +1026,7 @@ documentdb_extended_rum_tsquery_consistent(PG_FUNCTION_ARGS)
 }
 
 
-Datum
+PGDLLEXPORT Datum
 documentdb_extended_rum_tsquery_timestamp_consistent(PG_FUNCTION_ARGS)
 {
 	bool *check = (bool *) PG_GETARG_POINTER(0);
@@ -1376,7 +1376,7 @@ documentdb_extended_rum_extract_tsvector(PG_FUNCTION_ARGS)
 /*
  * Extracts hashed lexemes from tsvector with additional information.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_extended_rum_extract_tsvector_hash(PG_FUNCTION_ARGS)
 {
 	TSVector vector = PG_GETARG_TSVECTOR(0);
@@ -1552,7 +1552,7 @@ documentdb_extended_rum_extract_tsquery(PG_FUNCTION_ARGS)
  * Extracts hashed lexemes from tsquery with information about prefix search
  * syntax.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_extended_rum_extract_tsquery_hash(PG_FUNCTION_ARGS)
 {
 	TSQuery query = PG_GETARG_TSQUERY(0);
@@ -2293,7 +2293,7 @@ documentdb_extended_rum_tsquery_distance(PG_FUNCTION_ARGS)
 /*
  * Implementation of <=> operator. Uses default normalization method.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_extended_rum_ts_distance_tt(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
@@ -2318,7 +2318,7 @@ documentdb_extended_rum_ts_distance_tt(PG_FUNCTION_ARGS)
 /*
  * Implementation of <=> operator. Uses specified normalization method.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_extended_rum_ts_distance_ttf(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
@@ -2383,7 +2383,7 @@ calc_score_parse_opt(TSVector txt, HeapTupleHeader d)
 /*
  * Implementation of <=> operator. Uses specified normalization method.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_extended_rum_ts_distance_td(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
@@ -2409,7 +2409,7 @@ documentdb_extended_rum_ts_distance_td(PG_FUNCTION_ARGS)
 /*
  * Calculate score (inverted distance). Uses default normalization method.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_extended_rum_ts_score_tt(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
@@ -2428,7 +2428,7 @@ documentdb_extended_rum_ts_score_tt(PG_FUNCTION_ARGS)
 /*
  * Calculate score (inverted distance). Uses specified normalization method.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_extended_rum_ts_score_ttf(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
@@ -2448,7 +2448,7 @@ documentdb_extended_rum_ts_score_ttf(PG_FUNCTION_ARGS)
 /*
  * Calculate score (inverted distance). Uses specified normalization method.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_extended_rum_ts_score_td(PG_FUNCTION_ARGS)
 {
 	TSVector txt = PG_GETARG_TSVECTOR(0);
@@ -2467,7 +2467,7 @@ documentdb_extended_rum_ts_score_td(PG_FUNCTION_ARGS)
 /*
  * Casts tsquery to rum_distance_query type.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_tsquery_to_distance_query(PG_FUNCTION_ARGS)
 {
 	TSQuery query = PG_GETARG_TSQUERY(0);
