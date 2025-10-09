@@ -41,6 +41,7 @@ jobs:
       pg_version: ${{ matrix.pg_version }}
       arch: ${{ matrix.arch }}
       runner: ${{ matrix.runner }}
+      citus_version: 12
 
   test-full:
     if: github.event_name != 'pull_request'
@@ -64,4 +65,5 @@ jobs:
       pg_version: ${{ matrix.pg_version }}
       arch: ${{ matrix.arch }}
       runner: ${{ matrix.runner }}
+      citus_version: 12
 

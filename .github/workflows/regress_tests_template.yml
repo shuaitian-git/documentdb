@@ -12,6 +12,9 @@ on:
       runner:
         required: true
         type: string
+      citus_version:
+        required: true
+        type: number
 
 jobs:
   test:
@@ -24,7 +27,7 @@ jobs:
       - name: Install package dependencies
         run: |
           export PG_VERSION=${{ inputs.pg_version }}
-          export CITUS_VERSION=12
+          export CITUS_VERSION=${{ inputs.citus_version }}
 
           export LC_ALL=en_US.UTF-8
           export LANGUAGE=en_US
