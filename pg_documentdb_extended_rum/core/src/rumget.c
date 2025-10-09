@@ -42,11 +42,12 @@ typedef struct RumItemScanEntryBounds
 } RumItemScanEntryBounds;
 
 /* GUC parameter */
-int RumFuzzySearchLimit = 0;
-bool RumDisableFastScan = RUM_DEFAULT_DISABLE_FAST_SCAN;
-bool RumForceOrderedIndexScan = DEFAULT_FORCE_RUM_ORDERED_INDEX_SCAN;
-bool RumPreferOrderedIndexScan = RUM_DEFAULT_PREFER_ORDERED_INDEX_SCAN;
-bool RumEnableSkipIntermediateEntry = RUM_DEFAULT_ENABLE_SKIP_INTERMEDIATE_ENTRY;
+PGDLLEXPORT int RumFuzzySearchLimit = 0;
+PGDLLEXPORT bool RumDisableFastScan = RUM_DEFAULT_DISABLE_FAST_SCAN;
+PGDLLEXPORT bool RumForceOrderedIndexScan = DEFAULT_FORCE_RUM_ORDERED_INDEX_SCAN;
+PGDLLEXPORT bool RumPreferOrderedIndexScan = RUM_DEFAULT_PREFER_ORDERED_INDEX_SCAN;
+PGDLLEXPORT bool RumEnableSkipIntermediateEntry =
+	RUM_DEFAULT_ENABLE_SKIP_INTERMEDIATE_ENTRY;
 
 static bool scanPage(RumState *rumstate, RumScanEntry entry, RumItem *item,
 					 bool equalOk);

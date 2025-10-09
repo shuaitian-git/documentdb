@@ -16,7 +16,7 @@
 #include "pg_documentdb_rum.h"
 
 /* Test GUC to test data page splits */
-int RumDataPageIntermediateSplitSize = -1;
+PGDLLEXPORT int RumDataPageIntermediateSplitSize = -1;
 
 static BlockNumber dataGetLeftMostPage(RumBtree btree, Page page);
 static BlockNumber dataGetRightMostPage(RumBtree btree, Page page);

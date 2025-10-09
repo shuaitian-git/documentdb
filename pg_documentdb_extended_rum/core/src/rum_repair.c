@@ -85,7 +85,7 @@ documentdb_rum_prune_empty_entries_on_index(PG_FUNCTION_ARGS)
  * that subsequent inserts will repair the tree and leave it in a
  * consistent state.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_rum_repair_incomplete_split_on_index(PG_FUNCTION_ARGS)
 {
 	Relation indrel;
