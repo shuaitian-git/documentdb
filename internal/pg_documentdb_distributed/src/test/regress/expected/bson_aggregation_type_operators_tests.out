@@ -2183,3 +2183,32 @@ ERROR:  Unsupported conversion from int to binData in $convert with no onError v
 -- invalid count number of array input
 SELECT * FROM bson_dollar_project('{}', '{"result": {"$toUUID": ["123e4567-e89b-12d3-a456-426614174000", "123e4567-e89b-12d3-a456-426614174000"] }}');
 ERROR:  The expression $toUUID requires exactly 1 arguments, but 2 arguments were actually provided.
+-- $convert with constant onError handling
+-- Test invalid ObjectId conversion with onError (guaranteed to fail)
+SELECT * FROM bson_dollar_project('{}', '{"result": {"$convert": {"input": "xyz123", "to": "objectId", "onError": "CONVERSION_FAILED"}}}');
+        bson_dollar_project         
+---------------------------------------------------------------------
+ { "result" : "CONVERSION_FAILED" }
+(1 row)
+
+-- Test invalid number conversion with onError
+SELECT * FROM bson_dollar_project('{}', '{"result": {"$convert": {"input": "not_a_number_at_all", "to": "int", "onError": "ERROR_OCCURRED"}}}');
+       bson_dollar_project       
+---------------------------------------------------------------------
+ { "result" : "ERROR_OCCURRED" }
+(1 row)
+
+-- Test invalid date conversion with onError
+SELECT * FROM bson_dollar_project('{}', '{"result": {"$convert": {"input": "invalid_date_format", "to": "date", "onError": null}}}');
+ bson_dollar_project 
+---------------------------------------------------------------------
+ { "result" : null }
+(1 row)
+
+-- Test invalid boolean conversion with onError
+SELECT * FROM bson_dollar_project('{}', '{"result": {"$convert": {"input": "maybe_true", "to": "bool", "onError": false}}}');
+ bson_dollar_project 
+---------------------------------------------------------------------
+ { "result" : true }
+(1 row)
+

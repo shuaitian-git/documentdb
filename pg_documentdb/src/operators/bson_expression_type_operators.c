@@ -540,7 +540,6 @@ ParseDollarConvert(const bson_value_t *argument, AggregationExpressionData *data
 
 	/* onError and onNull expressions are evaluated first,
 	 * regardless of if they are going to be needed or not. */
-	AggregationExpressionData *onErrorData = NULL;
 	if (onErrorExpression.value_type != BSON_TYPE_EOD)
 	{
 		arguments->onErrorData = palloc0(sizeof(AggregationExpressionData));
@@ -652,11 +651,11 @@ ParseDollarConvert(const bson_value_t *argument, AggregationExpressionData *data
 			else if (isFormatUndefinedOrConstant)
 			{
 				bson_value_t onErrorValue = { 0 };
-				if (onErrorExpression.value_type != BSON_TYPE_EOD)
+				if (onErrorExpression.value_type != BSON_TYPE_EOD &&
+					arguments->onErrorData != NULL)
 				{
 					onErrorValue = arguments->onErrorData->value;
 				}
-
 				bool hasError = false;
 				List *argumentsList = list_make4(&inputValue, &toType, &toSubtype,
 												 &formatValue);
@@ -673,7 +672,7 @@ ParseDollarConvert(const bson_value_t *argument, AggregationExpressionData *data
 
 					if (IsAggregationExpressionConstant(arguments->onErrorData))
 					{
-						data->value = onErrorData->value;
+						data->value = arguments->onErrorData->value;
 						data->kind = AggregationExpressionKind_Constant;
 						evaluatedOnConstants = true;
 					}
