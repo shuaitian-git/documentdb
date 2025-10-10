@@ -8,7 +8,7 @@ FROM ghcr.io/microsoft/documentdb/documentdb-oss:ubuntu22.04-PG17-${BASE_ARCH}-$
 # Install dependencies
 RUN sudo apt-get update && \
     sudo apt-get install -y --no-install-recommends \
-    jq curl sudo git make build-essential openssl pkg-config libssl-dev \
+    jq curl sudo git make build-essential openssl pkg-config libssl-dev software-properties-common \
     && sudo rm -rf /var/lib/apt/lists/*
 
 USER documentdb
@@ -16,21 +16,21 @@ WORKDIR /home/documentdb/code
 
 COPY . /home/documentdb/code
 
-RUN sudo chown -R documentdb:documentdb /home/documentdb/code
+RUN /home/documentdb/code/scripts/install_llvm.sh
 
 # Install rustup (which includes rustc and cargo) in user directory
-ENV RUSTUP_HOME=/home/documentdb/.rustup \
-    CARGO_HOME=/home/documentdb/.cargo \
-    PATH=/home/documentdb/.cargo/bin:$PATH
+ENV RUSTUP_HOME=/home/documentdb/code/.rustup
+ENV CARGO_HOME=/home/documentdb/code/.cargo
+RUN mkdir -p $RUSTUP_HOME && mkdir -p $CARGO_HOME
+ENV PATH=$PATH:$CARGO_HOME/bin
 
-RUN . /home/documentdb/code/scripts/install_rustup.sh
+RUN /home/documentdb/code/scripts/install_rustup.sh --install-toolchain
 
-RUN rustc --version && cargo --version
+RUN sudo chown -R documentdb:documentdb /home/documentdb/code
 
 WORKDIR /home/documentdb/code/pg_documentdb_gw
 
-# Compile the code
-RUN cargo build --profile=release-with-symbols
+RUN CARGO_MANIFEST_DIR=/home/documentdb/code/pg_documentdb_gw cargo build --profile=release-with-symbols
 
 #------------------------------------------------------------------------------------------------
 
