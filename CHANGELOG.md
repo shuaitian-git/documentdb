@@ -1,4 +1,4 @@
-### documentdb v1.109-0 (Unreleased) ###
+### documentdb v0.109-0 (Unreleased) ###
 * Support collation with find positional queries *[Feature]*
 
 ### documentdb v0.108-0 (Unreleased) ###
