@@ -23,7 +23,6 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     locales \
     gcc \
     gdb \
-    clang \
     libipc-run-perl \
     unzip \
     apt-transport-https \
@@ -131,16 +130,32 @@ RUN cat /etc/sudoers | grep secure_path | sed "s/\:\/bin\:/\:\/bin\:\/usr\/lib\/
 # Add PG to the path
 ENV PATH=$PATH:/usr/lib/postgresql/$PG_VERSION/bin
 
+# Install LLVM for Rust language
+COPY scripts/install_llvm.sh /tmp/install_setup/
+RUN [ "bin/bash", "-c", "/tmp/install_setup/install_llvm.sh" ]
+
+# Set environment for Rust toolchain
+ENV RUSTUP_HOME=/home/documentdb/.rustup
+ENV CARGO_HOME=/home/documentdb/.cargo
+RUN mkdir -p $RUSTUP_HOME && mkdir -p $CARGO_HOME
+ENV PATH=$PATH:$CARGO_HOME/bin
+
 # Install Rust toolchain
 COPY scripts/install_rustup.sh /tmp/install_setup/
-COPY rust-toolchain.toml /tmp/install_setup/
-
-ENV RUSTUP_HOME=/home/documentdb/.rustup \
-    CARGO_HOME=/home/documentdb/.cargo \
-    PATH=/home/documentdb/.cargo/bin:$PATH
-
-RUN [ "bin/bash", "-c", "/tmp/install_setup/install_rustup.sh" ]
+COPY rust-toolchain.toml /
+RUN [ "bin/bash", "-c", "/tmp/install_setup/install_rustup.sh --install-toolchain" ]
 RUN chown -R documentdb:documentdb /home/documentdb/.cargo /home/documentdb/.rustup
+
+ENV PGRX_HOME=/home/documentdb/.pgrx
+RUN mkdir -p $PGRX_HOME
+
+# Install pgrx
+COPY scripts/install_pgrx.sh /tmp/install_setup/
+COPY pg_documentdb_gw_host/Cargo.toml /tmp/install_setup/
+RUN [ "bin/bash", "-c", "/tmp/install_setup/install_pgrx.sh -d /tmp/install_setup/ -v $PG_VERSION" ]
+
+# Change Rust tooling to non-root user
+RUN [ "bin/bash", "-c", "chown -R documentdb:documentdb $CARGO_HOME && chown -R documentdb:documentdb $RUSTUP_HOME && chown -R documentdb:documentdb $PGRX_HOME" ]
 
 USER documentdb
 WORKDIR /home/documentdb
