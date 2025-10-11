@@ -84,3 +84,4 @@ COPY packaging/rpm/packaging-entrypoint-rpm.sh /usr/local/bin/packaging-entrypoi
 RUN chmod +x /usr/local/bin/packaging-entrypoint-rpm.sh
 
 ENTRYPOINT ["packaging-entrypoint-rpm.sh"]
+

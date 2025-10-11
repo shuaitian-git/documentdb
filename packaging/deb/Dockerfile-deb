@@ -74,3 +74,4 @@ COPY packaging/deb/packaging-entrypoint.sh /usr/local/bin/packaging-entrypoint.s
 
 # Set the entrypoint
 ENTRYPOINT ["packaging-entrypoint.sh"]
+
