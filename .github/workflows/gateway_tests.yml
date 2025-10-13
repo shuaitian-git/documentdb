@@ -1,4 +1,3 @@
-jobs:
 name: DocumentDB gateway tests
 run-name: ${{ github.event.pull_request.title || '' }}
 concurrency:
