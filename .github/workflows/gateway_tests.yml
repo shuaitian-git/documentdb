@@ -44,7 +44,7 @@ jobs:
       runner: ${{ matrix.runner }}
       citus_version: 12
 
-    test-full:
+  test-full:
     if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
