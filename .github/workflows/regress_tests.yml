@@ -39,7 +39,7 @@ jobs:
           - pg_version: 18
             arch: arm64
             runner: ubuntu-22.04-arm
-    uses: ./.github/workflows/templates/regress_tests_template.yml
+    uses: ./.github/workflows/regress_tests_template.yml
     with:
       pg_version: ${{ matrix.pg_version }}
       arch: ${{ matrix.arch }}
@@ -64,7 +64,7 @@ jobs:
             runner: ubuntu-22.04
           - arch: arm64
             runner: ubuntu-22.04-arm
-    uses: ./.github/workflows/templates/regress_tests_template.yml
+    uses: ./.github/workflows/regress_tests_template.yml
     with:
       pg_version: ${{ matrix.pg_version }}
       arch: ${{ matrix.arch }}
