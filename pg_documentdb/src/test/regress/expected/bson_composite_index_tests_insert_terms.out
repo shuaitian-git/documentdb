@@ -526,9 +526,9 @@ SELECT documentdb_api.insert_one('comp_db', 'comp_collection', '{ "_id": 7, "a":
 (1 row)
 
 SELECT documentdb_api.insert_one('comp_db', 'comp_collection', FORMAT('{ "_id": 8, "a": { "key": "%s" }, "b": "%s" }', repeat('a', 10000), repeat('a', 10000))::bson);
-                                                                                                             insert_one                                                                                                             
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- { "n" : { "$numberInt" : "0" }, "ok" : { "$numberDouble" : "1.0" }, "writeErrors" : [ { "index" : { "$numberInt" : "0" }, "code" : { "$numberInt" : "29" }, "errmsg" : "Cannot compare ascending and descending index terms" } ] }
+                              insert_one                              
+----------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
 (1 row)
 
 set documentdb.logRelationIndexesOrder to on;

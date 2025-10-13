@@ -79,6 +79,9 @@ typedef struct IndexTermCreateMetadata
 
 	/* Whether or not the term is for a descending index */
 	bool isDescending;
+
+	/* Whether the index supports value only terms */
+	bool allowValueOnly;
 } IndexTermCreateMetadata;
 
 
@@ -106,6 +109,7 @@ bool IsIndexTermValueDescending(const BsonIndexTerm *indexTerm);
 bool IsSerializedIndexTermComposite(bytea *indexTermSerialized);
 bool IsSerializedIndexTermTruncated(bytea *indexTermSerialized);
 bool IsSerializedIndexTermMetadata(bytea *indexTermSerialized);
+
 void InitializeBsonIndexTerm(bytea *indexTermSerialized, BsonIndexTerm *indexTerm);
 
 int32_t InitializeCompositeIndexTerm(bytea *indexTermSerialized, BsonIndexTerm
@@ -140,7 +144,7 @@ int32_t CompareBsonIndexTerm(const BsonIndexTerm *left, const BsonIndexTerm *rig
 
 /* Check if the term is a root truncation term */
 inline static bool
-IsRootTruncationTerm(BsonIndexTerm *term)
+IsRootTruncationTerm(const BsonIndexTerm *term)
 {
 	return IsIndexTermTruncated(term) &&
 		   term->element.pathLength == 0 &&

@@ -93,6 +93,13 @@ bool EnableIndexOrderByReverse = DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE;
 #define DEFAULT_ENABLE_INDEX_ONLY_SCAN true
 bool EnableIndexOnlyScan = DEFAULT_ENABLE_INDEX_ONLY_SCAN;
 
+/* Note: this is a long term feature flag since we need to validate compatiblity
+ * in mixed mode for older indexes - once this is
+ * enabled by default - please move this to testing_configs.
+ */
+#define DEFAULT_ENABLE_VALUE_ONLY_INDEX_TERMS true
+bool EnableValueOnlyIndexTerms = DEFAULT_ENABLE_VALUE_ONLY_INDEX_TERMS;
+
 /*
  * SECTION: Planner feature flags
  */
@@ -592,5 +599,12 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable the update_bson_document command."),
 		NULL, &EnableUpdateBsonDocument, DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableValueOnlyIndexTerms", newGucPrefix),
+		gettext_noop(
+			"Whether to enable index terms that are value only."),
+		NULL, &EnableValueOnlyIndexTerms, DEFAULT_ENABLE_VALUE_ONLY_INDEX_TERMS,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }
