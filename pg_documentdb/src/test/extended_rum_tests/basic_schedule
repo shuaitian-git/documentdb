@@ -1,2 +1,2 @@
 test: documentdb_test_helpers
-test: basic_extended_rum_creation_tests bson_composite_index_selectivity_tests
+test: basic_extended_rum_creation_tests bson_composite_index_selectivity_tests rum_index_value_only_ordering_tests

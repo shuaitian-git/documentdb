@@ -1887,7 +1887,8 @@ FillCompositePathSpec(const char *prefix, void *buffer)
 static uint32_t
 BuildSinglePathTermsForCompositeTerms(pgbson *bson, BsonGinCompositePathOptions *options,
 									  Datum **entries, int32_t *entryCounts,
-									  bool *entryHasMultiKey)
+									  int32_t *entryCapacity,
+									  bool *entryHasMultiKey, bool *entryHasTruncation)
 {
 	const char *indexPaths[INDEX_MAX_KEYS] = { 0 };
 	int8_t sortOrders[INDEX_MAX_KEYS] = { 0 };
@@ -1906,10 +1907,9 @@ BuildSinglePathTermsForCompositeTerms(pgbson *bson, BsonGinCompositePathOptions 
 		singlePathOptions->base.version = IndexOptionsVersion_V0;
 
 		/* The truncation limit will be divided by the numPaths */
-		context.termMetadata = GetSinglePathTermCreateMetadata(options,
-															   (int32_t) pathCount);
-		singlePathOptions->base.indexTermTruncateLimit =
-			context.termMetadata.indexTermSizeLimit;
+		IndexTermCreateMetadata subMetadata =
+			GetSinglePathTermCreateMetadata(options, (int32_t) pathCount);
+		singlePathOptions->base.indexTermTruncateLimit = subMetadata.indexTermSizeLimit;
 		singlePathOptions->isWildcard = false;
 		singlePathOptions->generateNotFoundTerm = true;
 		singlePathOptions->path = sizeof(BsonGinSinglePathOptions);
@@ -1924,14 +1924,17 @@ BuildSinglePathTermsForCompositeTerms(pgbson *bson, BsonGinCompositePathOptions 
 		context.termMetadata = GetIndexTermMetadata(singlePathOptions);
 		context.skipGenerateTopLevelArrayTerm = true;
 		context.termMetadata.isDescending = sortOrders[i] < 0;
+		context.termMetadata.allowValueOnly = subMetadata.allowValueOnly;
 
 		bool addRootTerm = false;
 		GenerateTerms(bson, &context, addRootTerm);
 
 		entries[i] = context.terms.entries;
 		entryCounts[i] = context.totalTermCount;
+		entryCapacity[i] = context.terms.entryCapacity;
 
 		*entryHasMultiKey = *entryHasMultiKey || context.hasArrayValues;
+		*entryHasTruncation = *entryHasTruncation || context.hasTruncatedTerms;
 
 		/* We will have at least 1 term */
 		totalTermCount = totalTermCount * context.totalTermCount;
@@ -1939,6 +1942,43 @@ BuildSinglePathTermsForCompositeTerms(pgbson *bson, BsonGinCompositePathOptions 
 	}
 
 	return totalTermCount;
+}
+
+
+static Datum *
+AddTruncationOrMultiKeyTermsAndReturn(Datum *indexEntries, uint32_t totalTermCount,
+									  int32_t indexEntryCapacity,
+									  bool entryHasMultiKey, bool hasTruncation,
+									  int32_t *nentries,
+									  IndexTermCreateMetadata *overallMetadata)
+{
+	bool hasExtra = (totalTermCount > 1 || entryHasMultiKey) || hasTruncation;
+
+	uint32_t requiredSize = hasExtra ? (totalTermCount + 2) : totalTermCount;
+	if (hasExtra && (uint32_t) indexEntryCapacity < requiredSize)
+	{
+		indexEntries = repalloc(indexEntries, sizeof(Datum) * requiredSize);
+	}
+
+	if (totalTermCount > 1 || entryHasMultiKey)
+	{
+		/*
+		 * TODO: This term is only needed in the case of parallel build
+		 * See if we can eliminate this.
+		 */
+		RumHasMultiKeyPaths = true;
+		indexEntries[totalTermCount] = GenerateRootMultiKeyTerm(overallMetadata);
+		totalTermCount++;
+	}
+
+	if (hasTruncation)
+	{
+		indexEntries[totalTermCount] = GenerateRootTruncatedTerm(overallMetadata);
+		totalTermCount++;
+	}
+
+	*nentries = totalTermCount;
+	return indexEntries;
 }
 
 
@@ -1952,19 +1992,32 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 	uint32_t pathCount = (uint32_t) GetIndexPathsFromOptions(options,
 															 indexPaths, sortOrders);
 
-	Datum **entries = palloc(sizeof(Datum *) * pathCount);
-	int32_t *entryCounts = palloc0(sizeof(int32_t) * pathCount);
+	Datum *entries[INDEX_MAX_KEYS] = { 0 };
+	int32_t entryCounts[INDEX_MAX_KEYS] = { 0 };
+	int32_t entryCapacity[INDEX_MAX_KEYS] = { 0 };
 	bool entryHasMultiKey = false;
+	bool entryHasTruncation = false;
 	uint32_t totalTermCount = BuildSinglePathTermsForCompositeTerms(bson, options,
-																	entries, entryCounts,
-																	&entryHasMultiKey);
+																	entries,
+																	entryCounts,
+																	entryCapacity,
+																	&entryHasMultiKey,
+																	&entryHasTruncation);
+
+
+	IndexTermCreateMetadata overallMetadata = GetCompositeIndexTermMetadata(options);
+	if (pathCount == 1)
+	{
+		return AddTruncationOrMultiKeyTermsAndReturn(
+			entries[0], totalTermCount, entryCapacity[0], entryHasMultiKey,
+			entryHasTruncation, nentries, &overallMetadata);
+	}
 
 	/* Now that we have the per term counts, generate the overall terms */
 	/* Add an additional one in case we need a truncated term */
-	Datum *indexEntries = palloc0(sizeof(Datum) * (totalTermCount + 3));
-
+	int32_t finalEntryCapacity = (totalTermCount + 3);
+	Datum *indexEntries = palloc0(sizeof(Datum) * finalEntryCapacity);
 	bool hasTruncation = false;
-	IndexTermCreateMetadata overallMetadata = GetCompositeIndexTermMetadata(options);
 
 	bytea *compositeDatums[INDEX_MAX_KEYS] = { 0 };
 	for (uint32_t i = 0; i < totalTermCount; i++)
@@ -1976,15 +2029,13 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 			termIndex = termIndex / entryCounts[j];
 			Datum term = entries[j][currentIndex];
 
-			BsonIndexTerm indexTerm;
-			InitializeBsonIndexTerm(DatumGetByteaPP(term), &indexTerm);
-
-			if (IsIndexTermTruncated(&indexTerm))
+			bytea *termPointer = DatumGetByteaPP(term);
+			if (IsSerializedIndexTermTruncated(termPointer))
 			{
 				hasTruncation = true;
 			}
 
-			compositeDatums[j] = DatumGetByteaPP(term);
+			compositeDatums[j] = termPointer;
 		}
 
 		BsonCompressableIndexTermSerialized serializedTerm =
@@ -1997,25 +2048,9 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 		indexEntries[i] = serializedTerm.indexTermDatum;
 	}
 
-	if (totalTermCount > 1 || entryHasMultiKey)
-	{
-		/*
-		 * TODO: This term is only needed in the case of parallel build
-		 * See if we can eliminate this.
-		 */
-		RumHasMultiKeyPaths = true;
-		indexEntries[totalTermCount] = GenerateRootMultiKeyTerm(&overallMetadata);
-		totalTermCount++;
-	}
-
-	if (hasTruncation)
-	{
-		indexEntries[totalTermCount] = GenerateRootTruncatedTerm(&overallMetadata);
-		totalTermCount++;
-	}
-
-	*nentries = totalTermCount;
-	return indexEntries;
+	return AddTruncationOrMultiKeyTermsAndReturn(
+		indexEntries, totalTermCount, finalEntryCapacity, entryHasMultiKey, hasTruncation,
+		nentries, &overallMetadata);
 }
 
 
@@ -2032,12 +2067,16 @@ GenerateCompositeExtractQueryUniqueEqual(pgbson *bson,
 	uint32_t pathCount = (uint32_t) GetIndexPathsFromOptions(options,
 															 indexPaths, sortOrders);
 
-	Datum **entries = palloc(sizeof(Datum *) * pathCount);
-	int32_t *entryCounts = palloc0(sizeof(int32_t) * pathCount);
+	Datum *entries[INDEX_MAX_KEYS] = { 0 };
+	int32_t entryCounts[INDEX_MAX_KEYS] = { 0 };
+	int32_t entryCapacities[INDEX_MAX_KEYS] = { 0 };
 	bool hasArrayPaths = false;
+	bool hasTruncation = false;
 	uint32_t totalTermCount = BuildSinglePathTermsForCompositeTerms(bson, options,
 																	entries, entryCounts,
-																	&hasArrayPaths);
+																	entryCapacities,
+																	&hasArrayPaths,
+																	&hasTruncation);
 
 	/* Now that we have the per term counts, generate the overall terms */
 	/* Add an additional one in case we need a truncated term */
