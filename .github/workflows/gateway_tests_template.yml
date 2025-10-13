@@ -29,7 +29,7 @@ jobs:
 
       - name: Install package dependencies
         run: |
-          export PG_VERSION=${{ matrix.pg_version }}
+          export PG_VERSION=${{ inputs.pg_version }}
           export CITUS_VERSION=12
 
           export LC_ALL=en_US.UTF-8
@@ -119,7 +119,7 @@ jobs:
 
       - name: Export pg_config PATH
         run: |
-          echo "/usr/lib/postgresql/${{ matrix.pg_version }}/bin" >> $GITHUB_PATH
+          echo "/usr/lib/postgresql/${{ inputs.pg_version }}/bin" >> $GITHUB_PATH
 
       - name: Configure, Build and Install DocumentDB
         run: |
@@ -128,7 +128,7 @@ jobs:
           sudo PATH=$PATH make install
 
       - name: Build and Install Gateway host
-        run: scripts/build_and_install_with_pgrx.sh -v ${{ matrix.pg_version }} -d ./pg_documentdb_gw_host
+        run: scripts/build_and_install_with_pgrx.sh -v ${{ inputs.pg_version }} -d ./pg_documentdb_gw_host
 
       - name: Check Gateway formatting and lints
         run: |
@@ -139,12 +139,12 @@ jobs:
       - name: Check Gateway host formatting and lints
         run: |
           cargo fmt --all --check
-          cargo clippy --all-targets --no-default-features --features "pg${{ matrix.pg_version }}" -- -D warnings
+          cargo clippy --all-targets --no-default-features --features "pg${{ inputs.pg_version }}" -- -D warnings
         working-directory: pg_documentdb_gw_host
 
       - name: Start DocumentDB service
         run: |
-          export PG_VERSION_USED=${{ matrix.pg_version }}
+          export PG_VERSION_USED=${{ inputs.pg_version }}
           mkdir -p $RUNNER_TEMP/pgdata
           ./scripts/start_oss_server.sh -d $RUNNER_TEMP/pgdata -c -r
           cat $RUNNER_TEMP/pgdata/pglog.log
@@ -158,6 +158,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: logs_${{ matrix.runner }}_PG${{ matrix.pg_version }}
+          name: logs_${{ matrix.runner }}_PG${{ inputs.pg_version }}
           overwrite: true
           path: "**/*.log"
