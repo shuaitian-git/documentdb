@@ -392,11 +392,8 @@ GetMongoCollectionByColId(uint64 collectionId, LOCKMODE lockMode)
 														  CollectionsCacheContext);
 	}
 
-	if (collection.viewDefinition != NULL)
-	{
-		collection.viewDefinition = CopyPgbsonIntoMemoryContext(collection.viewDefinition,
-																CollectionsCacheContext);
-	}
+	collection.mongoDataCreationTimeVarAttrNumber =
+		GetMongoDataCreationTimeVarAttrNumber(collection.relationId);
 
 	if (collection.schemaValidator.validator != NULL)
 	{
