@@ -187,6 +187,7 @@ typedef struct RumMetaPageData
  * (which is InvalidBlockNumber/0) as well as from all normal item
  * pointers (which have item numbers in the range 1..MaxHeapTuplesPerPage).
  */
+
 /*
  * PostgreSQL 18 introduced some of these macros/types in core headers (e.g.
  * ginblock.h). Guard our fallback definitions so we don't redefine them when
@@ -237,13 +238,23 @@ typedef struct RumItem
 
 /*
  * Posting item in a non-leaf posting-tree page
+ *
+ * PostgreSQL 18 introduced a core PostingItem type in ginblock.h. To avoid
+ * conflicting typedefs we only define our own struct for older PG versions.
+ * For PG 18 and newer, alias the core PostingItem to RumPostingItem so the
+ * rest of the code can keep using RumPostingItem.
  */
+#if PG_VERSION_NUM < 180000
 typedef struct
 {
 	/* We use BlockIdData not BlockNumber to avoid padding space wastage */
 	BlockIdData child_blkno;
 	RumItem item;
 } RumPostingItem;
+#else
+/* Use core PostingItem type on PG18+ */
+typedef PostingItem RumPostingItem;
+#endif
 
 /*
  * PostingItem and helpers may be defined by newer PG headers; avoid
