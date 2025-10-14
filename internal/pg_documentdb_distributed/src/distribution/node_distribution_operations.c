@@ -21,90 +21,7 @@
 #include "io/bson_core.h"
 #include "metadata/metadata_cache.h"
 #include "node_distributed_operations.h"
-#include "metadata/collection.h"
-#include "commands/coll_mod.h"
-#include "parser/parse_func.h"
-
-extern char *ApiDistributedSchemaNameV2;
-static List * ExecutePerNodeCommand(Oid nodeFunction, pgbson *nodeFunctionArg, bool
-									readOnly, const char *distributedTableName);
-static Oid UpdatePostgresIndexWorkerFunctionOid(void);
-
-PG_FUNCTION_INFO_V1(documentdb_update_postgres_index_worker);
-
-void
-UpdateDistributedPostgresIndex(uint64_t collectionId, int indexId, bool hidden)
-{
-	pgbson_writer writer;
-	PgbsonWriterInit(&writer);
-	PgbsonWriterAppendInt64(&writer, "collectionId", 12, collectionId);
-	PgbsonWriterAppendInt32(&writer, "indexId", 7, indexId);
-	PgbsonWriterAppendBool(&writer, "hidden", 6, hidden);
-
-	MongoCollection *collection = GetMongoCollectionByColId(collectionId, NoLock);
-	if (collection == NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDNAMESPACE),
-						errmsg("Failed to find collection for index update")));
-	}
-
-	char fullyQualifiedTableName[NAMEDATALEN * 2 + 2] = { 0 };
-	pg_sprintf(fullyQualifiedTableName, "%s.%s", ApiDataSchemaName,
-			   collection->tableName);
-
-	ExecutePerNodeCommand(UpdatePostgresIndexWorkerFunctionOid(), PgbsonWriterGetPgbson(
-							  &writer),
-						  false, fullyQualifiedTableName);
-}
-
-
-Datum
-documentdb_update_postgres_index_worker(PG_FUNCTION_ARGS)
-{
-	pgbson *argBson = PG_GETARG_PGBSON(0);
-
-	uint64_t collectionId = 0;
-	int indexId = 0;
-	bool hidden = false;
-	bool hasHidden = false;
-	bson_iter_t argIter;
-	PgbsonInitIterator(argBson, &argIter);
-	while (bson_iter_next(&argIter))
-	{
-		const char *key = bson_iter_key(&argIter);
-		if (strcmp(key, "collectionId") == 0)
-		{
-			collectionId = bson_iter_as_int64(&argIter);
-		}
-		else if (strcmp(key, "indexId") == 0)
-		{
-			indexId = bson_iter_int32(&argIter);
-		}
-		else if (strcmp(key, "hidden") == 0)
-		{
-			hasHidden = true;
-			hidden = bson_iter_as_bool(&argIter);
-		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
-							errmsg(
-								"Unexpected argument to update_postgres_index_worker: %s",
-								key)));
-		}
-	}
-
-	if (collectionId == 0 || indexId == 0 || !hasHidden)
-	{
-		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
-						errmsg("Missing argument to update_postgres_index_worker")));
-	}
-
-	bool ignoreMissingShards = true;
-	UpdatePostgresIndexCore(collectionId, indexId, hidden, ignoreMissingShards);
-
-	PG_RETURN_POINTER(PgbsonInitEmpty());
-}
+#include "api_hooks.h"
 
 
 static ArrayType *
@@ -133,9 +50,33 @@ ChooseShardNamesForTable(const char *distributedTableName)
 }
 
 
-static List *
+static bool
+CoordinatorHasShardsForTable(const char *distributedTableName)
+{
+	const char *query =
+		"select COUNT(1) from citus_shards cs join pg_dist_node pd on cs.nodename = pd.nodename and cs.nodeport = pd.nodeport where cs.table_name = $1::regclass and pd.groupid = 0";
+
+	int nargs = 1;
+	Oid argTypes[1] = { TEXTOID };
+	Datum argValues[1] = { CStringGetTextDatum(distributedTableName) };
+	bool isReadOnly = true;
+	bool isNull = true;
+	Datum result = ExtensionExecuteQueryWithArgsViaSPI(query, nargs, argTypes, argValues,
+													   NULL, isReadOnly, SPI_OK_SELECT,
+													   &isNull);
+
+	if (isNull)
+	{
+		return false;
+	}
+
+	return DatumGetInt32(result) > 0;
+}
+
+
+List *
 ExecutePerNodeCommand(Oid nodeFunction, pgbson *nodeFunctionArg, bool readOnly, const
-					  char *distributedTableName)
+					  char *distributedTableName, bool backFillCoordinator)
 {
 	ArrayType *chosenShards = ChooseShardNamesForTable(distributedTableName);
 	if (chosenShards == NULL)
@@ -210,22 +151,18 @@ ExecutePerNodeCommand(Oid nodeFunction, pgbson *nodeFunctionArg, bool readOnly, 
 	}
 
 	SPI_finish();
+
+	/* If requested, also run on the coordinator if it doesn't have shards for the table as the command_node_worker
+	 * only runs on nodes with shards for the given table. We need to ensure metadata and system catalog are consistent in the coordinator
+	 * specially for management operations like add node, rebalancing, etc. */
+	if (backFillCoordinator && IsMetadataCoordinator() && !CoordinatorHasShardsForTable(
+			distributedTableName))
+	{
+		Datum result = OidFunctionCall1(nodeFunction,
+										PointerGetDatum(nodeFunctionArg));
+		pgbson *resultBson = DatumGetPgBson(result);
+		resultList = lappend(resultList, resultBson);
+	}
+
 	return resultList;
-}
-
-
-/*
- * Returns the OID of the update_postgres_index_worker function.
- * it isn't really worth caching this since it's only used in the diagnostic path.
- * If that changes, this can be put into an OID cache of sorts.
- */
-static Oid
-UpdatePostgresIndexWorkerFunctionOid(void)
-{
-	List *functionNameList = list_make2(makeString(ApiDistributedSchemaNameV2),
-										makeString("update_postgres_index_worker"));
-	Oid paramOids[1] = { DocumentDBCoreBsonTypeId() };
-	bool missingOK = false;
-
-	return LookupFuncName(functionNameList, 1, paramOids, missingOK);
 }

@@ -1087,8 +1087,10 @@ static CreateIndexesResult
 SubmitCreateIndexesRequest(Datum dbNameDatum,
 						   pgbson *createIndexesMessage, bool *volatile snapshotSet)
 {
+	bool buildAsUniqueForPrepareUnique = false;
 	CreateIndexesArg createIndexesArg = ParseCreateIndexesArg(dbNameDatum,
-															  createIndexesMessage);
+															  createIndexesMessage,
+															  buildAsUniqueForPrepareUnique);
 
 	char *collectionName = createIndexesArg.collectionName;
 	Datum collectionNameDatum = CStringGetTextDatum(collectionName);

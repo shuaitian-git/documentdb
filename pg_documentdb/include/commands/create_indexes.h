@@ -244,7 +244,8 @@ typedef struct
 
 bool IsCallCreateIndexesStmt(const Node *node);
 bool IsCallReIndexStmt(const Node *node);
-CreateIndexesArg ParseCreateIndexesArg(Datum dbNameDatum, pgbson *arg);
+CreateIndexesArg ParseCreateIndexesArg(Datum dbNameDatum, pgbson *arg,
+									   bool buildAsUniqueForPrepareUnique);
 CreateIndexesResult create_indexes_non_concurrently(Datum dbNameDatum,
 													CreateIndexesArg createIndexesArg,
 													bool skipCheckCollectionCreate,

@@ -221,7 +221,8 @@ bool ShouldScheduleIndexBuildJobs(void);
 
 List * GetShardIndexOids(uint64_t collectionId, int indexId, bool ignoreMissing);
 
-void UpdatePostgresIndexWithOverride(uint64_t colectionId, int indexId, bool hidden,
-									 void (*default_update)(uint64_t, int, bool));
+void UpdatePostgresIndexWithOverride(uint64_t collectionId, int indexId, int operation,
+									 bool value,
+									 void (*default_update)(uint64_t, int, int, bool));
 
 #endif

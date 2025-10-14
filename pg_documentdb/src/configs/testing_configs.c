@@ -83,6 +83,10 @@ bool EnableDebugQueryText = DEFAULT_ENABLE_DEBUG_QUERY_TEXT;
 #define DEFAULT_ENABLE_MULTI_INDEX_RUM_JOIN false
 bool EnableMultiIndexRumJoin = DEFAULT_ENABLE_MULTI_INDEX_RUM_JOIN;
 
+#define DEFAULT_FORCE_UPDATE_INDEX_INLINE false
+bool ForceUpdateIndexInline = DEFAULT_FORCE_UPDATE_INDEX_INLINE;
+
+
 void
 InitializeTestConfigurations(const char *prefix, const char *newGucPrefix)
 {
@@ -285,4 +289,11 @@ InitializeTestConfigurations(const char *prefix, const char *newGucPrefix)
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.forceUpdateIndexInline", newGucPrefix),
+		gettext_noop(
+			"Whether or not to force update index inline in the current node or go through the worker route."),
+		NULL, &ForceUpdateIndexInline, DEFAULT_FORCE_UPDATE_INDEX_INLINE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
 }

@@ -197,10 +197,12 @@ PG_FUNCTION_INFO_V1(command_fix_unique_index_stats_for_collection);
 static ReIndexResult reindex_concurrently(Datum dbNameDatum,
 										  Datum collectionNameDatum);
 static IndexDef * ParseIndexDefDocument(const bson_iter_t *indexesArrayIter,
-										bool ignoreUnknownIndexOptions);
+										bool ignoreUnknownIndexOptions,
+										bool buildAsUniqueForPrepareUnique);
 static IndexDef * ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 												const char *indexSpecRepr,
-												bool ignoreUnknownIndexOptions);
+												bool ignoreUnknownIndexOptions,
+												bool buildAsUniqueForPrepareUnique);
 static void EnsureIndexDefDocFieldType(const bson_iter_t *indexDefDocIter,
 									   bson_type_t expectedType);
 static void EnsureIndexDefDocFieldConvertibleToBool(bson_iter_t *indexDefDocIter);
@@ -494,8 +496,10 @@ command_create_indexes_non_concurrently(PG_FUNCTION_ARGS)
 
 	ThrowIfServerOrTransactionReadOnly();
 	pgbson *arg = PgbsonDeduplicateFields(PG_GETARG_PGBSON(1));
+	bool buildAsUniqueForPrepareUnique = false;
 	CreateIndexesArg createIndexesArg = ParseCreateIndexesArg(dbNameDatum,
-															  arg);
+															  arg,
+															  buildAsUniqueForPrepareUnique);
 	skip_check_collection_create |= createIndexesArg.blocking;
 	bool uniqueIndexOnly = false;
 	CreateIndexesResult result = create_indexes_non_concurrently(
@@ -518,8 +522,10 @@ command_create_temp_indexes_non_concurrently(PG_FUNCTION_ARGS)
 {
 	Datum dbNameDatum = PG_GETARG_DATUM(0);
 	pgbson *createIndexesMessage = PgbsonDeduplicateFields(PG_GETARG_PGBSON(1));
+	bool buildAsUniqueForPrepareUnique = false;
 	CreateIndexesArg createIndexesArg = ParseCreateIndexesArg(dbNameDatum,
-															  createIndexesMessage);
+															  createIndexesMessage,
+															  buildAsUniqueForPrepareUnique);
 
 	char *collectionName = createIndexesArg.collectionName;
 	Datum collectionNameDatum = CStringGetTextDatum(collectionName);
@@ -623,8 +629,10 @@ command_create_indexes(const CallStmt *callStmt, ProcessUtilityContext context,
 	 *   {"createIndexes": 1, "createIndexes": "my_collection_name"}
 	 */
 	pgbson *arg = PgbsonDeduplicateFields(PG_GETARG_PGBSON(1));
+	bool buildAsUniqueForPrepareUnique = false;
 	CreateIndexesArg createIndexesArg = ParseCreateIndexesArg(dbNameDatum,
-															  arg);
+															  arg,
+															  buildAsUniqueForPrepareUnique);
 	bool isTopLevel = (context == PROCESS_UTILITY_TOPLEVEL);
 	bool buildIndexesConcurrently = !IsInTransactionBlock(isTopLevel);
 	buildIndexesConcurrently &= !createIndexesArg.blocking;
@@ -1257,7 +1265,7 @@ InitFCInfoForCallStmt(FunctionCallInfo fcinfo, const CallStmt *callStmt,
  * dbCommand/createIndexes.
  */
 CreateIndexesArg
-ParseCreateIndexesArg(Datum dbNameDatum, pgbson *arg)
+ParseCreateIndexesArg(Datum dbNameDatum, pgbson *arg, bool buildAsUniqueForPrepareUnique)
 {
 	CreateIndexesArg createIndexesArg = { 0 };
 
@@ -1330,7 +1338,8 @@ ParseCreateIndexesArg(Datum dbNameDatum, pgbson *arg)
 
 				IndexDef *indexDef = ParseIndexDefDocument(&indexesArrayIter,
 														   createIndexesArg.
-														   ignoreUnknownIndexOptions);
+														   ignoreUnknownIndexOptions,
+														   buildAsUniqueForPrepareUnique);
 				createIndexesArg.indexDefList =
 					lappend(createIndexesArg.indexDefList, indexDef);
 
@@ -1407,7 +1416,8 @@ ParseCreateIndexesArg(Datum dbNameDatum, pgbson *arg)
  * dbCommand/createIndexes.
  */
 static IndexDef *
-ParseIndexDefDocument(const bson_iter_t *indexesArrayIter, bool ignoreUnknownIndexOptions)
+ParseIndexDefDocument(const bson_iter_t *indexesArrayIter, bool ignoreUnknownIndexOptions,
+					  bool buildAsUniqueForPrepareUnique)
 {
 	const char *indexSpecRepr = PgbsonIterDocumentToJsonForLogging(indexesArrayIter);
 	StringInfo errorMessagePrefixStr = makeStringInfo();
@@ -1420,7 +1430,8 @@ ParseIndexDefDocument(const bson_iter_t *indexesArrayIter, bool ignoreUnknownInd
 	PG_TRY();
 	{
 		indexDef = ParseIndexDefDocumentInternal(indexesArrayIter, indexSpecRepr,
-												 ignoreUnknownIndexOptions);
+												 ignoreUnknownIndexOptions,
+												 buildAsUniqueForPrepareUnique);
 	}
 	PG_CATCH();
 	{
@@ -1471,6 +1482,7 @@ ParseCustomIndexDefOption(const char *indexDefDocKey, bson_iter_t *indexDefDocIt
 
 	if (strcmp(indexDefDocKey, "buildAsUnique") == 0)
 	{
+		ReportFeatureUsage(FEATURE_CREATE_INDEX_BUILD_AS_UNIQUE);
 		EnsureTopLevelFieldIsBooleanLike(indexDefDocKey, indexDefDocIter);
 		const bson_value_t *value = bson_iter_value(indexDefDocIter);
 		if (BsonValueAsBool(value))
@@ -1528,7 +1540,8 @@ ParseCustomIndexDefOption(const char *indexDefDocKey, bson_iter_t *indexDefDocIt
 static IndexDef *
 ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 							  const char *indexSpecRepr,
-							  bool ignoreUnknownIndexOptions)
+							  bool ignoreUnknownIndexOptions,
+							  bool buildAsUniqueForPrepareUnique)
 {
 	/*
 	 * Distinguish "key: {}" from not specifying "key" field at all,
@@ -1902,6 +1915,21 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 			*(indexDef->coarsestIndexedLevel) = BsonValueAsInt32(bson_iter_value(
 																	 &indexDefDocIter));
 		}
+		else if (buildAsUniqueForPrepareUnique && strcmp(indexDefDocKey,
+														 "prepareUnique") == 0)
+		{
+			if (!BSON_ITER_HOLDS_BOOL(&indexDefDocIter))
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
+								errmsg(
+									"The 'prepareUnique' field must contain a boolean value, but received '%s'.",
+									BsonTypeName(bson_iter_type(&indexDefDocIter)))));
+			}
+
+			bool prepareUnique = bson_iter_bool(&indexDefDocIter);
+			indexDef->buildAsUnique = prepareUnique ? BoolIndexOption_True :
+									  BoolIndexOption_False;
+		}
 		else if (ParseCustomIndexDefOption(indexDefDocKey, &indexDefDocIter, indexDef))
 		{
 			/* parsed by the method above*/
@@ -2089,7 +2117,8 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 		}
 	}
 
-	if (indexDef->buildAsUnique && indexDef->enableCompositeTerm != BoolIndexOption_True)
+	if (indexDef->buildAsUnique == BoolIndexOption_True &&
+		indexDef->enableCompositeTerm != BoolIndexOption_True)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
 						errmsg(
@@ -4952,12 +4981,13 @@ CreatePostgresIndexCreationCmd(uint64 collectionId, IndexDef *indexDef, int inde
 		bool useReducedWildcardTermGeneration = ForceWildcardReducedTerm ||
 												(indexDef->enableReducedWildcardTerms ==
 												 BoolIndexOption_True);
+		bool buildAsUnique = indexDef->buildAsUnique == BoolIndexOption_True;
 		appendStringInfo(cmdStr,
 						 " USING %s_%s (%s) %s%s%s",
 						 ExtensionObjectPrefix,
 						 indexAm->am_name,
 						 GenerateIndexExprStr(indexAm->am_name,
-											  unique, indexDef->buildAsUnique,
+											  unique, buildAsUnique,
 											  sparse, enableNewIndexOpClass,
 											  indexDef->key,
 											  indexDef->wildcardProjectionTree,

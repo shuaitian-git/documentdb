@@ -10,6 +10,8 @@
 #include <executor/spi.h>
 #include <fmgr.h>
 #include <funcapi.h>
+#include <catalog/pg_constraint.h>
+#include <catalog/index.h>
 #include <utils/builtins.h>
 #include <utils/snapmgr.h>
 #include <utils/lsyscache.h>
@@ -27,6 +29,9 @@
 #include "utils/feature_counter.h"
 #include "commands/coll_mod.h"
 
+extern bool EnablePrepareUnique;
+extern bool ForceUpdateIndexInline;
+
 
 /* --------------------------------------------------------- */
 /* Data-types */
@@ -40,6 +45,7 @@ typedef struct
 	pgbson *keyPattern;
 	char *name;
 	bool hidden;
+	bool prepareUnique;
 	int expireAfterSeconds;
 } CollModIndexOptions;
 
@@ -81,14 +87,15 @@ typedef enum CollModSpecFlags
 	HAS_INDEX_OPTION_KEYPATTERN = 1 << 2,               /* Set if "index.keyPattern" is set */
 	HAS_INDEX_OPTION_HIDDEN = 1 << 3,                   /* Set if "index.hidden" is set */
 	HAS_INDEX_OPTION_EXPIRE_AFTER_SECONDS = 1 << 4,     /* Set if "index.expireAfterSeconds" is set */
+	HAS_INDEX_OPTION_PREPARE_UNIQUE = 1 << 5,           /* Set if "index.prepareUnique" is set */
 
 	/* Views update */
-	HAS_VIEW_OPTION = 1 << 5,
+	HAS_VIEW_OPTION = 1 << 6,
 
-	HAS_COLOCATION = 1 << 6,
+	HAS_COLOCATION = 1 << 7,
 
 	/* validation update */
-	HAS_VALIDATION_OPTION = 1 << 7,
+	HAS_VALIDATION_OPTION = 1 << 8,
 
 	/* TODO: More OPTIONS to follow */
 } CollModSpecFlags;
@@ -112,9 +119,19 @@ static void ModifyViewDefinition(Datum databaseDatum,
 								 const ViewDefinition *viewDefinition,
 								 pgbson_writer *writer);
 static bool GetHiddenFlagFromOptions(pgbson *indexOptions);
-static pgbson * UpdateHiddenInIndexOptions(pgbson *indexOptions, bool hidden);
-
-static void UpdatePostgresIndex(uint64_t collectionId, int indexId, bool hidden);
+static void GetPrepareUniqueFlagsFromOptions(pgbson *indexOptions, bool *buildAsUnique,
+											 bool *prepareUnique);
+static pgbson * UpdateOperationKeyInIndexOptions(pgbson *indexOptions,
+												 IndexMetadataUpdateOperation operation,
+												 bool newValue);
+static void UpdatePostgresIndex(uint64_t collectionId, int indexId, int operation, bool
+								value);
+static void UpdatePostgresIndexOverride(uint64_t collectionId, int indexId, int operation,
+										bool
+										value);
+static void UpdatePostgresIndexesForHide(List *indexOids, bool hidden);
+static void UpdatePostgresIndexesForPrepareUnique(List *indexOids, bool prepareUnique);
+static void RegisterExclusionInPgIndexCatalog(Oid indexoid);
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -374,6 +391,23 @@ ParseSpecSetCollModOptions(const pgbson *collModSpec,
 		specFlags |= HAS_VALIDATION_OPTION;
 	}
 
+	if ((specFlags & HAS_INDEX_OPTION) && (specFlags & HAS_INDEX_OPTION_PREPARE_UNIQUE))
+	{
+		/* prepareUnique cannot be specified with other collMod options, we should remove metadata flags. */
+		CollModSpecFlags tmpFlags = specFlags &
+									~HAS_INDEX_OPTION &
+									~HAS_INDEX_OPTION_NAME &
+									~HAS_INDEX_OPTION_KEYPATTERN &
+									~HAS_INDEX_OPTION_PREPARE_UNIQUE;
+
+		if (tmpFlags != 0)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
+							errmsg(
+								"collMod.prepareUnique cannot be specified with other collMod options")));
+		}
+	}
+
 	return specFlags;
 }
 
@@ -424,6 +458,14 @@ ParseIndexSpecSetCollModOptions(bson_iter_t *indexSpecIter,
 			collModIndexOptions->hidden = BsonValueAsBool(value);
 			*specFlags |= HAS_INDEX_OPTION_HIDDEN;
 		}
+		else if (strcmp(key, "prepareUnique") == 0)
+		{
+			ReportFeatureUsage(FEATURE_COMMAND_COLLMOD_INDEX_PREPARE_UNIQUE);
+			EnsureTopLevelFieldIsBooleanLike("collMod.index.prepareUnique",
+											 indexSpecIter);
+			collModIndexOptions->prepareUnique = BsonValueAsBool(value);
+			*specFlags |= HAS_INDEX_OPTION_PREPARE_UNIQUE;
+		}
 		else if (strcmp(key, "expireAfterSeconds") == 0)
 		{
 			ReportFeatureUsage(FEATURE_COMMAND_COLLMOD_TTL_UPDATE);
@@ -464,11 +506,12 @@ ParseIndexSpecSetCollModOptions(bson_iter_t *indexSpecIter,
 
 	if ((*specFlags & HAS_INDEX_OPTION_EXPIRE_AFTER_SECONDS) !=
 		HAS_INDEX_OPTION_EXPIRE_AFTER_SECONDS &&
-		(*specFlags & HAS_INDEX_OPTION_HIDDEN) != HAS_INDEX_OPTION_HIDDEN)
+		(*specFlags & HAS_INDEX_OPTION_HIDDEN) != HAS_INDEX_OPTION_HIDDEN &&
+		(*specFlags & HAS_INDEX_OPTION_PREPARE_UNIQUE) != HAS_INDEX_OPTION_PREPARE_UNIQUE)
 	{
 		/* If hidden or expireAfterSeconds is not provided then error */
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
-						errmsg("no expireAfterSeconds or hidden field")));
+						errmsg("no expireAfterSeconds, hidden or prepareUnique field")));
 	}
 }
 
@@ -539,6 +582,8 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 
 	BoolIndexOption oldHidden = BoolIndexOption_Undefined;
 	BoolIndexOption newHidden = BoolIndexOption_Undefined;
+	BoolIndexOption oldPrepareUnique = BoolIndexOption_Undefined;
+	BoolIndexOption newPrepareUnique = BoolIndexOption_Undefined;
 	int oldTTL = 0, newTTL = 0;
 
 	bool updateNeeded = false;
@@ -563,7 +608,7 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 
 	if ((*specFlags & HAS_INDEX_OPTION_HIDDEN) == HAS_INDEX_OPTION_HIDDEN)
 	{
-		if (!IsClusterVersionAtleast(DocDB_V0, 108, 0))
+		if (!ForceUpdateIndexInline && !IsClusterVersionAtleast(DocDB_V0, 108, 0))
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
 							errmsg("hidden index option is not supported yet")));
@@ -597,14 +642,77 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 						BoolIndexOption_False;
 
 			/* Update the postgres index status */
-			UpdatePostgresIndexWithOverride(collection->collectionId,
-											indexDetails.indexId,
-											indexOption->hidden, UpdatePostgresIndex);
+			UpdatePostgresIndex(collection->collectionId,
+								indexDetails.indexId,
+								INDEX_METADATA_UPDATE_OPERATION_HIDDEN,
+								indexOption->hidden);
 
 			/* update the hidden field in indexOptions */
-			indexDetails.indexSpec.indexOptions = UpdateHiddenInIndexOptions(
-				indexDetails.indexSpec.indexOptions, indexOption->hidden);
+			indexDetails.indexSpec.indexOptions = UpdateOperationKeyInIndexOptions(
+				indexDetails.indexSpec.indexOptions,
+				INDEX_METADATA_UPDATE_OPERATION_HIDDEN, indexOption->hidden);
 			updateNeeded = true;
+		}
+	}
+
+	if ((*specFlags & HAS_INDEX_OPTION_PREPARE_UNIQUE) == HAS_INDEX_OPTION_PREPARE_UNIQUE)
+	{
+		if (!EnablePrepareUnique || (!ForceUpdateIndexInline && !IsClusterVersionAtleast(
+										 DocDB_V0, 108, 0)))
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
+							errmsg("prepareUnique index option is not supported yet")));
+		}
+
+		if (!isIndexValid)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
+							errmsg(
+								"cannot modify prepareUnique field of an invalid index")));
+		}
+
+		if (!indexOption->prepareUnique)
+		{
+			/* we can support this if needed. */
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
+							errmsg("collMod.prepareUnique can only be set to true")));
+		}
+
+		bool isUnique = indexDetails.indexSpec.indexUnique == BoolIndexOption_True;
+
+		if (!isUnique)
+		{
+			bool isBuildAsUnique = false;
+			bool currentPrepareUnique = false;
+			GetPrepareUniqueFlagsFromOptions(
+				indexDetails.indexSpec.indexOptions, &isBuildAsUnique,
+				&currentPrepareUnique);
+			if (!isBuildAsUnique && !currentPrepareUnique)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
+								errmsg(
+									"index must be created with buildAsUnique option to be eligible for prepareUnique operation.")));
+			}
+
+			if (indexOption->prepareUnique != currentPrepareUnique)
+			{
+				oldPrepareUnique = currentPrepareUnique ? BoolIndexOption_True :
+								   BoolIndexOption_False;
+				newPrepareUnique = indexOption->prepareUnique ? BoolIndexOption_True :
+								   BoolIndexOption_False;
+
+				UpdatePostgresIndex(collection->collectionId,
+									indexDetails.indexId,
+									INDEX_METADATA_UPDATE_OPERATION_PREPARE_UNIQUE,
+									indexOption->prepareUnique);
+
+				indexDetails.indexSpec.indexOptions = UpdateOperationKeyInIndexOptions(
+					indexDetails.indexSpec.indexOptions,
+					INDEX_METADATA_UPDATE_OPERATION_PREPARE_UNIQUE,
+					indexOption->prepareUnique);
+
+				updateNeeded = true;
+			}
 		}
 	}
 
@@ -651,6 +759,16 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 								22, oldTTL);
 		PgbsonWriterAppendDouble(writer, "expireAfterSeconds_new",
 								 22, (double) newTTL);
+	}
+
+	if ((*specFlags & HAS_INDEX_OPTION_PREPARE_UNIQUE) == HAS_INDEX_OPTION_PREPARE_UNIQUE)
+	{
+		PgbsonWriterAppendBool(writer, "prepareUnique_old",
+							   17, GetBoolFromBoolIndexOptionDefaultTrue(
+								   oldPrepareUnique));
+		PgbsonWriterAppendBool(writer, "prepareUnique_new",
+							   17, GetBoolFromBoolIndexOptionDefaultTrue(
+								   newPrepareUnique));
 	}
 }
 
@@ -739,13 +857,85 @@ GetHiddenFlagFromOptions(pgbson *indexOptions)
 }
 
 
+static void
+GetPrepareUniqueFlagsFromOptions(pgbson *indexOptions, bool *buildAsUnique,
+								 bool *prepareUnique)
+{
+	if (indexOptions == NULL || buildAsUnique == NULL || prepareUnique == NULL)
+	{
+		return;
+	}
+
+	*buildAsUnique = false;
+	*prepareUnique = false;
+
+	bson_iter_t iter;
+	PgbsonInitIterator(indexOptions, &iter);
+	while (bson_iter_next(&iter))
+	{
+		const char *key = bson_iter_key(&iter);
+		const bson_value_t *value = bson_iter_value(&iter);
+		if (strcmp(key, "prepareUnique") == 0)
+		{
+			if (value->value_type != BSON_TYPE_BOOL)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_TYPEMISMATCH),
+								errmsg(
+									"BSON field 'prepareUnique' is the wrong type '%s', expected type 'bool'",
+									BsonTypeName(value->value_type))));
+			}
+
+			*prepareUnique = value->value.v_bool;
+		}
+		else if (strcmp(key, "buildAsUnique") == 0)
+		{
+			if (!BsonTypeIsNumberOrBool(value->value_type))
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_TYPEMISMATCH),
+								errmsg(
+									"BSON field 'buildAsUnique' is the wrong type '%s', expected type 'bool'",
+									BsonTypeName(value->value_type))));
+			}
+
+			*buildAsUnique = BsonValueAsBool(value);
+		}
+	}
+}
+
+
 static pgbson *
-UpdateHiddenInIndexOptions(pgbson *indexOptions, bool hidden)
+UpdateOperationKeyInIndexOptions(pgbson *indexOptions, IndexMetadataUpdateOperation
+								 operation, bool newValue)
 {
 	pgbson_writer writer;
 	PgbsonWriterInit(&writer);
 
-	bool writtenHidden = false;
+	bool writtenOperation = false;
+	bool removeBuildAsUnique = false;
+	const char *opKey = NULL;
+	uint32_t opKeyLen = 0;
+	switch (operation)
+	{
+		case INDEX_METADATA_UPDATE_OPERATION_HIDDEN:
+		{
+			opKey = "hidden";
+			opKeyLen = 6;
+			break;
+		}
+
+		case INDEX_METADATA_UPDATE_OPERATION_PREPARE_UNIQUE:
+		{
+			opKey = "prepareUnique";
+			opKeyLen = 13;
+			removeBuildAsUnique = true;
+			break;
+		}
+
+		default:
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
+							errmsg("unknown index metadata update operation: %d",
+								   operation)));
+	}
 
 	if (indexOptions != NULL)
 	{
@@ -755,15 +945,19 @@ UpdateHiddenInIndexOptions(pgbson *indexOptions, bool hidden)
 		{
 			const char *key = bson_iter_key(&iter);
 			const bson_value_t *value = bson_iter_value(&iter);
-			if (strcmp(key, "hidden") == 0)
+			if (strcmp(key, opKey) == 0)
 			{
-				writtenHidden = true;
+				writtenOperation = true;
 
-				if (hidden)
+				if (newValue)
 				{
 					/* Only serialize for true */
-					PgbsonWriterAppendBool(&writer, "hidden", 6, hidden);
+					PgbsonWriterAppendBool(&writer, opKey, opKeyLen, newValue);
 				}
+			}
+			else if (removeBuildAsUnique && strcmp(key, "buildAsUnique") == 0)
+			{
+				/* skip this */
 			}
 			else
 			{
@@ -772,10 +966,10 @@ UpdateHiddenInIndexOptions(pgbson *indexOptions, bool hidden)
 		}
 	}
 
-	if (hidden && !writtenHidden)
+	if (newValue && !writtenOperation)
 	{
 		/* Only serialize for true */
-		PgbsonWriterAppendBool(&writer, "hidden", 6, hidden);
+		PgbsonWriterAppendBool(&writer, opKey, opKeyLen, newValue);
 	}
 
 	if (IsPgbsonWriterEmptyDocument(&writer))
@@ -789,15 +983,33 @@ UpdateHiddenInIndexOptions(pgbson *indexOptions, bool hidden)
 
 
 static void
-UpdatePostgresIndex(uint64_t collectionId, int indexId, bool hidden)
+UpdatePostgresIndex(uint64_t collectionId, int indexId, int operation, bool value)
+{
+	if (ForceUpdateIndexInline)
+	{
+		bool ignoreMissingShards = false;
+		UpdatePostgresIndexCore(collectionId, indexId, operation, value,
+								ignoreMissingShards);
+	}
+	else
+	{
+		UpdatePostgresIndexWithOverride(collectionId, indexId, operation, value,
+										UpdatePostgresIndexOverride);
+	}
+}
+
+
+static void
+UpdatePostgresIndexOverride(uint64_t collectionId, int indexId, int operation, bool value)
 {
 	bool ignoreMissingShards = false;
-	UpdatePostgresIndexCore(collectionId, indexId, hidden, ignoreMissingShards);
+	UpdatePostgresIndexCore(collectionId, indexId, operation, value, ignoreMissingShards);
 }
 
 
 void
-UpdatePostgresIndexCore(uint64_t collectionId, int indexId, bool hidden, bool
+UpdatePostgresIndexCore(uint64_t collectionId, int indexId, IndexMetadataUpdateOperation
+						operation, bool value, bool
 						ignoreMissingShards)
 {
 	/* First get the OID of the index */
@@ -813,14 +1025,40 @@ UpdatePostgresIndexCore(uint64_t collectionId, int indexId, bool hidden, bool
 							   GetShardIndexOids(collectionId, indexId,
 												 ignoreMissingShards));
 
-	ListCell *cell;
-	int numUpdated = 0;
-	foreach(cell, indexOidList)
+	switch (operation)
 	{
+		case INDEX_METADATA_UPDATE_OPERATION_HIDDEN:
+		{
+			UpdatePostgresIndexesForHide(indexOidList, value);
+			break;
+		}
+
+		case INDEX_METADATA_UPDATE_OPERATION_PREPARE_UNIQUE:
+		{
+			UpdatePostgresIndexesForPrepareUnique(indexOidList, value);
+			break;
+		}
+
+		default:
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
+							errmsg("unknown index metadata update operation: %d",
+								   operation)));
+	}
+}
+
+
+static void
+UpdatePostgresIndexesForHide(List *indexOids, bool hidden)
+{
+	ListCell *cell;
+	foreach(cell, indexOids)
+	{
+		Oid currentIndexOid = lfirst_oid(cell);
 		bool readOnly = false;
 		int numArgs = 2;
-		Datum args[2] = { BoolGetDatum(!hidden), ObjectIdGetDatum(lfirst_oid(cell)) };
+		Datum args[2] = { BoolGetDatum(!hidden), ObjectIdGetDatum(currentIndexOid) };
 		Oid argTypes[2] = { BOOLOID, OIDOID };
+
 
 		/* all args are non-null */
 		char *argNulls = NULL;
@@ -836,14 +1074,128 @@ UpdatePostgresIndexCore(uint64_t collectionId, int indexId, bool hidden, bool
 			readOnly,
 			SPI_OK_UPDATE_RETURNING,
 			&resultIsNull);
-		numUpdated += (resultIsNull ? 0 : 1);
+
+		if (resultIsNull)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
+							errmsg("failed to update hidden status for index oid %u",
+								   currentIndexOid)));
+		}
+	}
+}
+
+
+/* Given a list of indexOids it updates them and registers a bson exclusion constraint for the owning table in pg_constraint catalog.
+ * This is done using the CreateConstraintEntry function which will also update the pg_depend catalog to mark the table as the owner of the constraint.
+ * If this is successful, the index will be marked as an exclusion index in the pg_index catalog.
+ */
+static void
+UpdatePostgresIndexesForPrepareUnique(List *indexOids, bool prepareUnique)
+{
+	ListCell *cell;
+	Oid namespace = ApiDataNamespaceOid();
+
+	/* Unique indexes always have 2 exclusion operators, the bson_unique_index_equal and the bson_unique_shard_path_equal operators. */
+	Oid excludeOperators[2];
+	excludeOperators[0] = BsonUniqueIndexEqualOperatorId();
+	excludeOperators[1] = BsonUniqueShardPathEqualOperatorId();
+
+	if (!prepareUnique)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
+						errmsg("prepareUnique can only be set to true")));
 	}
 
-	/* If not all tables requested were updated - fail */
-	if (numUpdated != list_length(indexOidList))
+	foreach(cell, indexOids)
+	{
+		Oid currentIndexOid = lfirst_oid(cell);
+		Relation indexRel = index_open(currentIndexOid, AccessShareLock);
+		IndexInfo *indexInfo = BuildIndexInfo(indexRel);
+		const char *indexName = RelationGetRelationName(indexRel);
+		Oid shardTableOid = indexRel->rd_index->indrelid;
+		RelationClose(indexRel);
+
+		if (indexInfo->ii_NumIndexAttrs != 2 || indexInfo->ii_NumIndexKeyAttrs != 2)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
+							errmsg(
+								"got an unexpected number of index attributes for a prepareUnique index with oid: %u and name: %s",
+								currentIndexOid, indexName)));
+		}
+
+
+		CreateConstraintEntry(indexName, /* constraintName */
+							  namespace, /* constraintNamespace */
+							  CONSTRAINT_EXCLUSION, /* constraintType */
+							  false, /* isDeferrable */
+							  false, /* isDeferred */
+#if PG_VERSION_NUM >= 180000
+							  true, /* isEnforced */
+#endif
+							  true, /* isValidated */
+							  InvalidOid, /* parentConstraintId */
+							  shardTableOid, /* relationId */
+							  indexInfo->ii_IndexAttrNumbers, /* constraintKey */
+							  indexInfo->ii_NumIndexKeyAttrs, /* constraintKeyLength */
+							  indexInfo->ii_NumIndexAttrs, /* numKeyAttrs */
+							  InvalidOid, /* domainId */
+							  currentIndexOid, /* constraintIndexId */
+							  InvalidOid, /* foreignRelId */
+							  NULL, /* foreignKey */
+							  NULL, /* primaryEqOp */
+							  NULL, /* primaryPrimaryEqOp */
+							  NULL, /* foreignForeignEqOp */
+							  0, /* foreignDeleteType */
+							  ' ', /* foreignUpdateType */
+							  ' ', /* foreignMatchType */
+							  NULL, /* constraintBin */
+							  0, /* constraintBinLength */
+							  ' ', /* constraintSource */
+							  excludeOperators, /* exclusionOp */
+							  NULL, /* constraintPeriod */
+							  NULL, /* constraintWithoutOverlaps */
+							  true, /* isLocal */
+							  0, /* inheritCount */
+							  true, /* noInherit */
+#if PG_VERSION_NUM >= 180000
+							  false, /* conPeriod */
+#endif
+							  false /* isInternal */);
+
+		RegisterExclusionInPgIndexCatalog(currentIndexOid);
+	}
+}
+
+
+static void
+RegisterExclusionInPgIndexCatalog(Oid indexoid)
+{
+	bool readOnly = false;
+	int numArgs = 1;
+	Datum args[1] = { ObjectIdGetDatum(indexoid) };
+	Oid argTypes[1] = { OIDOID };
+
+
+	/* all args are non-null */
+	char *argNulls = NULL;
+	bool resultIsNull;
+
+	/* Update pg_index to set the indisexclusion to true */
+	ExtensionExecuteQueryWithArgsViaSPI(
+		"UPDATE pg_catalog.pg_index SET indisexclusion = true WHERE indexrelid = $1 RETURNING indexrelid",
+		numArgs,
+		argTypes,
+		args,
+		argNulls,
+		readOnly,
+		SPI_OK_UPDATE_RETURNING,
+		&resultIsNull);
+
+	if (resultIsNull)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
-						errmsg("failed to update index status for index %s",
-							   postgresIndexName)));
+						errmsg(
+							"failed to update indisexclusion status in pg_index for index oid %u",
+							indexoid)));
 	}
 }
