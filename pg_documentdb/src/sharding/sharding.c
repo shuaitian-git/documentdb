@@ -1319,6 +1319,9 @@ ShardCollectionCore(ShardCollectionArgs *args)
 	if (args->numChunks > 0)
 	{
 		shardCount = args->numChunks;
+
+		/* Custom numChunks requires breaking colocation */
+		colocateWith = "none";
 	}
 
 	const char *distributionColumn = "shard_key_value";
