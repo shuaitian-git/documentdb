@@ -256,8 +256,8 @@ typedef List *(*GettShardIndexOids_HookType)(uint64_t collectionId, int indexId,
 											 ignoreMissing);
 extern GettShardIndexOids_HookType get_shard_index_oids_hook;
 
-typedef void (*UpdatePostgresIndex_HookType)(uint64_t collectionId, int indexId, bool
-											 hidden);
+typedef void (*UpdatePostgresIndex_HookType)(uint64_t collectionId, int indexId, int
+											 operation, bool value);
 extern UpdatePostgresIndex_HookType update_postgres_index_hook;
 
 #endif

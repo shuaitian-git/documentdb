@@ -249,6 +249,8 @@ DEBUG:  executing "UPDATE pg_catalog.pg_index SET indisvalid = $1 WHERE indexrel
 DEBUG:  executing "UPDATE pg_catalog.pg_index SET indisvalid = $1 WHERE indexrelid = $2 RETURNING indexrelid" via SPI
 DEBUG:  Skipping command_node_worker on table documentdb_data.documents_9201_920005 since not in chosen shards
 DEBUG:  Skipping command_node_worker on table documentdb_data.documents_9201_920006 since not in chosen shards
+DEBUG:  executing "SELECT citus_is_coordinator()" via SPI
+DEBUG:  executing "select COUNT(1) from citus_shards cs join pg_dist_node pd on cs.nodename = pd.nodename and cs.nodeport = pd.nodeport where cs.table_name = $1::regclass and pd.groupid = 0" via SPI
 DEBUG:  executing "UPDATE documentdb_api_catalog.collection_indexes SET index_spec = $1 WHERE index_id = $2;" via SPI
                                    coll_mod                                   
 ---------------------------------------------------------------------

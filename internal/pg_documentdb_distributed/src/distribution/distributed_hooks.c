@@ -15,6 +15,7 @@
 #include <utils/lsyscache.h>
 #include <utils/memutils.h>
 #include <metadata/index.h>
+#include <parser/parse_func.h>
 
 #include "io/bson_core.h"
 #include "utils/query_utils.h"
@@ -29,7 +30,7 @@
 #include "shard_colocation.h"
 #include "distributed_hooks.h"
 
-#include "node_distributed_operations.h"
+#include "distributed_index_operations.h"
 
 extern bool UseLocalExecutionShardQueries;
 extern char *ApiDistributedSchemaName;

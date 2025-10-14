@@ -221,6 +221,9 @@ bool EnableSchemaEnforcementForCSFLE = DEFAULT_ENABLE_SCHEMA_ENFORCEMENT_FOR_CSF
 #define DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT true
 bool UsePgStatsLiveTuplesForCount = DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT;
 
+#define DEFAULT_ENABLE_PREPARE_UNIQUE false
+bool EnablePrepareUnique = DEFAULT_ENABLE_PREPARE_UNIQUE;
+
 /* FEATURE FLAGS END */
 
 void
@@ -606,5 +609,12 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable index terms that are value only."),
 		NULL, &EnableValueOnlyIndexTerms, DEFAULT_ENABLE_VALUE_ONLY_INDEX_TERMS,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enablePrepareUnique", newGucPrefix),
+		gettext_noop(
+			"Whether to enable prepareUnique for coll mod."),
+		NULL, &EnablePrepareUnique, DEFAULT_ENABLE_PREPARE_UNIQUE,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }
