@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-${POSTGRES_VERSION}-cron \
     postgresql-${POSTGRES_VERSION}-pgvector \
     postgresql-${POSTGRES_VERSION}-postgis-3 \
-    $(if [ "${POSTGRES_VERSION}" -lt 18 ]; then echo "postgresql-${POSTGRES_VERSION}-rum \\"; else echo ""; fi) \
+    $(if [ "${POSTGRES_VERSION}" -lt 18 ]; then echo "postgresql-${POSTGRES_VERSION}-rum"; fi) \
     devscripts \
     debhelper \
     dpkg-dev \

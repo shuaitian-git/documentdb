@@ -48,7 +48,8 @@ echo "PostgreSQL version: $POSTGRES_VERSION"
 if [ "${POSTGRES_VERSION}" -ge 18 ]; then
     echo "POSTGRES_VERSION=${POSTGRES_VERSION} >= 18; clearing rum_requires in rpm/documentdb.spec"
     # Replace the rum_requires global macro line with an empty definition
-    sed -i 's/^%global[[:space:]]\+rum_requires.*/%global rum_requires /' rpm/documentdb.spec || true
+    # Comment out the rum_requires macro line to avoid empty macro body errors
+    sed -i 's/^%global[[:space:]]\+rum_requires.*/# %global rum_requires removed for PG18+/g' rpm/documentdb.spec || true
 fi
 
 cp rpm/documentdb.spec ~/rpmbuild/SPECS/

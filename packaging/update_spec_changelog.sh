@@ -66,11 +66,12 @@ target_header_line=""
 target_header_line=$(grep -n '^### ' "$CHANGELOG" | grep -m1 "v${VER_DASH}" | cut -d: -f1 || true)
 
 if [[ -z "$target_header_line" ]]; then
-    echo "ERROR: Could not find section for version v$VER_DASH in $CHANGELOG" >&2
-    exit 1
+    echo "WARNING: Could not find section for version v$VER_DASH in $CHANGELOG; using entire changelog" >&2
+    start_line=1
+else
+    start_line=$target_header_line
 fi
 
-start_line=$target_header_line
 end_line=$(wc -l < "$CHANGELOG")
 
 echo "Extracting lines $start_line..$end_line from $CHANGELOG"
