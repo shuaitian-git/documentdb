@@ -1,4 +1,5 @@
 %global pg_version POSTGRES_VERSION
+%global rum_requires rum_%{pg_version}
 %define debug_package %{nil}
 
 Name:           postgresql%{pg_version}-documentdb
@@ -30,7 +31,7 @@ Requires:       (postgresql%{pg_version}-server or percona-postgresql%{pg_versio
 Requires:       (pgvector_%{pg_version} or percona-pgvector_%{pg_version})
 Requires:       pg_cron_%{pg_version}
 Requires:       postgis34_%{pg_version}
-Requires:       rum_%{pg_version}
+Requires:       %{rum_requires}
 # Libbson is now bundled, so no runtime Requires for it.
 # pcre2 is statically linked.
 # libbid.a is bundled.

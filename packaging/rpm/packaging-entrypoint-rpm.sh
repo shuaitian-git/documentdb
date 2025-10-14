@@ -43,6 +43,14 @@ echo "Package version: $PACKAGE_VERSION"
 echo "PostgreSQL version: $POSTGRES_VERSION"
 
 # Copy spec file to the SPECS directory
+# If building for PG >= 18, clear the rum_requires macro so the produced RPM
+# won't require the distro 'rum' package (we provide documentdb_extended_rum for PG18+)
+if [ "${POSTGRES_VERSION}" -ge 18 ]; then
+    echo "POSTGRES_VERSION=${POSTGRES_VERSION} >= 18; clearing rum_requires in rpm/documentdb.spec"
+    # Replace the rum_requires global macro line with an empty definition
+    sed -i 's/^%global[[:space:]]\+rum_requires.*/%global rum_requires /' rpm/documentdb.spec || true
+fi
+
 cp rpm/documentdb.spec ~/rpmbuild/SPECS/
 
 # Prepare the source directory

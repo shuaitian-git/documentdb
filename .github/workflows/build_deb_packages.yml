@@ -28,15 +28,7 @@ jobs:
     if: github.event.pull_request.draft == false
     strategy:
       fail-fast: false
-      matrix:
-        os: ${{ fromJson(github.event_name == 'pull_request' && '["ubuntu22.04"]' || '["deb11","deb12","deb13","ubuntu22.04","ubuntu24.04"]') }}
-        arch: [amd64, arm64]
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-        pg_version: ${{ fromJson(github.event_name == 'pull_request' && '["17"]' || '["16","17"]') }}
+      matrix: ${{ fromJson(github.event_name == 'pull_request' && '{"include":[{"os":"ubuntu22.04","arch":"amd64","runner":"ubuntu-24.04","pg_version":"17"},{"os":"ubuntu22.04","arch":"arm64","runner":"ubuntu-24.04-arm","pg_version":"18"}]}' || '{"os":["deb11","deb12","deb13","ubuntu22.04","ubuntu24.04"],"arch":["amd64","arm64"],"include":[{"arch":"amd64","runner":"ubuntu-24.04"},{"arch":"arm64","runner":"ubuntu-24.04-arm"}],"pg_version":["16","17", 18]}') }}
 
     steps:
       - name: Checkout repository
