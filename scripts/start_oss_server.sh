@@ -187,7 +187,7 @@ if [ "$gatewayWorker" == "true" ]; then
   echo "documentdb_gateway.setup_configuration_file = '$setupConfigurationFile'" >> $postgresConfigFile
 fi
 
-if [ "$useDocumentdbExtendedRum" == "true" ]; then
+if [ "$useDocumentdbExtendedRum" == "true" ] && [ "$initSetup" == "true" ]; then
   echo "${green}Configuring PostgreSQL to use pg_documentdb_extended_rum extension instead of rum${reset}"
   echo "documentdb.rum_library_load_option = 'require_documentdb_extended_rum'" >> $postgresConfigFile
   echo "documentdb.alternate_index_handler_name = 'extended_rum'" >> $postgresConfigFile
@@ -201,15 +201,17 @@ StartServer $postgresDirectory $coordinatorPort
 
 if [ "$initSetup" == "true" ]; then
   SetupPostgresServerExtensions "$userName" $coordinatorPort $extensionName
+
+  if [ "$useDocumentdbExtendedRum" == "true" ] && [ "$initSetup" == "true" ]; then
+    psql -p $coordinatorPort -d postgres -c "CREATE EXTENSION documentdb_extended_rum"
+  fi
+
+  if [ "$distributed" == "true" ]; then
+    psql -p $coordinatorPort -d postgres -c "SELECT citus_set_coordinator_host('localhost', $coordinatorPort);"
+    AddNodeToCluster $coordinatorPort $coordinatorPort
+    psql -p $coordinatorPort -d postgres -c "SELECT documentdb_api_distributed.initialize_cluster()"
+  fi
   SetupCustomAdminUser "$customAdminUser" "$customAdminUserPassword" $coordinatorPort "$userName"
 fi
 
-if [ "$useDocumentdbExtendedRum" == "true" ]; then
-  psql -p $coordinatorPort -d postgres -c "CREATE EXTENSION documentdb_extended_rum"
-fi
-
-if [ "$distributed" == "true" ]; then
-  psql -p $coordinatorPort -d postgres -c "SELECT citus_set_coordinator_host('localhost', $coordinatorPort);"
-  AddNodeToCluster $coordinatorPort $coordinatorPort
-fi
 . $scriptDir/setup_psqlrc.sh
