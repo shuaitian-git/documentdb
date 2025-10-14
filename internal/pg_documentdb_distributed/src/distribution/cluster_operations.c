@@ -23,6 +23,7 @@
 #include "metadata/index.h"
 #include "metadata/metadata_cache.h"
 #include "utils/guc_utils.h"
+#include "utils/lsyscache.h"
 #include "utils/query_utils.h"
 #include "utils/version_utils.h"
 #include "utils/error_utils.h"
@@ -372,12 +373,16 @@ DistributeCrudFunctions()
 
 	char changesRelation[50];
 	sprintf(changesRelation, "%s.changes", ApiDataSchemaName);
-	const char *distributionColumn = "shard_key_value";
-	const char *colocateWith = "none";
-	int shardCount = 0;
-	DistributePostgresTable(changesRelation, distributionColumn, colocateWith,
-							shardCount);
+	Oid changesRelationOid = get_relname_relid("changes", ApiDataNamespaceOid());
 
+	if (changesRelationOid != InvalidOid)
+	{
+		const char *distributionColumn = "shard_key_value";
+		const char *colocateWith = "none";
+		int shardCount = 0;
+		DistributePostgresTable(changesRelation, distributionColumn, colocateWith,
+								shardCount);
+	}
 
 	if (!CreateDistributedFunctions)
 	{

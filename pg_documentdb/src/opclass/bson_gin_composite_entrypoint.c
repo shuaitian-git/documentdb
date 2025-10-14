@@ -1946,11 +1946,11 @@ BuildSinglePathTermsForCompositeTerms(pgbson *bson, BsonGinCompositePathOptions 
 
 
 static Datum *
-AddTruncationOrMultiKeyTermsAndReturn(Datum *indexEntries, uint32_t totalTermCount,
-									  int32_t indexEntryCapacity,
-									  bool entryHasMultiKey, bool hasTruncation,
-									  int32_t *nentries,
-									  IndexTermCreateMetadata *overallMetadata)
+AddTruncationOrMultiKeyTerms(Datum *indexEntries, uint32_t totalTermCount,
+							 int32_t indexEntryCapacity,
+							 bool entryHasMultiKey, bool hasTruncation,
+							 int32_t *nentries,
+							 IndexTermCreateMetadata *overallMetadata)
 {
 	bool hasExtra = (totalTermCount > 1 || entryHasMultiKey) || hasTruncation;
 
@@ -2008,7 +2008,7 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 	IndexTermCreateMetadata overallMetadata = GetCompositeIndexTermMetadata(options);
 	if (pathCount == 1)
 	{
-		return AddTruncationOrMultiKeyTermsAndReturn(
+		return AddTruncationOrMultiKeyTerms(
 			entries[0], totalTermCount, entryCapacity[0], entryHasMultiKey,
 			entryHasTruncation, nentries, &overallMetadata);
 	}
@@ -2048,7 +2048,7 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 		indexEntries[i] = serializedTerm.indexTermDatum;
 	}
 
-	return AddTruncationOrMultiKeyTermsAndReturn(
+	return AddTruncationOrMultiKeyTerms(
 		indexEntries, totalTermCount, finalEntryCapacity, entryHasMultiKey, hasTruncation,
 		nentries, &overallMetadata);
 }
