@@ -1061,4 +1061,96 @@ impl PgDataClient for DocumentDBDataClient {
             .await?;
         Ok(Response::Pg(PgResponse::new(compact_rows)))
     }
+
+    async fn execute_create_role(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        connection_context: &ConnectionContext,
+    ) -> Result<Response> {
+        let (request, request_info, request_tracker) = request_context.get_components();
+        let create_role_rows = self
+            .pull_connection(connection_context)
+            .await?
+            .query(
+                connection_context
+                    .service_context
+                    .query_catalog()
+                    .create_role(),
+                &[Type::BYTEA],
+                &[&PgDocument(request.document())],
+                Timeout::command(request_info.max_time_ms),
+                request_tracker,
+            )
+            .await?;
+        Ok(Response::Pg(PgResponse::new(create_role_rows)))
+    }
+
+    async fn execute_update_role(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        connection_context: &ConnectionContext,
+    ) -> Result<Response> {
+        let (request, request_info, request_tracker) = request_context.get_components();
+        let update_role_rows = self
+            .pull_connection(connection_context)
+            .await?
+            .query(
+                connection_context
+                    .service_context
+                    .query_catalog()
+                    .update_role(),
+                &[Type::BYTEA],
+                &[&PgDocument(request.document())],
+                Timeout::command(request_info.max_time_ms),
+                request_tracker,
+            )
+            .await?;
+        Ok(Response::Pg(PgResponse::new(update_role_rows)))
+    }
+
+    async fn execute_drop_role(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        connection_context: &ConnectionContext,
+    ) -> Result<Response> {
+        let (request, request_info, request_tracker) = request_context.get_components();
+        let drop_role_rows = self
+            .pull_connection(connection_context)
+            .await?
+            .query(
+                connection_context
+                    .service_context
+                    .query_catalog()
+                    .drop_role(),
+                &[Type::BYTEA],
+                &[&PgDocument(request.document())],
+                Timeout::command(request_info.max_time_ms),
+                request_tracker,
+            )
+            .await?;
+        Ok(Response::Pg(PgResponse::new(drop_role_rows)))
+    }
+
+    async fn execute_roles_info(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        connection_context: &ConnectionContext,
+    ) -> Result<Response> {
+        let (request, request_info, request_tracker) = request_context.get_components();
+        let roles_info_rows = self
+            .pull_connection(connection_context)
+            .await?
+            .query(
+                connection_context
+                    .service_context
+                    .query_catalog()
+                    .roles_info(),
+                &[Type::BYTEA],
+                &[&PgDocument(request.document())],
+                Timeout::command(request_info.max_time_ms),
+                request_tracker,
+            )
+            .await?;
+        Ok(Response::Pg(PgResponse::new(roles_info_rows)))
+    }
 }

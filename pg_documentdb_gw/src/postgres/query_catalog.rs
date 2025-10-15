@@ -92,6 +92,12 @@ pub struct QueryCatalog {
     pub users_info: String,
     pub connection_status: String,
 
+    // roles.rs
+    pub create_role: String,
+    pub update_role: String,
+    pub drop_role: String,
+    pub roles_info: String,
+
     // tests
     pub create_db_user: String,
 
@@ -340,6 +346,22 @@ impl QueryCatalog {
         &self.connection_status
     }
 
+    pub fn create_role(&self) -> &str {
+        &self.create_role
+    }
+
+    pub fn update_role(&self) -> &str {
+        &self.update_role
+    }
+
+    pub fn drop_role(&self) -> &str {
+        &self.drop_role
+    }
+
+    pub fn roles_info(&self) -> &str {
+        &self.roles_info
+    }
+
     pub fn create_db_user(&self, user: &str, pass: &str) -> String {
         self.create_db_user
             .replace("{user}", user)
@@ -441,6 +463,12 @@ pub fn create_query_catalog() -> QueryCatalog {
             update_user: "SELECT documentdb_api.update_user($1)".to_string(),
             users_info: "SELECT documentdb_api.users_info($1)".to_string(),
             connection_status: "SELECT documentdb_api.connection_status($1)".to_string(),
+
+            // roles.rs
+            create_role: "SELECT documentdb_api.create_role($1)".to_string(),
+            update_role: "SELECT documentdb_api.update_role($1)".to_string(),
+            drop_role: "SELECT documentdb_api.drop_role($1)".to_string(),
+            roles_info: "SELECT documentdb_api.roles_info($1)".to_string(),
 
             // tests
             create_db_user: "CREATE ROLE \"{user}\" WITH LOGIN INHERIT PASSWORD '{pass}' IN ROLE documentdb_readonly_role; 

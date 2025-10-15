@@ -20,12 +20,13 @@ use crate::{
     error::{DocumentDBError, ErrorCode, Result},
     explain,
     postgres::PgDataClient,
-    processor::{data_description, data_management},
+    processor::{
+        constant, cursor, data_description, data_management, indexing, ismaster, roles, session,
+        transaction, users,
+    },
     requests::RequestType,
     responses::Response,
 };
-
-use super::{constant, cursor, indexing, ismaster, session, transaction, users};
 
 enum Retry {
     Long,
@@ -321,6 +322,21 @@ pub async fn process_request(
             }
             RequestType::UsersInfo => {
                 users::process_users_info(request_context, connection_context, &pg_data_client)
+                    .await
+            }
+            RequestType::CreateRole => {
+                roles::process_create_role(request_context, connection_context, &pg_data_client)
+                    .await
+            }
+            RequestType::UpdateRole => {
+                roles::process_update_role(request_context, connection_context, &pg_data_client)
+                    .await
+            }
+            RequestType::DropRole => {
+                roles::process_drop_role(request_context, connection_context, &pg_data_client).await
+            }
+            RequestType::RolesInfo => {
+                roles::process_roles_info(request_context, connection_context, &pg_data_client)
                     .await
             }
             RequestType::UnshardCollection => {
