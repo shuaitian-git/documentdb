@@ -657,8 +657,7 @@ ModifyIndexSpecsInCollection(const MongoCollection *collection,
 
 	if ((*specFlags & HAS_INDEX_OPTION_PREPARE_UNIQUE) == HAS_INDEX_OPTION_PREPARE_UNIQUE)
 	{
-		if (!EnablePrepareUnique || (!ForceUpdateIndexInline && !IsClusterVersionAtleast(
-										 DocDB_V0, 108, 0)))
+		if (!EnablePrepareUnique || !IsClusterVersionAtleast(DocDB_V0, 109, 0))
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INVALIDOPTIONS),
 							errmsg("prepareUnique index option is not supported yet")));
