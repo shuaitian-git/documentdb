@@ -309,6 +309,19 @@ ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec)
 
 
 /*
+ * update_role implements the core logic for updateRole command
+ * Currently not supported.
+ */
+Datum
+update_role(pgbson *updateRoleBson)
+{
+	ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTED),
+					errmsg("UpdateRole command is not supported in preview."),
+					errdetail_log("UpdateRole command is not supported in preview.")));
+}
+
+
+/*
  * drop_role implements the core logic for dropRole command
  */
 Datum
