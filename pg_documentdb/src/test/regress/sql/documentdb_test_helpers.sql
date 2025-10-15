@@ -41,6 +41,10 @@ BEGIN
   LOOP
     IF v_explain_row ~ '^\s+Disabled: true\s*$' THEN
       CONTINUE;
+    ELSIF v_explain_row ~ '^\s+Index Searches: 0\s*$' THEN
+      CONTINUE;
+    ELSIF v_explain_row ~ 'actual rows=[0-9]+\.00' THEN
+      SELECT regexp_replace(v_explain_row, 'actual rows=([0-9]+)\.00', 'actual rows=\1') INTO v_explain_row;
     END IF;
     RETURN NEXT v_explain_row;
   END LOOP;

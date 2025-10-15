@@ -56,7 +56,7 @@ static void CheckTreeAtLevel(RumState *rumState, BlockNumber blockNumber, int le
  * Note that it does not do the bulk deletion of pruning dead rows.
  * That is still delegated to vacuum.
  */
-Datum
+PGDLLEXPORT Datum
 documentdb_rum_prune_empty_entries_on_index(PG_FUNCTION_ARGS)
 {
 	Relation indrel;
