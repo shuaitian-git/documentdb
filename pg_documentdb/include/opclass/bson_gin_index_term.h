@@ -18,9 +18,6 @@
 /* Struct used in manipulating bson index terms */
 typedef struct BsonIndexTerm
 {
-	/* Whether or not it's a metadata term */
-	bool isIndexTermMetadata;
-
 	/* The metadata for the term */
 	uint8_t termMetadata;
 
@@ -34,9 +31,6 @@ typedef struct BsonIndexTermSerialized
 	/* Whether or not the term is truncated */
 	bool isIndexTermTruncated;
 
-	/* Whether or not it's a root metadata term (exists/not exists) */
-	bool isRootMetadataTerm;
-
 	/* The serialized index term value */
 	bytea *indexTermVal;
 } BsonIndexTermSerialized;
@@ -46,9 +40,6 @@ typedef struct BsonCompressableIndexTermSerialized
 {
 	/* Whether or not the term is truncated */
 	bool isIndexTermTruncated;
-
-	/* Whether or not it's a root metadata term (exists/not exists) */
-	bool isRootMetadataTerm;
 
 	/* The serialized index term value */
 	Datum indexTermDatum;
@@ -83,6 +74,8 @@ typedef struct IndexTermCreateMetadata
 	/* Whether the index supports value only terms */
 	bool allowValueOnly;
 } IndexTermCreateMetadata;
+
+bool IsIndexTermMetadata(const BsonIndexTerm *indexTerm);
 
 
 bool IsIndexTermTruncated(const BsonIndexTerm *indexTerm);
