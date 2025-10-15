@@ -1428,9 +1428,8 @@ ShardCollectionCore(ShardCollectionArgs *args)
 	bool isPrepareUniqueArrayNull = true;
 	Datum prepareUniqueNamesArray = (Datum) 0;
 
-	bool isPrepareUniqueSupported = EnablePrepareUnique && (ForceUpdateIndexInline ||
-															IsClusterVersionAtleast(
-																DocDB_V0, 108, 0));
+	bool isPrepareUniqueSupported = EnablePrepareUnique &&
+									IsClusterVersionAtleast(DocDB_V0, 109, 0);
 	if (isPrepareUniqueSupported)
 	{
 		/* Get prepareUnique index names that need to be converted after rebuilt. */

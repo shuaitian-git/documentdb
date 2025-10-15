@@ -141,3 +141,17 @@ SELECT bson_dollar_unwind(cursorpage, '$cursor.firstBatch') FROM documentdb_api.
 -- turn off feature, should fail
 set documentdb.enablePrepareUnique to off;
 SELECT documentdb_api.coll_mod('prep_unique_db', 'collection', '{ "collMod": "collection", "index": { "name": "f_1", "prepareUnique": true } }');
+
+SELECT documentdb_api.drop_collection('prep_unique_db', 'collection');
+
+SELECT documentdb_api_internal.create_indexes_non_concurrently('prep_unique_db', '{ "createIndexes": "collection", "indexes": [ { "name": "f_1", "key": { "f": 1 }, "storageEngine": { "enableOrderedIndex": true, "buildAsUnique": true } } ] }', TRUE);
+
+-- test with a secondary user
+SELECT documentdb_api.create_user('{"createUser":"newPrepareUniqueUser", "pwd":"Admin123!", "roles":[{"role":"readWriteAnyDatabase","db":"admin"}, {"role":"clusterAdmin","db":"admin"}]}');
+
+\c regression newPrepareUniqueUser
+set documentdb.enablePrepareUnique to on;
+
+SELECT documentdb_api.coll_mod('prep_unique_db', 'collection', '{ "collMod": "collection", "index": { "name": "f_1", "prepareUnique": true } }');
+
+\d documentdb_data.documents_588003;
