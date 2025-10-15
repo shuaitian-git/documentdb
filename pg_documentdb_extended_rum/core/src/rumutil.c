@@ -37,23 +37,17 @@ PG_MODULE_MAGIC;
 void _PG_init(void);
 
 PG_FUNCTION_INFO_V1(documentdb_rumhandler);
-PGDLLEXPORT void DocumentDBSetRumUnredactedLogEmitHook(rum_format_log_hook hook);
-PGDLLEXPORT void InitializeCommonDocumentDBGUCs(const char *rumGucPrefix, const
-												char *documentDBRumGucPrefix);
+extern PGDLLEXPORT void InitializeCommonDocumentDBGUCs(const char *rumGucPrefix, const
+													   char *documentDBRumGucPrefix);
 
 static char * rumbuildphasename(int64 phasenum);
 
-/* Kind of relation optioms for rum index */
-static relopt_kind rum_relopt_kind;
+extern PGDLLIMPORT bool DocumentDBRumLoadCommonGUCs;
 
-PGDLLEXPORT rum_format_log_hook rum_unredacted_log_emit_hook = NULL;
+extern PGDLLIMPORT bool RumThrowErrorOnInvalidDataPage;
 
-PGDLLEXPORT bool DocumentDBRumLoadCommonGUCs = true;
-
-PGDLLEXPORT bool RumThrowErrorOnInvalidDataPage =
-	RUM_DEFAULT_THROW_ERROR_ON_INVALID_DATA_PAGE;
-PGDLLEXPORT bool RumUseNewItemPtrDecoding = RUM_DEFAULT_USE_NEW_ITEM_PTR_DECODING;
-PGDLLEXPORT bool RumEnableParallelVacuumFlags = RUM_ENABLE_PARALLEL_VACUUM_FLAGS;
+extern PGDLLIMPORT bool RumUseNewItemPtrDecoding;
+extern PGDLLIMPORT bool RumEnableParallelVacuumFlags;
 
 /*
  * Module load callback
@@ -63,6 +57,18 @@ _PG_init(void)
 {
 #define RUM_GUC_PREFIX "documentdb_rum"
 #define DOCUMENTDB_RUM_GUC_PREFIX "documentdb_rum"
+
+	StaticAssertExpr(offsetof(RumPageOpaqueData, maxoff) == sizeof(uint64_t),
+					 "maxoff must be the 3rd field with a specific offset");
+	StaticAssertExpr(offsetof(RumPageOpaqueData, freespace) == sizeof(uint64_t) +
+					 sizeof(uint16_t),
+					 "freespace must be the 3rd field with a specific offset");
+	StaticAssertExpr(offsetof(RumPageOpaqueData, flags) == sizeof(uint64_t) +
+					 sizeof(uint32_t),
+					 "flags must be the 3rd field with a specific offset");
+	StaticAssertExpr(sizeof(RumPageOpaqueData) == sizeof(uint64_t) + sizeof(uint64_t),
+					 "RumPageOpaqueData must be the 2 bigint fields worth");
+
 
 	/* Define custom GUC variables. */
 	RumTrackIncompleteSplit = RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT;
@@ -91,168 +97,6 @@ _PG_init(void)
 	}
 
 	MarkGUCPrefixReserved(DOCUMENTDB_RUM_GUC_PREFIX);
-}
-
-
-PGDLLEXPORT void
-InitializeCommonDocumentDBGUCs(const char *rumGucPrefix, const
-							   char *documentDBRumGucPrefix)
-{
-	DefineCustomIntVariable(psprintf("%s.rum_fuzzy_search_limit", rumGucPrefix),
-							"Sets the maximum allowed result for exact search by RUM.",
-							NULL,
-							&RumFuzzySearchLimit,
-							0, 0, INT_MAX,
-							PGC_USERSET, 0,
-							NULL, NULL, NULL);
-
-	DefineCustomIntVariable(psprintf("%s.data_page_posting_tree_size", rumGucPrefix),
-							"Test GUC that sets the data page size before splits.",
-							NULL,
-							&RumDataPageIntermediateSplitSize,
-							-1, -1, INT_MAX,
-							PGC_USERSET, 0,
-							NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(psprintf("%s.rum_skip_retry_on_delete_page",
-									  documentDBRumGucPrefix),
-							 "Sets whether or not to skip retrying on delete pages during vacuuming",
-							 NULL,
-							 &RumSkipRetryOnDeletePage,
-							 RUM_DEFAULT_SKIP_RETRY_ON_DELETE_PAGE,
-							 PGC_USERSET, 0,
-							 NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.rum_throw_error_on_invalid_data_page", documentDBRumGucPrefix),
-		"Sets whether or not to throw an error on invalid data page",
-		NULL,
-		&RumThrowErrorOnInvalidDataPage,
-		RUM_DEFAULT_THROW_ERROR_ON_INVALID_DATA_PAGE,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.rum_disable_fast_scan", documentDBRumGucPrefix),
-		"Sets whether or not to disable fast scan",
-		NULL,
-		&RumDisableFastScan,
-		RUM_DEFAULT_DISABLE_FAST_SCAN,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enable_parallel_index_build", documentDBRumGucPrefix),
-		"Sets whether or not to enable parallel index build",
-		NULL,
-		&RumEnableParallelIndexBuild,
-		RUM_DEFAULT_ENABLE_PARALLEL_INDEX_BUILD,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		psprintf("%s.parallel_index_workers_override", documentDBRumGucPrefix),
-		"Sets the number of parallel index workers to use (default: -1, meaning no override)",
-		NULL,
-		&RumParallelIndexWorkersOverride,
-		RUM_DEFAULT_PARALLEL_INDEX_WORKERS_OVERRIDE, -1, INT_MAX,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.forceRumOrderedIndexScan", documentDBRumGucPrefix),
-		"Sets whether or not to force a run ordered index scan",
-		NULL,
-		&RumForceOrderedIndexScan,
-		DEFAULT_FORCE_RUM_ORDERED_INDEX_SCAN,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.preferOrderedIndexScan", documentDBRumGucPrefix),
-		"Sets whether or not to prefer the ordered scan when available",
-		NULL,
-		&RumPreferOrderedIndexScan,
-		RUM_DEFAULT_PREFER_ORDERED_INDEX_SCAN,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enableSkipIntermediateEntry", documentDBRumGucPrefix),
-		"Sets whether or not to skip intermediate entries during scan",
-		NULL,
-		&RumEnableSkipIntermediateEntry,
-		RUM_DEFAULT_ENABLE_SKIP_INTERMEDIATE_ENTRY,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.vacuum_cleanup_entries", documentDBRumGucPrefix),
-		"Sets whether or not to clean up entries during vacuuming",
-		NULL,
-		&RumVacuumEntryItems,
-		RUM_DEFAULT_VACUUM_ENTRY_ITEMS,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-	DefineCustomBoolVariable(
-		psprintf("%s.rum_use_new_item_ptr_decoding", documentDBRumGucPrefix),
-		"Sets whether or not to use new item pointer decoding",
-		NULL,
-		&RumUseNewItemPtrDecoding,
-		RUM_DEFAULT_USE_NEW_ITEM_PTR_DECODING,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enable_inject_page_split_incomplete", documentDBRumGucPrefix),
-		"Test GUC - sets whether or not to enable injecting a failure in the middle of a page split",
-		NULL,
-		&RumInjectPageSplitIncomplete,
-		RUM_DEFAULT_ENABLE_INJECT_PAGE_SPLIT_INCOMPLETE,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enable_set_vacuum_parallel_flags", documentDBRumGucPrefix),
-		"Enables setting the parallel vacuum flags in Postgres",
-		NULL,
-		&RumEnableParallelVacuumFlags,
-		RUM_ENABLE_PARALLEL_VACUUM_FLAGS,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enable_custom_cost_estimate", documentDBRumGucPrefix),
-		"Temporary flag to enable using the custom rum cost estimate logic",
-		NULL,
-		&RumEnableCustomCostEstimate,
-		RUM_DEFAULT_ENABLE_CUSTOM_COST_ESTIMATE,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	rum_relopt_kind = add_reloption_kind();
-
-	add_string_reloption(rum_relopt_kind, "attach",
-						 "Column name to attach as additional info",
-						 NULL, NULL
-#if PG_VERSION_NUM >= 130000
-						 , AccessExclusiveLock
-#endif
-						 );
-	add_string_reloption(rum_relopt_kind, "to",
-						 "Column name to add a order by column",
-						 NULL, NULL
-#if PG_VERSION_NUM >= 130000
-						 , AccessExclusiveLock
-#endif
-						 );
-	add_bool_reloption(rum_relopt_kind, "order_by_attach",
-					   "Use (addinfo, itempointer) order instead of just itempointer",
-					   false
-#if PG_VERSION_NUM >= 130000
-					   , AccessExclusiveLock
-#endif
-					   );
 }
 
 
@@ -322,13 +166,6 @@ documentdb_rumhandler(PG_FUNCTION_ARGS)
 	amroutine->amoptsprocnum = RUM_INDEX_CONFIG_PROC;
 
 	PG_RETURN_POINTER(amroutine);
-}
-
-
-PGDLLEXPORT void
-DocumentDBSetRumUnredactedLogEmitHook(rum_format_log_hook hook)
-{
-	rum_unredacted_log_emit_hook = hook;
 }
 
 
@@ -1152,31 +989,6 @@ rumExtractEntries(RumState *rumstate, OffsetNumber attnum,
 	}
 
 	return entries;
-}
-
-
-PGDLLEXPORT bytea *
-documentdb_rumoptions(Datum reloptions, bool validate)
-{
-#if PG_VERSION_NUM >= 180000
-	static const int offsetIfDefault = -1;
-	static const relopt_parse_elt tab[] = {
-		{ "attach", RELOPT_TYPE_STRING, offsetof(RumOptions, attachColumn),
-		  offsetIfDefault },
-		{ "to", RELOPT_TYPE_STRING, offsetof(RumOptions, addToColumn), offsetIfDefault },
-		{ "order_by_attach", RELOPT_TYPE_BOOL, offsetof(RumOptions, useAlternativeOrder),
-		  offsetIfDefault }
-	};
-#else
-	static const relopt_parse_elt tab[] = {
-		{ "attach", RELOPT_TYPE_STRING, offsetof(RumOptions, attachColumn) },
-		{ "to", RELOPT_TYPE_STRING, offsetof(RumOptions, addToColumn) },
-		{ "order_by_attach", RELOPT_TYPE_BOOL, offsetof(RumOptions, useAlternativeOrder) }
-	};
-#endif
-
-	return (bytea *) build_reloptions(reloptions, validate, rum_relopt_kind,
-									  sizeof(RumOptions), tab, lengthof(tab));
 }
 
 

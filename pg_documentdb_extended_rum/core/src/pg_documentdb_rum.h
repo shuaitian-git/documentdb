@@ -1011,6 +1011,7 @@ extern RumItem * rumGetBAEntry(BuildAccumulator *accum,
 #define RUM_DEFAULT_ENABLE_SKIP_INTERMEDIATE_ENTRY true
 #define RUM_DEFAULT_VACUUM_ENTRY_ITEMS true
 #define RUM_DEFAULT_USE_NEW_ITEM_PTR_DECODING true
+#define RUM_DEFAULT_PRUNE_EMPTY_PAGES false
 #define RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT true
 #define RUM_DEFAULT_FIX_INCOMPLETE_SPLIT true
 #define RUM_DEFAULT_ENABLE_INJECT_PAGE_SPLIT_INCOMPLETE false
@@ -1030,6 +1031,7 @@ extern PGDLLEXPORT bool RumPreferOrderedIndexScan;
 extern PGDLLEXPORT bool RumEnableSkipIntermediateEntry;
 extern PGDLLEXPORT bool RumVacuumEntryItems;
 extern PGDLLEXPORT bool RumUseNewItemPtrDecoding;
+extern PGDLLEXPORT bool RumPruneEmptyPages;
 extern PGDLLEXPORT bool RumTrackIncompleteSplit;
 extern PGDLLEXPORT bool RumFixIncompleteSplit;
 extern PGDLLEXPORT bool RumInjectPageSplitIncomplete;

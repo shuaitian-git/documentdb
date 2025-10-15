@@ -15,3 +15,4 @@ s/\s+$//g
 # Replace the values of the $$NOW time system variable with a constant
 s/\"now\" : \{ \"\$date\" : \{ \"\$numberLong\" : \"[0-9]*\" \} \}/\"now\" : NOW_SYS_VARIABLE/g
 s/\"sn\" : \{ \"\$date\" : \{ \"\$numberLong\" : \"[0-9]*\" \} \}/\"sn\" : NOW_SYS_VARIABLE/g
+s/pruned empty posting trees for index [0-9]+/pruned empty posting trees for index xxx/g
