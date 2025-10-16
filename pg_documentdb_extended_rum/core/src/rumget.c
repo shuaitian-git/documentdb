@@ -342,7 +342,7 @@ scanPostingTree(Relation index, RumScanEntry scanEntry,
 		bool shouldScanPage = true;
 
 		page = BufferGetPage(buffer);
-		maxoff = RumPageGetOpaque(page)->maxoff;
+		maxoff = RumDataPageMaxOff(page);
 
 		if (scanEntryBounds != NULL &&
 			RumPageIsNotDeleted(page) &&
@@ -865,14 +865,14 @@ restartScanEntry:
 			 * increased to keep buffer pinned after freeRumBtreeStack() call.
 			 */
 			pageInner = BufferGetPage(entry->buffer);
-			entry->predictNumberResult = gdi->stack->predictNumber * RumPageGetOpaque(
-				pageInner)->maxoff;
+			entry->predictNumberResult = gdi->stack->predictNumber * RumDataPageMaxOff(
+				pageInner);
 
 			/*
 			 * Keep page content in memory to prevent durable page locking
 			 */
 			entry->list = (RumItem *) palloc(BLCKSZ * sizeof(RumItem));
-			maxoff = RumPageGetOpaque(pageInner)->maxoff;
+			maxoff = RumDataPageMaxOff(pageInner);
 			entry->nlist = maxoff;
 
 			if (RumUseNewItemPtrDecoding)
@@ -1512,14 +1512,14 @@ PrepareOrderedMatchedEntry(RumScanOpaque so, RumScanEntry entry,
 		 * increased to keep buffer pinned after freeRumBtreeStack() call.
 		 */
 		pageInner = BufferGetPage(entry->buffer);
-		entry->predictNumberResult += gdi->stack->predictNumber * RumPageGetOpaque(
-			pageInner)->maxoff;
+		entry->predictNumberResult += gdi->stack->predictNumber * RumDataPageMaxOff(
+			pageInner);
 
 		/*
 		 * Keep page content in memory to prevent durable page locking
 		 */
 		entry->list = (RumItem *) palloc(BLCKSZ * sizeof(RumItem));
-		maxoff = RumPageGetOpaque(pageInner)->maxoff;
+		maxoff = RumDataPageMaxOff(pageInner);
 		entry->nlist = maxoff;
 
 		if (RumUseNewItemPtrDecoding)
@@ -2062,7 +2062,7 @@ entryGetNextItem(RumState *rumstate, RumScanEntry entry, Snapshot snapshot,
 							  snapshot);
 
 			entry->offset = -1;
-			maxoff = RumPageGetOpaque(page)->maxoff;
+			maxoff = RumDataPageMaxOff(page);
 			entry->nlist = maxoff;
 			ItemPointerSetMin(&item.iptr);
 			ptr = RumDataPageGetData(page);
@@ -2259,13 +2259,13 @@ entryGetNextItemList(RumState *rumstate, RumScanEntry entry, Snapshot snapshot)
 		 */
 		pageInner = BufferGetPage(entry->buffer);
 		entry->predictNumberResult = gdi->stack->predictNumber *
-									 RumPageGetOpaque(pageInner)->maxoff;
+									 RumDataPageMaxOff(pageInner);
 
 		/*
 		 * Keep page content in memory to prevent durable page locking
 		 */
 		entry->list = (RumItem *) palloc(BLCKSZ * sizeof(RumItem));
-		maxoff = RumPageGetOpaque(pageInner)->maxoff;
+		maxoff = RumDataPageMaxOff(pageInner);
 		entry->nlist = maxoff;
 
 		if (RumUseNewItemPtrDecoding)
@@ -2927,7 +2927,7 @@ scanPage(RumState *rumstate, RumScanEntry entry, RumItem *item, bool equalOk)
 	}
 
 	ptr = RumDataPageGetData(page);
-	maxoff = RumPageGetOpaque(page)->maxoff;
+	maxoff = RumDataPageMaxOff(page);
 
 	for (j = 0; j < RumDataLeafIndexCount; j++)
 	{

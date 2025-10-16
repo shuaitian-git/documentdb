@@ -136,7 +136,7 @@ CheckLeafEntryPageForSplits(RumState *rumState, Buffer buffer, bool dryrunMode)
 inline static OffsetNumber
 GetMaxOffsetNumberForPage(Page page)
 {
-	return RumPageIsData(page) ? RumPageGetOpaque(page)->maxoff : PageGetMaxOffsetNumber(
+	return RumPageIsData(page) ? RumDataPageMaxOff(page) : PageGetMaxOffsetNumber(
 		page);
 }
 

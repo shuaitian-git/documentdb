@@ -58,9 +58,12 @@ _PG_init(void)
 #define RUM_GUC_PREFIX "documentdb_rum"
 #define DOCUMENTDB_RUM_GUC_PREFIX "documentdb_rum"
 
-	StaticAssertExpr(offsetof(RumPageOpaqueData, maxoff) == sizeof(uint64_t),
+
+	StaticAssertExpr(offsetof(RumPageOpaqueData, dataPageMaxoff) == sizeof(uint64_t),
 					 "maxoff must be the 3rd field with a specific offset");
-	StaticAssertExpr(offsetof(RumPageOpaqueData, freespace) == sizeof(uint64_t) +
+	StaticAssertExpr(offsetof(RumPageOpaqueData, entryPageUnused) == sizeof(uint64_t),
+					 "entryPageUnused must be the 3rd field with a specific offset");
+	StaticAssertExpr(offsetof(RumPageOpaqueData, dataPageFreespace) == sizeof(uint64_t) +
 					 sizeof(uint16_t),
 					 "freespace must be the 3rd field with a specific offset");
 	StaticAssertExpr(offsetof(RumPageOpaqueData, flags) == sizeof(uint64_t) +

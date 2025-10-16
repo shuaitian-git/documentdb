@@ -238,14 +238,14 @@ rumVacuumLeafPage(RumVacuumState *gvs, OffsetNumber attnum, Page page, Buffer bu
 {
 	bool hasVoidPage = false;
 	OffsetNumber newMaxOff,
-				 oldMaxOff = RumPageGetOpaque(page)->maxoff;
+				 oldMaxOff = RumDataPageMaxOff(page);
 	Pointer cleaned = NULL;
 	Size newSize;
 
 	newMaxOff = rumVacuumPostingList(gvs, attnum,
 									 RumDataPageGetData(page), oldMaxOff, &cleaned,
-									 RumDataPageSize - RumPageGetOpaque(
-										 page)->freespace, &newSize);
+									 RumDataPageSize - RumDataPageReadFreeSpaceValue(
+										 page), &newSize);
 
 	/* saves changes about deleted tuple ... */
 	if (oldMaxOff != newMaxOff)
@@ -263,11 +263,11 @@ rumVacuumLeafPage(RumVacuumState *gvs, OffsetNumber attnum, Page page, Buffer bu
 		}
 
 		pfree(cleaned);
-		RumPageGetOpaque(newPage)->maxoff = newMaxOff;
+		RumDataPageMaxOff(newPage) = newMaxOff;
 		updateItemIndexes(newPage, attnum, &gvs->rumstate);
 
 		/* if root is a leaf page, we don't desire further processing */
-		if (!isRoot && RumPageGetOpaque(newPage)->maxoff < FirstOffsetNumber)
+		if (!isRoot && RumDataPageMaxOff(newPage) < FirstOffsetNumber)
 		{
 			hasVoidPage = true;
 		}
@@ -368,9 +368,9 @@ restart:
 	 */
 	if (!(RumPageGetOpaque(lPage)->rightlink == deleteBlkno &&
 		  RumPageGetOpaque(rPage)->leftlink == deleteBlkno &&
-		  RumPageGetOpaque(dPage)->maxoff < FirstOffsetNumber))
+		  RumDataPageMaxOff(dPage) < FirstOffsetNumber))
 	{
-		OffsetNumber dMaxoff = RumPageGetOpaque(dPage)->maxoff;
+		OffsetNumber dMaxoff = RumDataPageMaxOff(dPage);
 
 		if (!isParentRoot && !isNewScan)
 		{
@@ -507,7 +507,7 @@ rumScanToDelete(RumVacuumState *gvs, BlockNumber blkno, bool isRoot,
 		OffsetNumber i;
 
 		me->blkno = blkno;
-		for (i = FirstOffsetNumber; i <= RumPageGetOpaque(page)->maxoff; i++)
+		for (i = FirstOffsetNumber; i <= RumDataPageMaxOff(page); i++)
 		{
 			RumPostingItem *pitem = (RumPostingItem *) RumDataPageGetItem(page, i);
 
@@ -519,7 +519,7 @@ rumScanToDelete(RumVacuumState *gvs, BlockNumber blkno, bool isRoot,
 		}
 	}
 
-	if (RumPageGetOpaque(page)->maxoff < FirstOffsetNumber && !isRoot)
+	if (RumDataPageMaxOff(page) < FirstOffsetNumber && !isRoot)
 	{
 		/*
 		 * Release the buffer because in rumDeletePage() we need to pin it again
@@ -747,7 +747,7 @@ IsRumEntryPageEmptyCheck(Page page, Relation index, BufferAccessStrategy bufferS
 
 			/* We don't hold the lock for too long to ensure we minimize stalling other operations */
 			postingRootPage = BufferGetPage(postingRootBuffer);
-			isPostingTreeNotEmpty = RumPageGetOpaque(postingRootPage)->maxoff >=
+			isPostingTreeNotEmpty = RumDataPageMaxOff(postingRootPage) >=
 									FirstOffsetNumber ||
 									RumPageGetOpaque(postingRootPage)->rightlink !=
 									InvalidBlockNumber;
@@ -1265,6 +1265,77 @@ rumFindLeftMostLeafPage(Relation index, BlockNumber blkno,
 }
 
 
+static void
+rumVacuumSingleEntryPage(Page page, Buffer buffer, BlockNumber currentBlockNo,
+						 RumVacuumState *gvs,
+						 uint32_t *numEmptyEntries, uint32_t *numPrunedEntries,
+						 uint32_t *numEmptyPostingTrees, uint32_t *numEmptyPages,
+						 uint32_t *prunedEmptyPostingRoots, uint32_t *numPrunedPages)
+{
+	Page resPage;
+	bool isEmptyPage = true;
+	uint32_t i;
+
+	BlockNumber rootOfPostingTree[BLCKSZ / (sizeof(IndexTupleData) + sizeof(ItemId))];
+	OffsetNumber attnumOfPostingTree[BLCKSZ / (sizeof(IndexTupleData) + sizeof(ItemId))];
+	uint32 nRoot;
+
+	Assert(!RumPageIsData(page));
+	resPage = rumVacuumEntryPage(gvs, buffer, rootOfPostingTree, attnumOfPostingTree,
+								 &nRoot, &isEmptyPage, numEmptyEntries,
+								 numPrunedEntries);
+
+	if (resPage)
+	{
+		GenericXLogState *state;
+
+		state = GenericXLogStart(gvs->index);
+		page = GenericXLogRegisterBuffer(state, buffer, 0);
+		PageRestoreTempPage(resPage, page);
+		GenericXLogFinish(state);
+		UnlockReleaseBuffer(buffer);
+	}
+	else
+	{
+		UnlockReleaseBuffer(buffer);
+	}
+
+	RumVacuumDelayPointCompat();
+
+	for (i = 0; i < nRoot; i++)
+	{
+		bool isEmptyTree = rumVacuumPostingTreeNew(gvs, attnumOfPostingTree[i],
+												   rootOfPostingTree[i]);
+
+		if (isEmptyTree)
+		{
+			(*numEmptyPostingTrees)++;
+		}
+		else
+		{
+			isEmptyPage = false;
+		}
+
+		RumVacuumDelayPointCompat();
+	}
+
+	if (isEmptyPage)
+	{
+		(*numEmptyPages)++;
+	}
+
+	/* If we found a truly empty page, now handle this here */
+	if (isEmptyPage && RumPruneEmptyPages)
+	{
+		if (CheckAndPruneEmptyRumPage(&gvs->rumstate, gvs->strategy,
+									  currentBlockNo, prunedEmptyPostingRoots))
+		{
+			(*numPrunedPages)++;
+		}
+	}
+}
+
+
 IndexBulkDeleteResult *
 rumbulkdelete(IndexVacuumInfo *info,
 			  IndexBulkDeleteResult *stats, IndexBulkDeleteCallback callback,
@@ -1274,9 +1345,6 @@ rumbulkdelete(IndexVacuumInfo *info,
 	BlockNumber blkno = RUM_ROOT_BLKNO;
 	RumVacuumState gvs;
 	Buffer buffer;
-	BlockNumber rootOfPostingTree[BLCKSZ / (sizeof(IndexTupleData) + sizeof(ItemId))];
-	OffsetNumber attnumOfPostingTree[BLCKSZ / (sizeof(IndexTupleData) + sizeof(ItemId))];
-	uint32 nRoot;
 	uint32 numEmptyPages = 0, numEmptyEntries = 0, numEmptyPostingTrees = 0,
 		   numPrunedEntries = 0, numPrunedPages = 0, prunedEmptyPostingRoots = 0;
 
@@ -1300,70 +1368,16 @@ rumbulkdelete(IndexVacuumInfo *info,
 	buffer = rumFindLeftMostLeafPage(index, blkno, gvs.strategy);
 
 	/* right now we found leftmost page in entry's BTree */
-
 	for (;;)
 	{
 		Page page = BufferGetPage(buffer);
-		Page resPage;
-		uint32 i;
 		BlockNumber currentBlockNo = blkno;
-		bool isEmptyPage = true;
-
-		Assert(!RumPageIsData(page));
-		resPage = rumVacuumEntryPage(&gvs, buffer, rootOfPostingTree, attnumOfPostingTree,
-									 &nRoot, &isEmptyPage, &numEmptyEntries,
-									 &numPrunedEntries);
 
 		blkno = RumPageGetOpaque(page)->rightlink;
 
-		if (resPage)
-		{
-			GenericXLogState *state;
-
-			state = GenericXLogStart(index);
-			page = GenericXLogRegisterBuffer(state, buffer, 0);
-			PageRestoreTempPage(resPage, page);
-			GenericXLogFinish(state);
-			UnlockReleaseBuffer(buffer);
-		}
-		else
-		{
-			UnlockReleaseBuffer(buffer);
-		}
-
-		RumVacuumDelayPointCompat();
-
-		for (i = 0; i < nRoot; i++)
-		{
-			bool isEmptyTree = rumVacuumPostingTreeNew(&gvs, attnumOfPostingTree[i],
-													   rootOfPostingTree[i]);
-
-			if (isEmptyTree)
-			{
-				numEmptyPostingTrees++;
-			}
-			else
-			{
-				isEmptyPage = false;
-			}
-
-			RumVacuumDelayPointCompat();
-		}
-
-		if (isEmptyPage)
-		{
-			numEmptyPages++;
-		}
-
-		/* If we found a truly empty page, now handle this here */
-		if (isEmptyPage && RumPruneEmptyPages)
-		{
-			if (CheckAndPruneEmptyRumPage(&gvs.rumstate, gvs.strategy,
-										  currentBlockNo, &prunedEmptyPostingRoots))
-			{
-				numPrunedPages++;
-			}
-		}
+		rumVacuumSingleEntryPage(page, buffer, currentBlockNo, &gvs, &numEmptyEntries,
+								 &numPrunedEntries, &numEmptyPostingTrees, &numEmptyPages,
+								 &prunedEmptyPostingRoots, &numPrunedPages);
 
 		if (blkno == InvalidBlockNumber)        /* rightmost page */
 		{
