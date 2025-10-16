@@ -589,7 +589,7 @@ rumVacuumPostingTreeLeavesNew(RumVacuumState *gvs, OffsetNumber attnum, BlockNum
 		}
 
 		isPageRoot = false;
-		Assert(RumPageGetOpaque(page)->maxoff >= FirstOffsetNumber);
+		Assert(RumDataPageMaxOff(page) >= FirstOffsetNumber);
 
 		pitem = (RumPostingItem *) RumDataPageGetItem(page, FirstOffsetNumber);
 		blkno = PostingItemGetBlockNumber(pitem);
