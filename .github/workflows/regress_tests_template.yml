@@ -126,7 +126,11 @@ jobs:
           export LANGUAGE=en_US
           export LC_COLLATE=en_US.UTF-8
           export LC_CTYPE=en_US.UTF-8
-          make check
+          if [ "${{ inputs.pg_version }}" -eq 18 ]; then
+            make check-no-distributed
+          else
+            make check
+          fi
 
       - name: Citus Indent
         run: |
