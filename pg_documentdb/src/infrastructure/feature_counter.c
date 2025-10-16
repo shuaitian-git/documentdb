@@ -229,6 +229,8 @@ static char FeatureMapping[MAX_FEATURE_COUNT][MAX_FEATURE_NAME_LENGTH] = {
 	[FEATURE_COMMAND_INSERT_BULK] = "command_insert_bulk",
 	[FEATURE_COMMAND_LIST_COLLECTIONS_CURSOR_FIRST_PAGE] =
 		"command_list_collections_cursor_first_page",
+	[FEATURE_COMMAND_LIST_DATABASES] =
+		"command_list_databases",
 	[FEATURE_COMMAND_LIST_INDEXES_CURSOR_FIRST_PAGE] =
 		"command_list_indexes_cursor_first_page",
 	[FEATURE_COMMAND_SHARD_COLLECTION] = "command_shard_collection",
