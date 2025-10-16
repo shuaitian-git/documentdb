@@ -248,7 +248,7 @@ createPostingTree(RumState *rumstate, OffsetNumber attnum, Relation index,
 
 	blkno = BufferGetBlockNumber(buffer);
 
-	RumPageGetOpaque(page)->maxoff = nitems;
+	RumDataPageMaxOff(page) = nitems;
 	ptr = RumDataPageGetData(page);
 	for (i = 0; i < nitems; i++)
 	{

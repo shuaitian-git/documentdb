@@ -54,11 +54,16 @@ typedef struct RumPageOpaqueData
 {
 	BlockNumber leftlink;       /* prev page if any */
 	BlockNumber rightlink;      /* next page if any */
-	OffsetNumber maxoff;        /* number entries on RUM_DATA page: number of
-	                             * heap ItemPointers on RUM_DATA|RUM_LEAF page
-	                             * or number of PostingItems on RUM_DATA &
-	                             * ~RUM_LEAF page. */
-	OffsetNumber freespace;
+	union
+	{
+		OffsetNumber dataPageMaxoff;        /* number entries on RUM_DATA page: number of
+		                                     * heap ItemPointers on RUM_DATA|RUM_LEAF page
+		                                     * or number of PostingItems on RUM_DATA &
+		                                     * ~RUM_LEAF page. */
+		OffsetNumber entryPageUnused;
+	};
+
+	OffsetNumber dataPageFreespace;
 	uint16 flags;               /* see bit definitions below */
 }   RumPageOpaqueData;
 
@@ -136,6 +141,9 @@ typedef struct RumMetaPageData
  * Macros for accessing a RUM index page's opaque data
  */
 #define RumPageGetOpaque(page) ((RumPageOpaque) PageGetSpecialPointer(page))
+
+#define RumPageRightLink(page) (RumPageGetOpaque(page)->rightlink)
+#define RumPageLeftLink(page) (RumPageGetOpaque(page)->leftlink)
 
 #define RumPageIsLeaf(page) ((RumPageGetOpaque(page)->flags & RUM_LEAF) != 0)
 #define RumPageSetLeaf(page) (RumPageGetOpaque(page)->flags |= RUM_LEAF)
@@ -346,8 +354,11 @@ typedef signed char RumNullCategory;
 #define RumDataPageGetFreeSpace(page) \
 	(BLCKSZ - MAXALIGN(SizeOfPageHeaderData) \
 	 - MAXALIGN(sizeof(RumItem)) /* right bound */ \
-	 - RumPageGetOpaque(page)->maxoff * sizeof(RumPostingItem) \
+	 - RumPageGetOpaque(page)->dataPageMaxoff * sizeof(RumPostingItem) \
 	 - MAXALIGN(sizeof(RumPageOpaqueData)))
+
+#define RumDataPageMaxOff(page) (RumPageGetOpaque(page)->dataPageMaxoff)
+#define RumDataPageReadFreeSpaceValue(page) (RumPageGetOpaque(page)->dataPageFreespace)
 
 #define RumMaxLeafDataItems \
 	((BLCKSZ - MAXALIGN(SizeOfPageHeaderData) - \

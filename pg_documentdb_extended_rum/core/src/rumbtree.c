@@ -81,6 +81,7 @@ rumPrepareFindLeafPage(RumBtree btree, BlockNumber blkno)
 
 /*
  * Locates leaf page contained tuple
+ * Note: This only works for data pages.
  */
 RumBtreeStack *
 rumReFindLeafPage(RumBtree btree, RumBtreeStack *stack)
@@ -105,7 +106,7 @@ rumReFindLeafPage(RumBtree btree, RumBtreeStack *stack)
 		pfree(ptr);
 
 		page = BufferGetPage(stack->buffer);
-		maxoff = RumPageGetOpaque(page)->maxoff;
+		maxoff = RumDataPageMaxOff(page);
 
 		/*
 		 * We don't know right bound of rightmost pointer. So, we can be sure
