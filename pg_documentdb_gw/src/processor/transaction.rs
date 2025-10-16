@@ -25,6 +25,15 @@ pub async fn handle(
     connection_context.transaction = None;
     if let Some(request_transaction_info) = &request_info.transaction_info {
         if request_transaction_info.auto_commit {
+            if request_info.session_id.is_none() {
+                return Err(DocumentDBError::UntypedDocumentDBError(
+                    50768,
+                    "txnNumber may only be provided for multi-document transactions and retryable write commands. autocommit:false was not provided, and command is not a retryable write command.".to_string(),
+                    String::new(),
+                    std::backtrace::Backtrace::capture(),
+                ));
+            }
+
             return Ok(());
         }
 
@@ -37,10 +46,7 @@ pub async fn handle(
         ) {
             return Err(DocumentDBError::documentdb_error(
                 ErrorCode::OperationNotSupportedInTransaction,
-                format!(
-                    "Cannot perform operation of type {} inside a transaction",
-                    request.request_type()
-                ),
+                "Cannot run command in transaction.".to_string(),
             ));
         }
 
@@ -54,15 +60,37 @@ pub async fn handle(
                 | RequestType::Distinct
                 | RequestType::Find
                 | RequestType::GetMore
-        ) && matches!(request.db()?, "config" | "admin" | "local")
-        {
-            return Err(DocumentDBError::documentdb_error(
-                ErrorCode::OperationNotSupportedInTransaction,
-                format!(
-                    "Cannot perform data operation against database {} inside a transaction",
-                    request.db()?
-                ),
-            ));
+        ) {
+            if matches!(request.db()?, "config" | "admin" | "local") {
+                return Err(DocumentDBError::documentdb_error(
+                    ErrorCode::OperationNotSupportedInTransaction,
+                    format!(
+                        "Cannot perform data operation against database {} inside a transaction",
+                        request.db()?
+                    ),
+                ));
+            }
+
+            let collection = match request_info.collection() {
+                Ok(c) if !c.is_empty() => c.to_string(),
+                _ => String::new(),
+            };
+
+            if collection == "system.profile" {
+                return Err(DocumentDBError::documentdb_error(
+                    ErrorCode::OperationNotSupportedInTransaction,
+                    "Cannot run command against system collections in transaction.".to_string(),
+                ));
+            }
+
+            if collection.starts_with("system.") {
+                return Err(DocumentDBError::UntypedDocumentDBError(
+                    51071,
+                    "Cannot run command against system views in transaction.".to_string(),
+                    String::new(),
+                    std::backtrace::Backtrace::capture(),
+                ));
+            }
         }
 
         let session_id = request_info
