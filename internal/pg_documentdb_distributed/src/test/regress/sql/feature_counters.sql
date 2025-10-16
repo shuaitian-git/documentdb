@@ -243,3 +243,16 @@ SELECT documentdb_api.insert('db', '{"insert":"writeFC", "documents":[
 SELECT documentdb_api.update('db', '{"update": "writeFC", "updates":[{"q": {"_id": 1},"u":{"$set":{"year": "1998" }},"multi":true}]}');
 SELECT documentdb_api.update('db', '{"update": "writeFC", "updates":[{"q": {"_id": 1},"u":{"$set":{"year": "2001" }},"multi":true}, {"q": {"_id": 2},"u":{"$set":{"year": "2002" }},"multi":true}]}');
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
+
+-- Test: Feature counter for list_databases command
+
+-- Reset feature counters
+SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
+
+-- execute list_databases command but suppress all output with LIMIT 0 to avoid varying result
+SELECT * FROM documentdb_api.list_databases('{"listDatabases": 1, "nameOnly":true}') LIMIT 0;
+SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(false);
+
+SELECT * FROM documentdb_api.list_databases('{"listDatabases": 1}') LIMIT 0;
+SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
+
