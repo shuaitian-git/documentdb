@@ -60,7 +60,8 @@ ExtensionExecuteQueryViaSPI(const char *query, bool readOnly, int expectedSPIOK,
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
-	ereport(DEBUG1, (errmsg("executing \"%s\" via SPI", query)));
+	ereport(DEBUG1, (errmsg("executing \"%s\" via SPI", query), errhidestmt(true),
+					 errhidecontext(true)));
 
 	int tupleCountLimit = 1;
 	int spiErrorCode = SPI_execute(query, readOnly, tupleCountLimit);
