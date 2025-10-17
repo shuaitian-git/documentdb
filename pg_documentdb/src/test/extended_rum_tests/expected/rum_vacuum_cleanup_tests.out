@@ -195,7 +195,7 @@ set documentdb_rum.prune_rum_empty_pages to on;
 set client_min_messages to DEBUG1;
 VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_401;
 DEBUG:  [RUM] Vacuum posting tree void pages 0, deleted pages 0
-LOG:  Vacuum found 17 empty pages, 36 empty entries, 1 empty posting trees, 18 pruned entries, 15 pruned pages, 1 pruned empty posting trees for index 19102
+LOG:  Vacuum found 17 empty pages, 36 empty entries, 1 empty posting trees, 18 pruned entries, 15 pruned pages, 1 pruned empty posting trees, 0 posting tree pages deleted, 0 empty posting tree pages for index 19027
 LOG:  Vacuum pages - marked 1 pages as reusable
 reset client_min_messages;
 -- delete one more row to ensure vacuum has a chance to clean up
