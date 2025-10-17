@@ -49,7 +49,7 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT mi.collection_id, mi.index_id,
-         documentdb_api_internal.index_spec_as_bson(mi.index_spec),
+         documentdb_api_internal.index_spec_as_bson(mi.index_spec, for_get_indexes=>true),
          mi.index_is_valid
   FROM documentdb_api_catalog.collection_indexes AS mi
   WHERE mi.collection_id = (SELECT mc.collection_id FROM documentdb_api_catalog.collections AS mc

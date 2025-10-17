@@ -2401,11 +2401,15 @@ SerializeIndexSpec(const IndexSpec *indexSpec, bool isGetIndexes,
 		 * 1. { "a": "text" }
 		 * 2. { "_fts": "text", "_ftsx": 1 }, { "weights": { "a": 1 } }
 		 * For the latter case, the text paths are specified in the weights field.
+		 *
+		 * Also, any custom options we should write under storageEngine document.
 		 */
 		if (isGetIndexes)
 		{
+			pgbson_writer storageEngineOptionsWriter;
 			bson_iter_t optionsIter;
 			PgbsonInitIterator(indexSpec->indexOptions, &optionsIter);
+			PgbsonWriterInit(&storageEngineOptionsWriter);
 
 			while (bson_iter_next(&optionsIter))
 			{
@@ -2423,11 +2427,46 @@ SerializeIndexSpec(const IndexSpec *indexSpec, bool isGetIndexes,
 				{
 					languageOverride = bson_iter_utf8(&optionsIter, NULL);
 				}
+				else if (StringViewEqualsCString(&keyView, "enableLargeIndexKeys"))
+				{
+					bool value = BsonValueAsBool(bson_iter_value(&optionsIter));
+					PgbsonWriterAppendBool(&storageEngineOptionsWriter,
+										   "enableLargeIndexKeys", 20,
+										   value);
+				}
+				else if (StringViewEqualsCString(&keyView, "buildAsUnique"))
+				{
+					bool value = BsonValueAsBool(bson_iter_value(&optionsIter));
+					if (value)
+					{
+						PgbsonWriterAppendBool(&storageEngineOptionsWriter,
+											   "buildAsUnique", 13,
+											   true);
+					}
+				}
+				else if (IsOptionsKeyOrderedIndex(keyView.string))
+				{
+					bool value = BsonValueAsBool(bson_iter_value(&optionsIter));
+					PgbsonWriterAppendBool(&storageEngineOptionsWriter,
+										   "enableOrderedIndex", 18,
+										   value);
+				}
 				else
 				{
 					PgbsonWriterAppendValue(&finalWriter, keyView.string, keyView.length,
 											bson_iter_value(&optionsIter));
 				}
+			}
+
+			if (!IsPgbsonWriterEmptyDocument(&storageEngineOptionsWriter))
+			{
+				PgbsonWriterAppendDocument(&finalWriter, "storageEngine", 13,
+										   PgbsonWriterGetPgbson(
+											   &storageEngineOptionsWriter));
+			}
+			else
+			{
+				PgbsonWriterFree(&storageEngineOptionsWriter);
 			}
 		}
 		else
@@ -2435,7 +2474,6 @@ SerializeIndexSpec(const IndexSpec *indexSpec, bool isGetIndexes,
 			PgbsonWriterConcat(&finalWriter, indexSpec->indexOptions);
 		}
 	}
-
 
 	if (textColumns != NIL)
 	{
