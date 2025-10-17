@@ -1942,7 +1942,9 @@ GenerateCountQuery(text *databaseDatum, pgbson *countSpec, bool setStatementTime
 		{
 			EnsureTopLevelFieldType("query", &countIterator, BSON_TYPE_DOCUMENT);
 			filter = *value;
-			hasQueryModifier = true;
+
+			/* Only do runtime count if there's a non-empty filter */
+			hasQueryModifier = hasQueryModifier || !IsBsonValueEmptyDocument(value);
 		}
 		else if (StringViewEqualsCString(&keyView, "limit"))
 		{
@@ -1958,6 +1960,7 @@ GenerateCountQuery(text *databaseDatum, pgbson *countSpec, bool setStatementTime
 		}
 		else if (StringViewEqualsCString(&keyView, "hint"))
 		{
+			hasQueryModifier = true;
 			ProcessIndexHint(&countIterator, &indexHint);
 		}
 		else if (StringViewEqualsCString(&keyView, "fields"))

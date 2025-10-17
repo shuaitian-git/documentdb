@@ -85,6 +85,7 @@ static AGGREGATION_STAGE_NAME_MAP: Lazy<HashMap<&'static str, AggregationStage>>
             ("WORKER_PARTIAL_AGG", ("$group", None)),
             ("UNIONWITH", ("$unionWith", None)),
             ("DOCUMENTS_AGG", ("$documents", None)),
+            ("COLLSTATS_AGG", ("$collStats", None)),
         ])
     });
 
@@ -977,6 +978,13 @@ fn get_stage_from_plan(
                                     .is_some_and(|pr| pr != "Outer"))
                         {
                             return ("DOCUMENTS_AGG".to_owned(), None);
+                        }
+                    }
+                    "coll_stats_aggregation" => {
+                        if parent_stage.is_some_and(|x| x == "COUNT") {
+                            return ("RECORD_STORE_FAST_COUNT".to_owned(), None);
+                        } else {
+                            return ("COLLSTATS_AGG".to_owned(), None);
                         }
                     }
                     _ => {}

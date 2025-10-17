@@ -86,6 +86,9 @@ bool EnableMultiIndexRumJoin = DEFAULT_ENABLE_MULTI_INDEX_RUM_JOIN;
 #define DEFAULT_FORCE_UPDATE_INDEX_INLINE false
 bool ForceUpdateIndexInline = DEFAULT_FORCE_UPDATE_INDEX_INLINE;
 
+#define DEFAULT_FORCE_RUN_DIAGNOSTIC_COMMAND_INLINE false
+bool ForceRunDiagnosticCommandInline = DEFAULT_FORCE_RUN_DIAGNOSTIC_COMMAND_INLINE;
+
 
 void
 InitializeTestConfigurations(const char *prefix, const char *newGucPrefix)
@@ -295,5 +298,13 @@ InitializeTestConfigurations(const char *prefix, const char *newGucPrefix)
 		gettext_noop(
 			"Whether or not to force update index inline in the current node or go through the worker route."),
 		NULL, &ForceUpdateIndexInline, DEFAULT_FORCE_UPDATE_INDEX_INLINE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.forceRunDiagnosticCommandInline", newGucPrefix),
+		gettext_noop(
+			"Whether or not to force running diagnostic commands in inline mode."),
+		NULL, &ForceRunDiagnosticCommandInline,
+		DEFAULT_FORCE_RUN_DIAGNOSTIC_COMMAND_INLINE,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }
