@@ -14,11 +14,13 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "commands/progress.h"
 #include "commands/vacuum.h"
 #include "postmaster/autovacuum.h"
 #include "storage/indexfsm.h"
 #include "storage/lmgr.h"
 #include "storage/predicate.h"
+#include "utils/backend_progress.h"
 
 #include "pg_documentdb_rum.h"
 
@@ -632,7 +634,9 @@ rumVacuumPostingTreeLeavesNew(RumVacuumState *gvs, OffsetNumber attnum, BlockNum
 
 
 static bool
-rumVacuumPostingTreeNew(RumVacuumState *gvs, OffsetNumber attnum, BlockNumber rootBlkno)
+rumVacuumPostingTreeNew(RumVacuumState *gvs, OffsetNumber attnum, BlockNumber rootBlkno,
+						BlockNumber *blocks_done, uint32_t *postingTreePagesDeleted,
+						uint32_t *postingTreeEmptyPages)
 {
 	bool isNewScan = true;
 	int numDeletedPages = 0;
@@ -676,6 +680,9 @@ rumVacuumPostingTreeNew(RumVacuumState *gvs, OffsetNumber attnum, BlockNumber ro
 		UnlockReleaseBuffer(buffer);
 	}
 
+	*blocks_done += numVoidPages + nonVoidPageCount;
+	*postingTreePagesDeleted += numDeletedPages;
+	*postingTreeEmptyPages += numVoidPages;
 	ereport(DEBUG1, (errmsg("[RUM] Vacuum posting tree void pages %d, deleted pages %d",
 							numVoidPages, numDeletedPages)));
 	return nonVoidPageCount == 0;
@@ -1265,14 +1272,17 @@ rumFindLeftMostLeafPage(Relation index, BlockNumber blkno,
 }
 
 
-static void
+static bool
 rumVacuumSingleEntryPage(Page page, Buffer buffer, BlockNumber currentBlockNo,
-						 RumVacuumState *gvs,
+						 RumVacuumState *gvs, BlockNumber *blocks_done,
 						 uint32_t *numEmptyEntries, uint32_t *numPrunedEntries,
 						 uint32_t *numEmptyPostingTrees, uint32_t *numEmptyPages,
-						 uint32_t *prunedEmptyPostingRoots, uint32_t *numPrunedPages)
+						 uint32_t *prunedEmptyPostingRoots, uint32_t *numPrunedPages,
+						 uint32_t *postingTreePagesDeleted,
+						 uint32_t *postingTreeEmptyPages)
 {
 	Page resPage;
+	bool updatedEntryPage = false;
 	bool isEmptyPage = true;
 	uint32_t i;
 
@@ -1288,7 +1298,7 @@ rumVacuumSingleEntryPage(Page page, Buffer buffer, BlockNumber currentBlockNo,
 	if (resPage)
 	{
 		GenericXLogState *state;
-
+		updatedEntryPage = true;
 		state = GenericXLogStart(gvs->index);
 		page = GenericXLogRegisterBuffer(state, buffer, 0);
 		PageRestoreTempPage(resPage, page);
@@ -1305,7 +1315,9 @@ rumVacuumSingleEntryPage(Page page, Buffer buffer, BlockNumber currentBlockNo,
 	for (i = 0; i < nRoot; i++)
 	{
 		bool isEmptyTree = rumVacuumPostingTreeNew(gvs, attnumOfPostingTree[i],
-												   rootOfPostingTree[i]);
+												   rootOfPostingTree[i], blocks_done,
+												   postingTreePagesDeleted,
+												   postingTreeEmptyPages);
 
 		if (isEmptyTree)
 		{
@@ -1330,9 +1342,14 @@ rumVacuumSingleEntryPage(Page page, Buffer buffer, BlockNumber currentBlockNo,
 		if (CheckAndPruneEmptyRumPage(&gvs->rumstate, gvs->strategy,
 									  currentBlockNo, prunedEmptyPostingRoots))
 		{
+			updatedEntryPage = true;
 			(*numPrunedPages)++;
 		}
 	}
+
+	/* The entry page is done */
+	(*blocks_done)++;
+	return updatedEntryPage;
 }
 
 
@@ -1342,11 +1359,14 @@ rumbulkdelete(IndexVacuumInfo *info,
 			  void *callback_state)
 {
 	Relation index = info->index;
+	bool needLock;
 	BlockNumber blkno = RUM_ROOT_BLKNO;
+	BlockNumber num_pages, blocks_done;
 	RumVacuumState gvs;
 	Buffer buffer;
 	uint32 numEmptyPages = 0, numEmptyEntries = 0, numEmptyPostingTrees = 0,
-		   numPrunedEntries = 0, numPrunedPages = 0, prunedEmptyPostingRoots = 0;
+		   numPrunedEntries = 0, numPrunedPages = 0, prunedEmptyPostingRoots = 0,
+		   numPostingTreePagesDeleted = 0, numEmptyPostingTreePages = 0;
 
 	gvs.index = index;
 	gvs.callback = callback;
@@ -1367,6 +1387,27 @@ rumbulkdelete(IndexVacuumInfo *info,
 
 	buffer = rumFindLeftMostLeafPage(index, blkno, gvs.strategy);
 
+	needLock = !RELATION_IS_LOCAL(index);
+
+	if (needLock)
+	{
+		LockRelationForExtension(index, ExclusiveLock);
+	}
+
+	num_pages = RelationGetNumberOfBlocks(index);
+
+	if (needLock)
+	{
+		UnlockRelationForExtension(index, ExclusiveLock);
+	}
+
+	blocks_done = 0;
+
+	pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_TOTAL,
+								 num_pages);
+	pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE,
+								 0);
+
 	/* right now we found leftmost page in entry's BTree */
 	for (;;)
 	{
@@ -1374,11 +1415,14 @@ rumbulkdelete(IndexVacuumInfo *info,
 		BlockNumber currentBlockNo = blkno;
 
 		blkno = RumPageGetOpaque(page)->rightlink;
+		rumVacuumSingleEntryPage(page, buffer, currentBlockNo, &gvs, &blocks_done,
+								 &numEmptyEntries, &numPrunedEntries,
+								 &numEmptyPostingTrees,
+								 &numEmptyPages, &prunedEmptyPostingRoots,
+								 &numPrunedPages, &numPostingTreePagesDeleted,
+								 &numEmptyPostingTreePages);
 
-		rumVacuumSingleEntryPage(page, buffer, currentBlockNo, &gvs, &numEmptyEntries,
-								 &numPrunedEntries, &numEmptyPostingTrees, &numEmptyPages,
-								 &prunedEmptyPostingRoots, &numPrunedPages);
-
+		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE, blocks_done);
 		if (blkno == InvalidBlockNumber)        /* rightmost page */
 		{
 			break;
@@ -1393,9 +1437,11 @@ rumbulkdelete(IndexVacuumInfo *info,
 		numPrunedEntries > 0 || numPrunedPages > 0 || prunedEmptyPostingRoots > 0)
 	{
 		elog_rum_unredacted(
-			"Vacuum found %u empty pages, %u empty entries, %u empty posting trees, %u pruned entries, %u pruned pages, %u pruned empty posting trees for index %u",
+			"Vacuum found %u empty pages, %u empty entries, %u empty posting trees, %u pruned entries, %u pruned pages,"
+			" %u pruned empty posting trees, %u posting tree pages deleted, %u empty posting tree pages for index %u",
 			numEmptyPages, numEmptyEntries, numEmptyPostingTrees,
 			numPrunedEntries, numPrunedPages, prunedEmptyPostingRoots,
+			numPostingTreePagesDeleted, numEmptyPostingTreePages,
 			index->rd_id);
 	}
 
@@ -1482,8 +1528,6 @@ rumVacuumPruneEmptyEntries(Relation index)
 		BlockNumber currentBlockNo;
 		bool isEmptyPage = true;
 
-		CHECK_FOR_INTERRUPTS();
-
 		Assert(!RumPageIsData(page));
 		resPage = rumPruneEmptyEntriesInEntryPage(buffer, &rumState, &isEmptyPage,
 												  &numEmptyEntries,
@@ -1527,6 +1571,8 @@ rumVacuumPruneEmptyEntries(Relation index)
 			}
 		}
 
+		/* Check for interrupts before locking the next buffer */
+		CHECK_FOR_INTERRUPTS();
 		buffer = ReadBufferExtended(index, MAIN_FORKNUM, blkno,
 									RBM_NORMAL, NULL);
 		LockBuffer(buffer, RUM_EXCLUSIVE);
@@ -1616,12 +1662,18 @@ rumvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 	{
 		LockRelationForExtension(index, ExclusiveLock);
 	}
+
 	npages = RelationGetNumberOfBlocks(index);
+
 	if (needLock)
 	{
 		UnlockRelationForExtension(index, ExclusiveLock);
 	}
 
+	pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_TOTAL,
+								 npages);
+	pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE,
+								 0);
 	totFreePages = 0;
 
 	for (blkno = RUM_ROOT_BLKNO; blkno < npages; blkno++)
@@ -1664,6 +1716,8 @@ rumvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 		}
 
 		UnlockReleaseBuffer(buffer);
+		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE,
+									 blkno);
 	}
 
 	/* Update the metapage with accurate page and entry counts */
@@ -1679,7 +1733,9 @@ rumvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 	{
 		LockRelationForExtension(index, ExclusiveLock);
 	}
+
 	stats->num_pages = RelationGetNumberOfBlocks(index);
+
 	if (needLock)
 	{
 		UnlockRelationForExtension(index, ExclusiveLock);
