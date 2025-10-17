@@ -253,9 +253,9 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 	bson_iter_t createIter;
 	PgbsonInitIterator(createSpec, &createIter);
 
-	bool hasUser = false;
-	bool hasPwd = false;
-	bool hasRoles = false;
+	bool userFound = false;
+	bool passwordFound = false;
+	bool rolesFound = false;
 	bool dbFound = false;
 	while (bson_iter_next(&createIter))
 	{
@@ -279,7 +279,7 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 								errmsg("Invalid username, use a different username.")));
 			}
 
-			hasUser = true;
+			userFound = true;
 		}
 		else if (strcmp(key, "pwd") == 0)
 		{
@@ -293,7 +293,7 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 									"The password field must not be left empty.")));
 			}
 
-			hasPwd = true;
+			passwordFound = true;
 		}
 		else if (strcmp(key, "roles") == 0)
 		{
@@ -315,7 +315,7 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 
 			/* Check if it's in the right format */
 			spec->pgRole = ValidateAndObtainUserRole(&spec->roles);
-			hasRoles = true;
+			rolesFound = true;
 		}
 		else if (strcmp(key, "$db") == 0 && EnableUsersAdminDBCheck)
 		{
@@ -385,13 +385,13 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 
 	if (spec->has_identity_provider)
 	{
-		if (!hasUser || !hasRoles)
+		if (!userFound || !rolesFound)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
 								"'createUser' and 'roles' are required fields.")));
 		}
 
-		if (hasPwd)
+		if (passwordFound)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
 								"Password is not allowed when using an external identity provider.")));
@@ -399,7 +399,7 @@ ParseCreateUserSpec(pgbson *createSpec, CreateUserSpec *spec)
 	}
 	else
 	{
-		if (!hasUser || !hasRoles || !hasPwd)
+		if (!userFound || !rolesFound || !passwordFound)
 		{
 			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
 								"'createUser', 'roles' and 'pwd' are required fields.")));
@@ -723,7 +723,7 @@ ParseUpdateUserSpec(pgbson *updateSpec, UpdateUserSpec *spec)
 	bson_iter_t updateIter;
 	PgbsonInitIterator(updateSpec, &updateIter);
 
-	bool hasUser = false;
+	bool userFound = false;
 	bool dbFound = false;
 	while (bson_iter_next(&updateIter))
 	{
@@ -740,7 +740,7 @@ ParseUpdateUserSpec(pgbson *updateSpec, UpdateUserSpec *spec)
 									"'updateUser' is a required field.")));
 			}
 
-			hasUser = true;
+			userFound = true;
 		}
 		else if (strcmp(key, "pwd") == 0)
 		{
@@ -784,7 +784,7 @@ ParseUpdateUserSpec(pgbson *updateSpec, UpdateUserSpec *spec)
 						errmsg("The required $db property is missing.")));
 	}
 
-	if (!hasUser)
+	if (!userFound)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 						errmsg("'updateUser' is a required field.")));
@@ -866,16 +866,24 @@ documentdb_extension_get_users(PG_FUNCTION_ARGS)
 	if (PG_ARGISNULL(0))
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-						errmsg("'usersInfo' or 'forAllDBs' must be provided.")));
+						errmsg("'usersInfo' must be provided.")));
 	}
 
 	GetUserSpec userSpec = { 0 };
 	ParseGetUserSpec(PG_GETARG_PGBSON(0), &userSpec);
 	const char *userName = userSpec.user.length > 0 ? userSpec.user.string : NULL;
+	const bool showAllUsers = userSpec.showAllUsers;
 	const bool showPrivileges = userSpec.showPrivileges;
-	Datum userInfoDatum;
 
-	if (userName == NULL)
+	if (showAllUsers && showPrivileges)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg(
+							"The 'showPrivileges' option is not supported when 'usersInfo' is set to 1.")));
+	}
+
+	Datum userInfoDatum;
+	if (showAllUsers)
 	{
 		userInfoDatum = GetAllUsersInfo();
 	}
@@ -944,6 +952,7 @@ ParseGetUserSpec(pgbson *getSpec, GetUserSpec *spec)
 	spec->user = (StringView) {
 		0
 	};
+	spec->showAllUsers = false;
 	spec->showPrivileges = false;
 	bool getUsersFieldFound = false;
 	bool dbFound = false;
@@ -961,6 +970,8 @@ ParseGetUserSpec(pgbson *getSpec, GetUserSpec *spec)
 									errmsg(
 										"The 'usersInfo' field contains an unsupported value.")));
 				}
+
+				spec->showAllUsers = true;
 			}
 			else if (bson_iter_type(&getIter) == BSON_TYPE_UTF8)
 			{
@@ -980,24 +991,6 @@ ParseGetUserSpec(pgbson *getSpec, GetUserSpec *spec)
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 								errmsg("Unsupported value specified for 'usersInfo'.")));
-			}
-		}
-		else if (strcmp(key, "forAllDBs") == 0)
-		{
-			getUsersFieldFound = true;
-			if (bson_iter_type(&getIter) == BSON_TYPE_BOOL)
-			{
-				if (bson_iter_as_bool(&getIter) != true)
-				{
-					ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-									errmsg(
-										"Unsupported value specified for 'forAllDBs'.")));
-				}
-			}
-			else
-			{
-				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-								errmsg("Unsupported value specified for 'forAllDBs'")));
 			}
 		}
 		else if (strcmp(key, "getUser") == 0)
@@ -1058,7 +1051,7 @@ ParseGetUserSpec(pgbson *getSpec, GetUserSpec *spec)
 	if (!getUsersFieldFound)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
-							"'usersInfo' or 'forAllDBs' must be provided.")));
+							"'usersInfo' must be provided.")));
 	}
 }
 
@@ -1466,11 +1459,28 @@ ParseUsersInfoDocument(const bson_value_t *usersInfoBson, GetUserSpec *spec)
 	bson_iter_t iter;
 	BsonValueInitIterator(usersInfoBson, &iter);
 
+	bool forAllDBsFound = false;
+	bool userFound = false;
+	bool dbFound = false;
 	while (bson_iter_next(&iter))
 	{
 		const char *bsonDocKey = bson_iter_key(&iter);
-		if (strcmp(bsonDocKey, "db") == 0 && BSON_ITER_HOLDS_UTF8(&iter))
+		if (strcmp(bsonDocKey, "forAllDBs") == 0)
 		{
+			if (!BSON_ITER_HOLDS_BOOL(&iter) || bson_iter_as_bool(&iter) != true)
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+								errmsg(
+									"Unsupported value specified for 'forAllDBs'.")));
+			}
+
+			/* Because we only support users provisioned at admin database level, forAllDBs doesn't have any impact, so we only set spec->showAllUsers to true */
+			spec->showAllUsers = true;
+			forAllDBsFound = true;
+		}
+		else if (strcmp(bsonDocKey, "db") == 0 && BSON_ITER_HOLDS_UTF8(&iter))
+		{
+			dbFound = true;
 			uint32_t strLength;
 			const char *db = bson_iter_utf8(&iter, &strLength);
 			if (strcmp(db, "admin") != 0)
@@ -1485,6 +1495,7 @@ ParseUsersInfoDocument(const bson_value_t *usersInfoBson, GetUserSpec *spec)
 		else if (strcmp(bsonDocKey, "user") == 0 && BSON_ITER_HOLDS_UTF8(
 					 &iter))
 		{
+			userFound = true;
 			uint32_t strLength;
 			const char *userString = bson_iter_utf8(&iter, &strLength);
 			spec->user = (StringView) {
@@ -1492,6 +1503,21 @@ ParseUsersInfoDocument(const bson_value_t *usersInfoBson, GetUserSpec *spec)
 				.length = strLength
 			};
 		}
+	}
+
+	/* The usersInfo document must contain either 'forAllDBs' or (exclusive) 'user' and 'db' together*/
+	if (userFound ^ dbFound)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg(
+							"'usersInfo' document must contain both 'user' and 'db' together.")));
+	}
+
+	if (!(forAllDBsFound ^ userFound))
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg(
+							"'usersInfo' document must contain either 'forAllDBs: true', or 'user' and 'db'.")));
 	}
 }
 
