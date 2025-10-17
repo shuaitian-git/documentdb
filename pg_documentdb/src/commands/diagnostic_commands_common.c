@@ -30,6 +30,8 @@
 #include "utils/documentdb_errors.h"
 
 
+extern bool ForceRunDiagnosticCommandInline;
+
 PG_FUNCTION_INFO_V1(command_node_worker);
 
 
@@ -118,7 +120,7 @@ RunQueryOnAllServerNodes(const char *commandName, Datum *values, Oid *types,
 						 int numValues, PGFunction directFunc,
 						 const char *nameSpaceName, const char *functionName)
 {
-	if (DefaultInlineWriteOperations)
+	if (DefaultInlineWriteOperations || ForceRunDiagnosticCommandInline)
 	{
 		FunctionCallInfo fcinfo = palloc(SizeForFunctionCallInfo(numValues));
 		Datum result;

@@ -1,0 +1,169 @@
+SET search_path TO documentdb_core,documentdb_api,documentdb_api_catalog,documentdb_api_internal;
+SET citus.next_shard_id TO 58000000;
+SET documentdb.next_collection_id TO 58000;
+SET documentdb.next_collection_index_id TO 58000;
+SELECT COUNT(documentdb_api.insert_one('countdb', 'countcoll', bson_build_document('_id'::text, i, 'value'::text, i))) FROM generate_series(1, 200) i;
+NOTICE:  creating collection
+ count 
+---------------------------------------------------------------------
+   200
+(1 row)
+
+SELECT documentdb_api_internal.create_indexes_non_concurrently('countdb', '{ "createIndexes": "countcoll", "indexes": [ { "key": { "a": 1 }, "name": "a_1" }] }', TRUE);
+                                                                                                   create_indexes_non_concurrently                                                                                                    
+---------------------------------------------------------------------
+ { "raw" : { "defaultShard" : { "numIndexesBefore" : { "$numberInt" : "1" }, "numIndexesAfter" : { "$numberInt" : "2" }, "createdCollectionAutomatically" : false, "ok" : { "$numberInt" : "1" } } }, "ok" : { "$numberInt" : "1" } }
+(1 row)
+
+ANALYZE documentdb_data.documents_58001;
+SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll" }');
+                                document                                
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "200" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll" }');
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------
+ Function Scan on documentdb_api_internal.coll_stats_aggregation collection
+   Output: bson_dollar_merge_documents(bson_dollar_project(document, '{ "n" : "$count" }'::bson), '{ "ok" : { "$numberDouble" : "1.0" } }'::bson, false)
+   Function Call: coll_stats_aggregation('countdb'::text, 'countcoll'::text, '{ "count" : {  } }'::bson)
+(3 rows)
+
+SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {} }');
+                                document                                
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "200" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {} }');
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------
+ Function Scan on documentdb_api_internal.coll_stats_aggregation collection
+   Output: bson_dollar_merge_documents(bson_dollar_project(document, '{ "n" : "$count" }'::bson), '{ "ok" : { "$numberDouble" : "1.0" } }'::bson, false)
+   Function Call: coll_stats_aggregation('countdb'::text, 'countcoll'::text, '{ "count" : {  } }'::bson)
+(3 rows)
+
+SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {}, "limit": 1000 }');
+                                document                                
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "200" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {}, "limit": 1000 }');
+                                                                                    QUERY PLAN                                                                                    
+---------------------------------------------------------------------
+ Aggregate
+   Output: bson_dollar_merge_documents(bson_repath_and_build('n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)), '{ "ok" : { "$numberDouble" : "1.0" } }'::bson, false)
+   ->  Limit
+         Output: NULL::bson
+         ->  Seq Scan on documentdb_data.documents_58001_58000002 collection
+               Output: NULL::bson
+(6 rows)
+
+SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {}, "limit": 100 }');
+                                document                                
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "100" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {}, "limit": 100 }');
+                                                                                    QUERY PLAN                                                                                    
+---------------------------------------------------------------------
+ Aggregate
+   Output: bson_dollar_merge_documents(bson_repath_and_build('n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)), '{ "ok" : { "$numberDouble" : "1.0" } }'::bson, false)
+   ->  Limit
+         Output: NULL::bson
+         ->  Seq Scan on documentdb_data.documents_58001_58000002 collection
+               Output: NULL::bson
+(6 rows)
+
+SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": { "$alwaysTrue": 1 } }');
+                                document                                
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "200" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": { "$alwaysTrue": 1 } }');
+                                                                                    QUERY PLAN                                                                                    
+---------------------------------------------------------------------
+ Aggregate
+   Output: bson_dollar_merge_documents(bson_repath_and_build('n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)), '{ "ok" : { "$numberDouble" : "1.0" } }'::bson, false)
+   ->  Seq Scan on documentdb_data.documents_58001_58000002 collection
+         Output: collection.shard_key_value, collection.object_id, collection.document
+(4 rows)
+
+SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": { "$alwaysFalse": 1 } }');
+                               document                               
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "0" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": { "$alwaysFalse": 1 } }');
+                                                                                    QUERY PLAN                                                                                    
+---------------------------------------------------------------------
+ Aggregate
+   Output: bson_dollar_merge_documents(bson_repath_and_build('n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)), '{ "ok" : { "$numberDouble" : "1.0" } }'::bson, false)
+   ->  Result
+         One-Time Filter: false
+(4 rows)
+
+BEGIN;
+set local client_min_messages to DEBUG1;
+set local documentdb.forceRunDiagnosticCommandInline to on;
+-- here we only query count metadata
+SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {} }');
+DEBUG:  executing "SELECT array_agg(shardid) FROM pg_dist_shard WHERE logicalrelid = $1" via SPI
+DEBUG:  executing "SELECT SUM(reltuples)::int8 FROM pg_catalog.pg_class WHERE oid =ANY ($1) AND reltuples > 0" via SPI
+DEBUG:  executing "SELECT SUM(pg_catalog.pg_stat_get_live_tuples(oid))::int8 FROM unnest($1) oid" via SPI
+DEBUG:  [collStats] Taking count from live stats
+                                document                                
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "200" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+-- here we get storage & index sizes
+SELECT documentdb_api.coll_stats('countdb', 'countcoll');
+DEBUG:  executing "SELECT array_agg(shardid) FROM pg_dist_shard WHERE logicalrelid = $1" via SPI
+DEBUG:  executing "SELECT SUM(reltuples)::int8 FROM pg_catalog.pg_class WHERE oid =ANY ($1) AND reltuples > 0" via SPI
+DEBUG:  executing "SELECT SUM(pg_catalog.pg_stat_get_live_tuples(oid))::int8 FROM unnest($1) oid" via SPI
+DEBUG:  executing "SELECT SUM(pg_catalog.pg_total_relation_size(r))::int8, SUM(pg_catalog.pg_table_size(r))::int8 FROM unnest($1) r" via SPI
+DEBUG:  executing "SELECT AVG(s.avg_width)::int4 AS avg_width FROM pg_catalog.pg_stats s  WHERE s.schemaname = $2 AND s.tablename =ANY ($1) and s.attname = 'document'" via SPI
+DEBUG:  executing "SELECT (index_spec).index_name FROM documentdb_api_catalog.collection_indexes WHERE index_id = $1" via SPI
+DEBUG:  [collStats] Taking count from live stats
+DEBUG:  executing "SELECT avg(pg_column_size(document))::int4 FROM (SELECT document FROM documentdb_data.documents_58001 TABLESAMPLE public.SYSTEM_ROWS(1000)) AS sample" via SPI
+DEBUG:  executing "SELECT array_agg((index_spec).index_name ORDER BY index_id) FROM documentdb_api_catalog.collection_indexes WHERE collection_id = 58001 AND documentdb_api_internal.index_build_is_in_progress(index_id)" via SPI
+DEBUG:  executing "SELECT array_agg((index_spec).index_name ORDER BY index_id) FROM documentdb_api_catalog.collection_indexes WHERE collection_id = 58001 AND (index_is_valid OR documentdb_api_internal.index_build_is_in_progress(index_id))" via SPI
+                                                                                                                                                                                                                                                     coll_stats                                                                                                                                                                                                                                                      
+---------------------------------------------------------------------
+ { "ns" : "countdb.countcoll", "size" : { "$numberInt" : "5200" }, "count" : { "$numberInt" : "200" }, "avgObjSize" : { "$numberInt" : "26" }, "storageSize" : { "$numberInt" : "49152" }, "nindexes" : { "$numberInt" : "2" }, "indexBuilds" : [  ], "totalIndexSize" : { "$numberInt" : "32768" }, "totalSize" : { "$numberInt" : "81920" }, "indexSizes" : { "_id_" : { "$numberLong" : "16384" }, "a_1" : { "$numberLong" : "16384" } }, "scaleFactor" : { "$numberInt" : "1" }, "ok" : { "$numberInt" : "1" } }
+(1 row)
+
+-- test it out for collstats aggregation too
+SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate": "countcoll", "pipeline": [ { "$collStats": { "count": {} }} ] }');
+DEBUG:  executing "SELECT array_agg(shardid) FROM pg_dist_shard WHERE logicalrelid = $1" via SPI
+DEBUG:  executing "SELECT SUM(reltuples)::int8 FROM pg_catalog.pg_class WHERE oid =ANY ($1) AND reltuples > 0" via SPI
+DEBUG:  executing "SELECT SUM(pg_catalog.pg_stat_get_live_tuples(oid))::int8 FROM unnest($1) oid" via SPI
+DEBUG:  [collStats] Taking count from live stats
+                              document                              
+---------------------------------------------------------------------
+ { "ns" : "countdb.countcoll", "count" : { "$numberInt" : "200" } }
+(1 row)
+
+SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate": "countcoll", "pipeline": [ { "$collStats": { "storageStats": {} }} ] }');
+DEBUG:  executing "SELECT array_agg(shardid) FROM pg_dist_shard WHERE logicalrelid = $1" via SPI
+DEBUG:  executing "SELECT SUM(reltuples)::int8 FROM pg_catalog.pg_class WHERE oid =ANY ($1) AND reltuples > 0" via SPI
+DEBUG:  executing "SELECT SUM(pg_catalog.pg_stat_get_live_tuples(oid))::int8 FROM unnest($1) oid" via SPI
+DEBUG:  executing "SELECT SUM(pg_catalog.pg_total_relation_size(r))::int8, SUM(pg_catalog.pg_table_size(r))::int8 FROM unnest($1) r" via SPI
+DEBUG:  executing "SELECT AVG(s.avg_width)::int4 AS avg_width FROM pg_catalog.pg_stats s  WHERE s.schemaname = $2 AND s.tablename =ANY ($1) and s.attname = 'document'" via SPI
+DEBUG:  executing "SELECT (index_spec).index_name FROM documentdb_api_catalog.collection_indexes WHERE index_id = $1" via SPI
+DEBUG:  [collStats] Taking count from live stats
+DEBUG:  executing "SELECT avg(pg_column_size(document))::int4 FROM (SELECT document FROM documentdb_data.documents_58001 TABLESAMPLE public.SYSTEM_ROWS(1000)) AS sample" via SPI
+DEBUG:  executing "SELECT array_agg((index_spec).index_name ORDER BY index_id) FROM documentdb_api_catalog.collection_indexes WHERE collection_id = 58001 AND documentdb_api_internal.index_build_is_in_progress(index_id)" via SPI
+DEBUG:  executing "SELECT array_agg((index_spec).index_name ORDER BY index_id) FROM documentdb_api_catalog.collection_indexes WHERE collection_id = 58001 AND (index_is_valid OR documentdb_api_internal.index_build_is_in_progress(index_id))" via SPI
+                                                                                                                                                                                                                                                 document                                                                                                                                                                                                                                                  
+---------------------------------------------------------------------
+ { "ns" : "countdb.countcoll", "storageStats" : { "size" : { "$numberInt" : "5200" }, "count" : { "$numberInt" : "200" }, "avgObjSize" : { "$numberInt" : "26" }, "storageSize" : { "$numberInt" : "49152" }, "nindexes" : { "$numberInt" : "2" }, "indexBuilds" : [  ], "totalIndexSize" : { "$numberInt" : "32768" }, "totalSize" : { "$numberInt" : "81920" }, "indexSizes" : { "_id_" : { "$numberLong" : "16384" }, "a_1" : { "$numberLong" : "16384" } }, "scaleFactor" : { "$numberInt" : "0" } } }
+(1 row)
+
+ROLLBACK;
