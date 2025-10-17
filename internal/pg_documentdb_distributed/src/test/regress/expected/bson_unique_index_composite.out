@@ -19,10 +19,10 @@ SELECT documentdb_api_internal.create_indexes_non_concurrently('db', '{ "createI
 (1 row)
 
 SELECT * FROM documentdb_distributed_test_helpers.get_collection_indexes('db', 'queryuniquecomposite') ORDER BY collection_id, index_id;
- collection_id | index_id |                                                                           index_spec_as_bson                                                                            | index_is_valid 
+ collection_id | index_id |                                                                             index_spec_as_bson                                                                              | index_is_valid 
 ---------------------------------------------------------------------
-          5620 |     5620 | { "v" : { "$numberInt" : "2" }, "key" : { "_id" : { "$numberInt" : "1" } }, "name" : "_id_" }                                                                           | t
-          5620 |     5621 | { "v" : { "$numberInt" : "2" }, "key" : { "a.b" : { "$numberInt" : "1" } }, "name" : "rumConstraint1", "unique" : true, "enableOrderedIndex" : { "$numberInt" : "1" } } | t
+          5620 |     5620 | { "v" : { "$numberInt" : "2" }, "key" : { "_id" : { "$numberInt" : "1" } }, "name" : "_id_" }                                                                               | t
+          5620 |     5621 | { "v" : { "$numberInt" : "2" }, "key" : { "a.b" : { "$numberInt" : "1" } }, "name" : "rumConstraint1", "unique" : true, "storageEngine" : { "enableOrderedIndex" : true } } | t
 (2 rows)
 
 -- insert a value that doesn't collide with the unique index.
@@ -164,7 +164,7 @@ SELECT documentdb_api.insert_one('db','queryuniquecomposite','{"_id":"10", "a": 
 -- create an index when the collection violates unique. Should fail.
 SELECT documentdb_api_internal.create_indexes_non_concurrently('db', '{ "createIndexes": "queryuniquecomposite", "indexes": [ { "key" : { "a.b": 1 }, "name": "rumConstraint1", "unique": 1, "sparse": 1, "enableCompositeTerm": true }] }', true);
 ERROR:  could not create exclusion constraint "documents_rum_index_5622_562002"
-DETAIL:  Key (document, documentdb_api_internal.generate_unique_shard_document(document, shard_key_value, '{ "a.b" : { "$numberInt" : "1" } }'::documentdb_core.bson, true))=({ "_id" : "1", "a" : { "b" : { "$numberInt" : "1" } } }, { "$shard_key_value" : { "$numberLong" : "5620" }, "$numTerms" : { "$numberInt" : "1" }, "$numPaths" : { "$numberInt" : "1" }, "a.b" : [ { "$numberInt" : "1" } ] }) conflicts with key (document, documentdb_api_internal.generate_unique_shard_document(document, shard_key_value, '{ "a.b" : { "$numberInt" : "1" } }'::documentdb_core.bson, true))=({ "_id" : "9", "a" : { "b" : { "$numberInt" : "1" } } }, { "$shard_key_value" : { "$numberLong" : "5620" }, "$numTerms" : { "$numberInt" : "1" }, "$numPaths" : { "$numberInt" : "1" }, "a.b" : [ { "$numberInt" : "1" } ] }).
+DETAIL:  Key (document, generate_unique_shard_document(document, shard_key_value, '{ "a.b" : { "$numberInt" : "1" } }'::bson, true))=({ "_id" : "1", "a" : { "b" : { "$numberInt" : "1" } } }, { "$shard_key_value" : { "$numberLong" : "5620" }, "$numTerms" : { "$numberInt" : "1" }, "$numPaths" : { "$numberInt" : "1" }, "a.b" : [ { "$numberInt" : "1" } ] }) conflicts with key (document, generate_unique_shard_document(document, shard_key_value, '{ "a.b" : { "$numberInt" : "1" } }'::bson, true))=({ "_id" : "9", "a" : { "b" : { "$numberInt" : "1" } } }, { "$shard_key_value" : { "$numberLong" : "5620" }, "$numTerms" : { "$numberInt" : "1" }, "$numPaths" : { "$numberInt" : "1" }, "a.b" : [ { "$numberInt" : "1" } ] }).
 CONTEXT:  SQL statement "ALTER TABLE documentdb_data.documents_5620 ADD CONSTRAINT documents_rum_index_5622 EXCLUDE USING documentdb_rum ( document documentdb_api_internal.bson_rum_composite_path_ops(pathspec='[ "a.b" ]',tl=2691) WITH OPERATOR(documentdb_api_catalog.=?=),documentdb_api_internal.generate_unique_shard_document(document, shard_key_value, 'BSONHEX0e00000010612e62000100000000'::documentdb_core.bson, true) documentdb_api_internal.bson_rum_unique_shard_path_ops  WITH OPERATOR(documentdb_api_internal.=#=)) "
 -- create a unique index with the same name ( should be fine since we dropped it )
 SELECT documentdb_api_internal.create_indexes_non_concurrently('db', '{ "createIndexes": "queryuniquecomposite", "indexes": [ { "key" : { "c": 1 }, "name": "rumConstraint1", "unique": 1, "sparse": 1 , "enableCompositeTerm": true}] }', true);
@@ -174,10 +174,10 @@ SELECT documentdb_api_internal.create_indexes_non_concurrently('db', '{ "createI
 (1 row)
 
 SELECT * FROM documentdb_distributed_test_helpers.get_collection_indexes('db', 'queryuniquecomposite') ORDER BY collection_id, index_id;
- collection_id | index_id |                                                                                   index_spec_as_bson                                                                                   | index_is_valid 
+ collection_id | index_id |                                                                                     index_spec_as_bson                                                                                     | index_is_valid 
 ---------------------------------------------------------------------
-          5620 |     5620 | { "v" : { "$numberInt" : "2" }, "key" : { "_id" : { "$numberInt" : "1" } }, "name" : "_id_" }                                                                                          | t
-          5620 |     5623 | { "v" : { "$numberInt" : "2" }, "key" : { "c" : { "$numberInt" : "1" } }, "name" : "rumConstraint1", "sparse" : true, "unique" : true, "enableOrderedIndex" : { "$numberInt" : "1" } } | t
+          5620 |     5620 | { "v" : { "$numberInt" : "2" }, "key" : { "_id" : { "$numberInt" : "1" } }, "name" : "_id_" }                                                                                              | t
+          5620 |     5623 | { "v" : { "$numberInt" : "2" }, "key" : { "c" : { "$numberInt" : "1" } }, "name" : "rumConstraint1", "sparse" : true, "unique" : true, "storageEngine" : { "enableOrderedIndex" : true } } | t
 (2 rows)
 
 -- since this is sparse, we can create several documents without "c" on it.
@@ -248,10 +248,10 @@ SELECT documentdb_api_internal.create_indexes_non_concurrently('db', '{ "createI
 (1 row)
 
 SELECT * FROM documentdb_distributed_test_helpers.get_collection_indexes('db', 'queryuniqueshardedcomposite') ORDER BY collection_id, index_id;
- collection_id | index_id |                                                                           index_spec_as_bson                                                                            | index_is_valid 
+ collection_id | index_id |                                                                             index_spec_as_bson                                                                              | index_is_valid 
 ---------------------------------------------------------------------
-          5621 |     5625 | { "v" : { "$numberInt" : "2" }, "key" : { "_id" : { "$numberInt" : "1" } }, "name" : "_id_" }                                                                           | t
-          5621 |     5626 | { "v" : { "$numberInt" : "2" }, "key" : { "a.b" : { "$numberInt" : "1" } }, "name" : "rumConstraint1", "unique" : true, "enableOrderedIndex" : { "$numberInt" : "1" } } | t
+          5621 |     5625 | { "v" : { "$numberInt" : "2" }, "key" : { "_id" : { "$numberInt" : "1" } }, "name" : "_id_" }                                                                               | t
+          5621 |     5626 | { "v" : { "$numberInt" : "2" }, "key" : { "a.b" : { "$numberInt" : "1" } }, "name" : "rumConstraint1", "unique" : true, "storageEngine" : { "enableOrderedIndex" : true } } | t
 (2 rows)
 
 -- valid scenarios:
