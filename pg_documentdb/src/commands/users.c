@@ -1169,22 +1169,24 @@ ParseConnectionStatusSpec(pgbson *connectionStatusSpec)
 
 		if (strcmp(key, "connectionStatus") == 0)
 		{
-			connectionStatusFound = true;
-			if (bson_iter_type(&connectionIter) == BSON_TYPE_INT32)
+			if (bson_iter_type(&connectionIter) == BSON_TYPE_INT64)
 			{
 				if (bson_iter_as_int64(&connectionIter) != 1)
 				{
-					ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-									errmsg(
-										"Unsupported value for 'connectionStatus' field.")));
+					elog(DEBUG1,
+						 "The 'connectionStatus' field contains an integer not equal to 1, got %ld",
+						 bson_iter_as_int64(&connectionIter));
 				}
 			}
 			else
 			{
-				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-								errmsg(
-									"'connectionStatus' must be an integer value")));
+				elog(DEBUG1,
+					 "The 'connectionStatus' field contains a non-integer value, got %s",
+					 BsonIterTypeName(&connectionIter));
 			}
+
+			/* We accept all values and types */
+			connectionStatusFound = true;
 		}
 		else if (strcmp(key, "showPrivileges") == 0)
 		{

@@ -235,7 +235,10 @@ SELECT documentdb_api.connection_status('{"connectionStatus": 1, "showPrivileges
 -- Test connectionStatus command with no parameters, should fail
 SELECT documentdb_api.connection_status();
 
--- Test connectionStatus command with invalid parameters
+-- Test connectionStatus command with non-int value
+SELECT documentdb_api.connection_status('{"connectionStatus": "1", "$db":"admin"}');
+
+-- Test connectionStatus command with non-1 value
 SELECT documentdb_api.connection_status('{"connectionStatus": 0, "$db":"admin"}');
 
 -- Test connectionStatus command with no $db parameter, should fail

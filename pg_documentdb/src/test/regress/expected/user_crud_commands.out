@@ -430,9 +430,20 @@ SELECT documentdb_api.connection_status('{"connectionStatus": 1, "showPrivileges
 -- Test connectionStatus command with no parameters, should fail
 SELECT documentdb_api.connection_status();
 ERROR:  function documentdb_api.connection_status() does not exist at character 8
--- Test connectionStatus command with invalid parameters
+-- Test connectionStatus command with non-int value
+SELECT documentdb_api.connection_status('{"connectionStatus": "1", "$db":"admin"}');
+                                                                                                                    connection_status                                                                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ { "authInfo" : { "authenticatedUsers" : [ { "user" : "adminUser", "db" : "admin" } ], "authenticatedUserRoles" : [ { "role" : "readWriteAnyDatabase", "db" : "admin" }, { "role" : "clusterAdmin", "db" : "admin" } ] }, "ok" : { "$numberInt" : "1" } }
+(1 row)
+
+-- Test connectionStatus command with non-1 value
 SELECT documentdb_api.connection_status('{"connectionStatus": 0, "$db":"admin"}');
-ERROR:  Unsupported value for 'connectionStatus' field.
+                                                                                                                    connection_status                                                                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ { "authInfo" : { "authenticatedUsers" : [ { "user" : "adminUser", "db" : "admin" } ], "authenticatedUserRoles" : [ { "role" : "readWriteAnyDatabase", "db" : "admin" }, { "role" : "clusterAdmin", "db" : "admin" } ] }, "ok" : { "$numberInt" : "1" } }
+(1 row)
+
 -- Test connectionStatus command with no $db parameter, should fail
 SELECT documentdb_api.connection_status('{"connectionStatus": 1}');
                                                                                                                     connection_status                                                                                                                     
