@@ -149,9 +149,6 @@ SELECT documentdb_api.create_user('{"$db":"admin"}');
 --Get all users
 SELECT documentdb_api.users_info('{"usersInfo":1, "$db":"admin"}');
 
---Get all users for all DBs
-SELECT documentdb_api.users_info('{"forAllDBs":true, "$db":"admin"}');
-
 --Test SQL injection attack
 SELECT documentdb_api.create_user('{"createUser":"test_user_injection_attack", "pwd":"; DROP TABLE users; --", "roles":[{"role":"readAnyDatabase","db":"admin"}], "$db":"admin"}');
 
@@ -200,15 +197,16 @@ SELECT documentdb_api.create_user('{"createUser":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbb
 SELECT current_user as original_user \gset
 
 -- Call usersInfo with showPrivileges set to true
-SELECT documentdb_api.users_info('{"usersInfo":1, "showPrivileges":true, "$db":"admin"}');
 SELECT documentdb_api.users_info('{"usersInfo":"test_user", "showPrivileges":true, "$db":"admin"}');
 SELECT documentdb_api.users_info('{"usersInfo":"test_user", "showPrivileges":false, "$db":"admin"}');
 SELECT documentdb_api.users_info('{"usersInfo":"adminUser", "showPrivileges":true, "$db":"admin"}');
 SELECT documentdb_api.users_info('{"usersInfo":"adminUser", "showPrivileges":false, "$db":"admin"}');
 
+-- Test usersInfo command with usersInfo set to 1 and showPrivileges set to true, should fail
+SELECT documentdb_api.users_info('{"usersInfo":1, "showPrivileges":true, "$db":"admin"}');
+
 -- Test usersInfo command with enableUserInfoPrivileges set to false
 SET documentdb.enableUsersInfoPrivileges TO OFF;
-SELECT documentdb_api.users_info('{"usersInfo":1, "showPrivileges":true, "$db":"admin"}');
 SELECT documentdb_api.users_info('{"usersInfo":"test_user", "showPrivileges":true, "$db":"admin"}');
 SELECT documentdb_api.users_info('{"usersInfo":"adminUser", "showPrivileges":true, "$db":"admin"}');
 RESET documentdb.enableUsersInfoPrivileges;
