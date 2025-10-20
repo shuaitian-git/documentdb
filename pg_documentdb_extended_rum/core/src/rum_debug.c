@@ -186,15 +186,16 @@ documentdb_rum_page_get_stats(PG_FUNCTION_ARGS)
 
 	if (RumPageIsData(page))
 	{
-		args[5] = "entryPageUnused";
+		args[5] = "entryPageCycleId";
 		values[5].type = jbvNumeric;
 		values[5].val.numeric = int64_to_numeric(0);
 	}
 	else
 	{
-		args[5] = "entryPageUnused";
+		args[5] = "entryPageCycleId";
 		values[5].type = jbvNumeric;
-		values[5].val.numeric = int64_to_numeric(RumPageGetOpaque(page)->entryPageUnused);
+		values[5].val.numeric = int64_to_numeric(RumPageGetOpaque(
+													 page)->entryPageCycleId);
 	}
 
 	PG_RETURN_POINTER(GetResultJsonB(nargs, args, values));

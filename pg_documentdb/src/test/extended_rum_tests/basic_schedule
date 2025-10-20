@@ -3,3 +3,4 @@ test: basic_extended_rum_creation_tests bson_composite_index_selectivity_tests r
 
 # test runs separately due to autovacuum stability.
 test: rum_vacuum_cleanup_tests
+test: rum_vacuum_cleanup_tests_newbulkdel

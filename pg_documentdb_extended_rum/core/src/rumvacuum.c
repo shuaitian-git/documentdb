@@ -16,10 +16,12 @@
 
 #include "commands/progress.h"
 #include "commands/vacuum.h"
+#include "commands/progress.h"
 #include "postmaster/autovacuum.h"
 #include "storage/indexfsm.h"
 #include "storage/lmgr.h"
 #include "storage/predicate.h"
+#include "storage/ipc.h"
 #include "utils/backend_progress.h"
 
 #include "pg_documentdb_rum.h"
@@ -35,6 +37,8 @@
 extern bool RumSkipRetryOnDeletePage;
 extern bool RumVacuumEntryItems;
 extern bool RumPruneEmptyPages;
+extern bool RumEnableNewBulkDelete;
+extern bool RumVacuumSkipPrunePostingTreePages;
 
 typedef struct
 {
@@ -44,7 +48,28 @@ typedef struct
 	void *callback_state;
 	RumState rumstate;
 	BufferAccessStrategy strategy;
+	RumVacuumCycleId cycleId;
 }   RumVacuumState;
+
+typedef struct RumVacuumStatistics
+{
+	uint32_t numEmptyPages;
+	uint32_t numEmptyEntries;
+	uint32_t numEmptyPostingTrees;
+	uint32_t numPrunedEntries;
+	uint32_t numPrunedPages;
+	uint32_t prunedEmptyPostingRoots;
+	uint32_t numPostingTreePagesDeleted;
+	uint32_t numEmptyPostingTreePages;
+	uint32_t numEntryBacktracks;
+} RumVacuumStatistics;
+
+static IndexBulkDeleteResult * rumbulkdeleteNew(IndexVacuumInfo *info,
+												IndexBulkDeleteResult *stats,
+												IndexBulkDeleteCallback callback,
+												void *callback_state);
+static void LogFinalVacuumState(Relation index, RumVacuumStatistics *stats,
+								bool isNewBulkDelete);
 
 
 /*
@@ -434,6 +459,7 @@ restart:
 	 * search scan
 	 */
 	RumPageForceSetDeleted(dPage);
+	RumPageSetDeleteXid(dPage, ReadNextTransactionId());
 
 	GenericXLogFinish(state);
 
@@ -643,7 +669,7 @@ rumVacuumPostingTreeNew(RumVacuumState *gvs, OffsetNumber attnum, BlockNumber ro
 	int nonVoidPageCount = 0;
 	int numVoidPages = rumVacuumPostingTreeLeavesNew(gvs, attnum, rootBlkno,
 													 &nonVoidPageCount);
-	if (numVoidPages > 0)
+	if (!RumVacuumSkipPrunePostingTreePages && numVoidPages > 0)
 	{
 		/*
 		 * There is at least one empty page.  So we have to rescan the tree
@@ -1298,17 +1324,29 @@ rumVacuumSingleEntryPage(Page page, Buffer buffer, BlockNumber currentBlockNo,
 	if (resPage)
 	{
 		GenericXLogState *state;
+		if (RumEnableNewBulkDelete &&
+			gvs->cycleId != 0 &&
+			RumEntryPageGetCycleId(page) == gvs->cycleId)
+		{
+			/* Done with this page - set cycleId to 0 */
+			RumEntryPageGetCycleId(resPage) = 0;
+		}
+
 		updatedEntryPage = true;
 		state = GenericXLogStart(gvs->index);
 		page = GenericXLogRegisterBuffer(state, buffer, 0);
 		PageRestoreTempPage(resPage, page);
 		GenericXLogFinish(state);
-		UnlockReleaseBuffer(buffer);
 	}
-	else
+	else if (RumEnableNewBulkDelete &&
+			 gvs->cycleId != 0 &&
+			 RumEntryPageGetCycleId(page) == gvs->cycleId)
 	{
-		UnlockReleaseBuffer(buffer);
+		RumEntryPageGetCycleId(page) = 0;
+		MarkBufferDirtyHint(buffer, true);
 	}
+
+	UnlockReleaseBuffer(buffer);
 
 	RumVacuumDelayPointCompat();
 
@@ -1353,25 +1391,25 @@ rumVacuumSingleEntryPage(Page page, Buffer buffer, BlockNumber currentBlockNo,
 }
 
 
-IndexBulkDeleteResult *
-rumbulkdelete(IndexVacuumInfo *info,
-			  IndexBulkDeleteResult *stats, IndexBulkDeleteCallback callback,
-			  void *callback_state)
+static IndexBulkDeleteResult *
+rumbulkdeleteOld(IndexVacuumInfo *info,
+				 IndexBulkDeleteResult *stats, IndexBulkDeleteCallback callback,
+				 void *callback_state)
 {
 	Relation index = info->index;
 	bool needLock;
+	bool isNewBulkDelete = false;
 	BlockNumber blkno = RUM_ROOT_BLKNO;
 	BlockNumber num_pages, blocks_done;
 	RumVacuumState gvs;
 	Buffer buffer;
-	uint32 numEmptyPages = 0, numEmptyEntries = 0, numEmptyPostingTrees = 0,
-		   numPrunedEntries = 0, numPrunedPages = 0, prunedEmptyPostingRoots = 0,
-		   numPostingTreePagesDeleted = 0, numEmptyPostingTreePages = 0;
+	RumVacuumStatistics vacStats = { 0 };
 
 	gvs.index = index;
 	gvs.callback = callback;
 	gvs.callback_state = callback_state;
 	gvs.strategy = info->strategy;
+	gvs.cycleId = 0;
 	initRumState(&gvs.rumstate, index);
 
 	/* Is this the first time running through? */
@@ -1416,11 +1454,13 @@ rumbulkdelete(IndexVacuumInfo *info,
 
 		blkno = RumPageGetOpaque(page)->rightlink;
 		rumVacuumSingleEntryPage(page, buffer, currentBlockNo, &gvs, &blocks_done,
-								 &numEmptyEntries, &numPrunedEntries,
-								 &numEmptyPostingTrees,
-								 &numEmptyPages, &prunedEmptyPostingRoots,
-								 &numPrunedPages, &numPostingTreePagesDeleted,
-								 &numEmptyPostingTreePages);
+								 &vacStats.numEmptyEntries, &vacStats.numPrunedEntries,
+								 &vacStats.numEmptyPostingTrees,
+								 &vacStats.numEmptyPages,
+								 &vacStats.prunedEmptyPostingRoots,
+								 &vacStats.numPrunedPages,
+								 &vacStats.numPostingTreePagesDeleted,
+								 &vacStats.numEmptyPostingTreePages);
 
 		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE, blocks_done);
 		if (blkno == InvalidBlockNumber)        /* rightmost page */
@@ -1433,19 +1473,38 @@ rumbulkdelete(IndexVacuumInfo *info,
 		LockBuffer(buffer, RUM_EXCLUSIVE);
 	}
 
-	if (numEmptyPages > 0 || numEmptyEntries > 0 || numEmptyPostingTrees > 0 ||
-		numPrunedEntries > 0 || numPrunedPages > 0 || prunedEmptyPostingRoots > 0)
-	{
-		elog_rum_unredacted(
-			"Vacuum found %u empty pages, %u empty entries, %u empty posting trees, %u pruned entries, %u pruned pages,"
-			" %u pruned empty posting trees, %u posting tree pages deleted, %u empty posting tree pages for index %u",
-			numEmptyPages, numEmptyEntries, numEmptyPostingTrees,
-			numPrunedEntries, numPrunedPages, prunedEmptyPostingRoots,
-			numPostingTreePagesDeleted, numEmptyPostingTreePages,
-			index->rd_id);
-	}
-
+	LogFinalVacuumState(index, &vacStats, isNewBulkDelete);
 	return gvs.result;
+}
+
+
+static void
+LogFinalVacuumState(Relation index, RumVacuumStatistics *stats, bool isNewBulkDelete)
+{
+	elog_rum_unredacted(
+		"Vacuum found emptyEntryPages=%u, emptyEntries=%u, emptyPostingTrees=%u, prunedEntries=%u, prunedPages=%u,"
+		"prunedPostingTrees=%u, postingPagesDeleted=%u, emptyPostingPages=%u, numBacktracks=%u isNewBulkDelete=%d for index=%u",
+		stats->numEmptyPages, stats->numEmptyEntries, stats->numEmptyPostingTrees,
+		stats->numPrunedEntries, stats->numPrunedPages, stats->prunedEmptyPostingRoots,
+		stats->numPostingTreePagesDeleted, stats->numEmptyPostingTreePages,
+		stats->numEntryBacktracks,
+		isNewBulkDelete, index->rd_id);
+}
+
+
+IndexBulkDeleteResult *
+rumbulkdelete(IndexVacuumInfo *info,
+			  IndexBulkDeleteResult *stats, IndexBulkDeleteCallback callback,
+			  void *callback_state)
+{
+	if (RumEnableNewBulkDelete)
+	{
+		return rumbulkdeleteNew(info, stats, callback, callback_state);
+	}
+	else
+	{
+		return rumbulkdeleteOld(info, stats, callback, callback_state);
+	}
 }
 
 
@@ -1595,7 +1654,13 @@ RumPageIsRecyclable(Page page)
 		return false;
 	}
 
-	if (!RumPageIsHalfDead(page))
+	if (!RumPruneEmptyPages)
+	{
+		return RumPageIsDeleted(page);
+	}
+
+	if (!RumPageIsHalfDead(page) &&
+		!RumPageIsDeleted(page))
 	{
 		return false;
 	}
@@ -1688,14 +1753,13 @@ rumvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 		LockBuffer(buffer, RUM_SHARE);
 		page = (Page) BufferGetPage(buffer);
 
-		if (PageIsNew(page) || RumPageIsDeleted(page))
+		if (PageIsNew(page))
 		{
 			Assert(blkno != RUM_ROOT_BLKNO);
 			RecordFreeIndexPage(index, blkno);
 			totFreePages++;
 		}
-		else if (RumPruneEmptyPages &&
-				 RumPageIsRecyclable(page))
+		else if (RumPageIsRecyclable(page))
 		{
 			Assert(blkno != RUM_ROOT_BLKNO);
 			RecordFreeIndexPage(index, blkno);
@@ -1749,3 +1813,267 @@ rumvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 
 	return stats;
 }
+
+
+static void
+rum_end_vacuum_callback(int code, Datum arg)
+{
+	rum_end_vacuum_cycle_id((Relation) DatumGetPointer(arg));
+}
+
+
+static void
+rum_vacuum_page_new(RumVacuumState *gvs, BlockNumber scanblkno,
+					RumVacuumStatistics *vacStats, BlockNumber *blocks_done)
+{
+	Relation rel = gvs->index;
+	BlockNumber blkno,
+				backtrack_to;
+	Buffer buf;
+	Page page;
+
+	blkno = scanblkno;
+
+backtrack:
+
+	backtrack_to = InvalidBlockNumber;
+
+	/* call vacuum_delay_point while not holding any buffer lock */
+	RumVacuumDelayPointCompat();
+
+	/*
+	 * We can't use _bt_getbuf() here because it always applies
+	 * _bt_checkpage(), which will barf on an all-zero page. We want to
+	 * recycle all-zero pages, not fail.  Also, we want to use a nondefault
+	 * buffer access strategy.
+	 */
+	buf = ReadBufferExtended(rel, MAIN_FORKNUM, blkno, RBM_NORMAL,
+							 gvs->strategy);
+	LockBuffer(buf, RUM_SHARE);
+	page = BufferGetPage(buf);
+	if (!PageIsNew(page))
+	{
+		if (PageGetSpecialSize(page) != MAXALIGN(sizeof(RumPageOpaqueData)))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_INDEX_CORRUPTED),
+					 errmsg("index \"%s\" contains corrupted page at block %u",
+							RelationGetRelationName(rel), BufferGetBlockNumber(buf))));
+		}
+	}
+
+	Assert(blkno <= scanblkno);
+	if (blkno != scanblkno)
+	{
+		/*
+		 * We're backtracking.
+		 *
+		 * We followed a right link to a sibling leaf page (a page that
+		 * happens to be from a block located before scanblkno).  The only
+		 * case we want to do anything with is a live leaf page having the
+		 * current vacuum cycle ID.
+		 *
+		 * Check that the page is in a state that's consistent.
+		 */
+		if (!RumPageIsLeaf(page) || RumPageIsHalfDead(page) || RumPageIsData(page))
+		{
+			ereport(LOG,
+					(errcode(ERRCODE_INDEX_CORRUPTED),
+					 errmsg_internal(
+						 "[RUM] right sibling %u of scanblkno %u unexpectedly in an inconsistent state in index \"%s\"",
+						 blkno, scanblkno, RelationGetRelationName(rel))));
+			UnlockReleaseBuffer(buf);
+			return;
+		}
+
+		/*
+		 * We may have already processed the page in an earlier call, when the
+		 * page was scanblkno.  This happens when the leaf page split occurred
+		 * after the scan began, but before the right sibling page became the
+		 * scanblkno.
+		 */
+		if (RumEntryPageGetCycleId(page) != gvs->cycleId || RumPageIsHalfDead(page))
+		{
+			/* Done with current scanblkno (and all lower split pages) */
+			UnlockReleaseBuffer(buf);
+			return;
+		}
+	}
+
+	/* Only vacuum leaf pages here */
+	if (!RumPageIsLeaf(page))
+	{
+		/* Done with current scanblkno. */
+		UnlockReleaseBuffer(buf);
+		return;
+	}
+
+	/* Leaf entry page */
+	if (!RumPageIsData(page))
+	{
+		/* Upgrade read lock for a exclusive lock on this page. */
+		LockBuffer(buf, RUM_UNLOCK);
+		LockBuffer(buf, RUM_EXCLUSIVE);
+
+		/*
+		 * Check whether we need to backtrack to earlier pages.  What we are
+		 * concerned about is a page split that happened since we started the
+		 * vacuum scan.  If the split moved tuples on the right half of the
+		 * split (i.e. the tuples that sort high) to a block that we already
+		 * passed over, then we might have missed the tuples.  We need to
+		 * backtrack now.  (Must do this before possibly clearing btpo_cycleid
+		 * or deleting scanblkno page below!)
+		 */
+		if (gvs->cycleId != 0 &&
+			RumEntryPageGetCycleId(page) == gvs->cycleId &&
+			!RumPageRightMost(page) &&
+			RumPageGetOpaque(page)->rightlink < scanblkno)
+		{
+			backtrack_to = RumPageGetOpaque(page)->rightlink;
+		}
+
+		rumVacuumSingleEntryPage(page, buf, blkno, gvs, blocks_done,
+								 &vacStats->numEmptyEntries, &vacStats->numPrunedEntries,
+								 &vacStats->numEmptyPostingTrees,
+								 &vacStats->numEmptyPages,
+								 &vacStats->prunedEmptyPostingRoots,
+								 &vacStats->numPrunedPages,
+								 &vacStats->numPostingTreePagesDeleted,
+								 &vacStats->numEmptyPostingTreePages);
+	}
+	else if (RumPageIsData(page) && RumNewBulkDeleteInlineDataPages &&
+			 gvs->rumstate.oneCol)
+	{
+		/* In this mode, we don't back-track or consider it done.
+		 * In other words we would still visit this page again with the entry tree's
+		 * posting tree. However, we optimistically vacuum the postings so that the
+		 * amount of work in a future visit of this page is minimized.
+		 * Note that we do this only for single column indexes now since we don't know the
+		 * attnum here.
+		 * TODO: We can also extend it in the future for cases where attAttach
+		 * is InvalidOid since the downstream path doesn't require attnum (but that is left
+		 * as a future change)
+		 */
+		OffsetNumber attNumofFirstColumn = FirstOffsetNumber;
+		OffsetNumber maxOffsetAfterVacuum = InvalidOffsetNumber;
+
+		/* We don't know if it's a root page but pretend it is for now. */
+		bool isRoot = true;
+
+		/* Upgrade read lock for a exclusive lock on this page. */
+		LockBuffer(buf, RUM_UNLOCK);
+		LockBuffer(buf, RUM_EXCLUSIVE);
+
+		rumVacuumLeafPage(gvs, attNumofFirstColumn, page, buf, isRoot,
+						  &maxOffsetAfterVacuum);
+		UnlockReleaseBuffer(buf);
+	}
+	else
+	{
+		/* Interior pages or non vacuumable data pages - not vacuumed in this cycle */
+		UnlockReleaseBuffer(buf);
+	}
+
+	if (backtrack_to != InvalidBlockNumber)
+	{
+		vacStats->numEntryBacktracks++;
+		blkno = backtrack_to;
+		goto backtrack;
+	}
+}
+
+
+static void
+rum_bulk_delete_new_core(IndexVacuumInfo *info, IndexBulkDeleteResult *stats,
+						 IndexBulkDeleteCallback callback, void *callback_state,
+						 RumVacuumCycleId cycleid)
+{
+	Relation rel = info->index;
+	RumVacuumState gvs;
+	BlockNumber num_pages;
+	BlockNumber scanblkno;
+	BlockNumber blocks_done;
+	bool isNewBulkDelete = true;
+
+	RumVacuumStatistics vacStats = { 0 };
+
+	gvs.index = rel;
+	gvs.callback = callback;
+	gvs.callback_state = callback_state;
+	gvs.strategy = info->strategy;
+	gvs.cycleId = cycleid;
+	initRumState(&gvs.rumstate, rel);
+
+	/* we'll re-count the tuples each time */
+	stats->num_index_tuples = 0;
+	gvs.result = stats;
+
+	/*
+	 * For more details on this loop see btvacuumscan.
+	 */
+	scanblkno = RUM_ROOT_BLKNO;
+	blocks_done = 0;
+	for (;;)
+	{
+		/* Get the current relation length */
+		LockRelationForExtension(rel, ExclusiveLock);
+		num_pages = RelationGetNumberOfBlocks(rel);
+		UnlockRelationForExtension(rel, ExclusiveLock);
+		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_TOTAL, num_pages);
+
+		/* Quit if we've scanned the whole relation */
+		if (scanblkno >= num_pages)
+		{
+			break;
+		}
+
+		/* Iterate over pages, then loop back to recheck length */
+		for (; scanblkno < num_pages; scanblkno++)
+		{
+			rum_vacuum_page_new(&gvs, scanblkno, &vacStats, &blocks_done);
+
+			pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE, scanblkno);
+		}
+	}
+
+	/* Set statistics num_pages field to final size of index */
+	stats->num_pages = num_pages;
+
+	LogFinalVacuumState(rel, &vacStats, isNewBulkDelete);
+}
+
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wclobbered"
+
+static IndexBulkDeleteResult *
+rumbulkdeleteNew(IndexVacuumInfo *info,
+				 IndexBulkDeleteResult *stats, IndexBulkDeleteCallback callback,
+				 void *callback_state)
+{
+	Relation rel = info->index;
+	RumVacuumCycleId cycleid;
+
+	/* Is this the first time running through? */
+	if (stats == NULL)
+	{
+		/* Yes, so initialize stats to zeroes */
+		stats = (IndexBulkDeleteResult *) palloc0(sizeof(IndexBulkDeleteResult));
+	}
+
+	/* Establish the vacuum cycle ID to use for this scan */
+	/* The ENSURE stuff ensures we clean up shared memory on failure */
+	PG_ENSURE_ERROR_CLEANUP(rum_end_vacuum_callback, PointerGetDatum(rel));
+	{
+		cycleid = rum_start_vacuum_cycle_id(rel);
+
+		rum_bulk_delete_new_core(info, stats, callback, callback_state, cycleid);
+	}
+	PG_END_ENSURE_ERROR_CLEANUP(rum_end_vacuum_callback, PointerGetDatum(rel));
+	rum_end_vacuum_cycle_id(rel);
+
+	return stats;
+}
+
+
+#pragma GCC diagnostic pop

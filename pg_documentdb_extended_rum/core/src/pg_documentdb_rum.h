@@ -39,6 +39,8 @@
 #define RUM_LEFT_DISTANCE 21
 #define RUM_RIGHT_DISTANCE 22
 
+typedef uint16 RumVacuumCycleId;
+
 /*
  * Page opaque data in a inverted index page.
  *
@@ -60,7 +62,8 @@ typedef struct RumPageOpaqueData
 		                                     * heap ItemPointers on RUM_DATA|RUM_LEAF page
 		                                     * or number of PostingItems on RUM_DATA &
 		                                     * ~RUM_LEAF page. */
-		OffsetNumber entryPageUnused;
+
+		RumVacuumCycleId entryPageCycleId;  /* for entry Pages, the vacuum cycleId */
 	};
 
 	OffsetNumber dataPageFreespace;
@@ -163,6 +166,8 @@ typedef struct RumMetaPageData
 
 #define RumPageIsIncompleteSplit(page) ((RumPageGetOpaque(page)->flags & \
 										 RUM_INCOMPLETE_SPLIT) != 0)
+
+#define RumEntryPageGetCycleId(page) (RumPageGetOpaque(page)->entryPageCycleId)
 
 /*
  * Set the XMIN based of the half-dead page based on maxoff and freespace (these are only
@@ -492,7 +497,7 @@ typedef struct RumState
 #endif
 
 /* rumutil.c */
-extern PGDLLEXPORT bytea * documentdb_rumoptions(Datum reloptions, bool validate);
+extern PGDLLIMPORT bytea * documentdb_rumoptions(Datum reloptions, bool validate);
 extern bool rumproperty(Oid index_oid, int attno,
 						IndexAMProperty prop, const char *propname,
 						bool *res, bool *isnull);
@@ -932,6 +937,14 @@ extern IndexBulkDeleteResult * rumbulkdelete(IndexVacuumInfo *info,
 extern IndexBulkDeleteResult * rumvacuumcleanup(IndexVacuumInfo *info,
 												IndexBulkDeleteResult *stats);
 
+
+/* rumvacuumutil.c */
+extern void InitializeRumVacuumState(void);
+extern RumVacuumCycleId rum_start_vacuum_cycle_id(Relation rel);
+extern void rum_end_vacuum_cycle_id(Relation rel);
+extern RumVacuumCycleId rum_vacuum_get_cycleId(Relation rel);
+
+
 /* rumvalidate.c */
 extern bool rumvalidate(Oid opclassoid);
 
@@ -944,7 +957,7 @@ typedef RBNode RBTNode;
 #endif
 
 /* rumselfuncs.c */
-extern PGDLLEXPORT void documentdb_rum_costestimate(struct PlannerInfo *root, struct
+extern PGDLLIMPORT void documentdb_rum_costestimate(struct PlannerInfo *root, struct
 													IndexPath *path, double
 													loop_count,
 													Cost *indexStartupCost,
@@ -1028,26 +1041,32 @@ extern RumItem * rumGetBAEntry(BuildAccumulator *accum,
 #define RUM_DEFAULT_ENABLE_INJECT_PAGE_SPLIT_INCOMPLETE false
 #define RUM_ENABLE_PARALLEL_VACUUM_FLAGS true
 #define RUM_DEFAULT_ENABLE_CUSTOM_COST_ESTIMATE true
+#define RUM_DEFAULT_ENABLE_NEW_BULK_DELETE false
+#define RUM_DEFAULT_ENABLE_NEW_BULK_DELETE_INLINE_DATA_PAGES true
+#define RUM_DEFAULT_SKIP_PRUNE_POSTING_TREE_PAGES false
 
 /* GUC parameters */
-extern PGDLLEXPORT int RumFuzzySearchLimit;
-extern PGDLLEXPORT int RumDataPageIntermediateSplitSize;
-extern PGDLLEXPORT bool RumThrowErrorOnInvalidDataPage;
-extern PGDLLEXPORT bool RumDisableFastScan;
-extern PGDLLEXPORT bool RumEnableParallelIndexBuild;
-extern PGDLLEXPORT int RumParallelIndexWorkersOverride;
-extern PGDLLEXPORT bool RumSkipRetryOnDeletePage;
-extern PGDLLEXPORT bool RumForceOrderedIndexScan;
-extern PGDLLEXPORT bool RumPreferOrderedIndexScan;
-extern PGDLLEXPORT bool RumEnableSkipIntermediateEntry;
-extern PGDLLEXPORT bool RumVacuumEntryItems;
-extern PGDLLEXPORT bool RumUseNewItemPtrDecoding;
-extern PGDLLEXPORT bool RumPruneEmptyPages;
-extern PGDLLEXPORT bool RumTrackIncompleteSplit;
-extern PGDLLEXPORT bool RumFixIncompleteSplit;
-extern PGDLLEXPORT bool RumInjectPageSplitIncomplete;
-extern PGDLLEXPORT bool RumEnableParallelVacuumFlags;
-extern PGDLLEXPORT bool RumEnableCustomCostEstimate;
+extern PGDLLIMPORT int RumFuzzySearchLimit;
+extern PGDLLIMPORT int RumDataPageIntermediateSplitSize;
+extern PGDLLIMPORT bool RumThrowErrorOnInvalidDataPage;
+extern PGDLLIMPORT bool RumDisableFastScan;
+extern PGDLLIMPORT bool RumEnableParallelIndexBuild;
+extern PGDLLIMPORT int RumParallelIndexWorkersOverride;
+extern PGDLLIMPORT bool RumSkipRetryOnDeletePage;
+extern PGDLLIMPORT bool RumForceOrderedIndexScan;
+extern PGDLLIMPORT bool RumPreferOrderedIndexScan;
+extern PGDLLIMPORT bool RumEnableSkipIntermediateEntry;
+extern PGDLLIMPORT bool RumVacuumEntryItems;
+extern PGDLLIMPORT bool RumUseNewItemPtrDecoding;
+extern PGDLLIMPORT bool RumPruneEmptyPages;
+extern PGDLLIMPORT bool RumTrackIncompleteSplit;
+extern PGDLLIMPORT bool RumFixIncompleteSplit;
+extern PGDLLIMPORT bool RumInjectPageSplitIncomplete;
+extern PGDLLIMPORT bool RumEnableParallelVacuumFlags;
+extern PGDLLIMPORT bool RumEnableCustomCostEstimate;
+extern PGDLLIMPORT bool RumEnableNewBulkDelete;
+extern PGDLLIMPORT bool RumNewBulkDeleteInlineDataPages;
+extern PGDLLIMPORT bool RumVacuumSkipPrunePostingTreePages;
 
 /*
  * Functions for reading ItemPointers with additional information. Used in
@@ -1567,13 +1586,13 @@ extern Datum FunctionCall10Coll(FmgrInfo *flinfo, Oid collation,
 #define PROGRESS_RUM_PHASE_MERGE_2 6
 
 struct ExplainState;
-extern PGDLLEXPORT void try_explain_documentdb_rum_index(IndexScanDesc scan,
+extern PGDLLIMPORT void try_explain_documentdb_rum_index(IndexScanDesc scan,
 														 struct ExplainState *es);
-extern PGDLLEXPORT bool can_documentdb_rum_index_scan_ordered(IndexScanDesc scan);
+extern PGDLLIMPORT bool can_documentdb_rum_index_scan_ordered(IndexScanDesc scan);
 
 #define UNREDACTED_RUM_LOG_CODE MAKE_SQLSTATE('R', 'Z', 'Z', 'Z', 'Z')
 typedef int (*rum_format_log_hook)(const char *fmt, ...) pg_attribute_printf (1, 2);
-extern PGDLLEXPORT rum_format_log_hook rum_unredacted_log_emit_hook;
+extern PGDLLIMPORT rum_format_log_hook rum_unredacted_log_emit_hook;
 
 #define errmsg_unredacted(...) \
 	(rum_unredacted_log_emit_hook ? \
