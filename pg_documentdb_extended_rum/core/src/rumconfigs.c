@@ -56,6 +56,11 @@ PGDLLEXPORT int RumParallelIndexWorkersOverride =
 PGDLLEXPORT bool RumSkipRetryOnDeletePage = RUM_DEFAULT_SKIP_RETRY_ON_DELETE_PAGE;
 PGDLLEXPORT bool RumVacuumEntryItems = RUM_DEFAULT_VACUUM_ENTRY_ITEMS;
 PGDLLEXPORT bool RumPruneEmptyPages = RUM_DEFAULT_PRUNE_EMPTY_PAGES;
+PGDLLEXPORT bool RumEnableNewBulkDelete = RUM_DEFAULT_ENABLE_NEW_BULK_DELETE;
+PGDLLEXPORT bool RumNewBulkDeleteInlineDataPages =
+	RUM_DEFAULT_ENABLE_NEW_BULK_DELETE_INLINE_DATA_PAGES;
+PGDLLEXPORT bool RumVacuumSkipPrunePostingTreePages =
+	RUM_DEFAULT_SKIP_PRUNE_POSTING_TREE_PAGES;
 
 PGDLLEXPORT rum_format_log_hook rum_unredacted_log_emit_hook = NULL;
 
@@ -209,6 +214,33 @@ InitializeCommonDocumentDBGUCs(const char *rumGucPrefix, const
 		NULL,
 		&RumPruneEmptyPages,
 		RUM_DEFAULT_PRUNE_EMPTY_PAGES,
+		PGC_USERSET, 0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enable_new_bulk_delete", documentDBRumGucPrefix),
+		"Sets whether or not to the new bulk delete vacuum framework",
+		NULL,
+		&RumEnableNewBulkDelete,
+		RUM_DEFAULT_ENABLE_NEW_BULK_DELETE,
+		PGC_USERSET, 0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enable_new_bulk_delete_inline_data_pages", documentDBRumGucPrefix),
+		"Sets whether or not to delete data pages inline in the new bulkdel framework",
+		NULL,
+		&RumNewBulkDeleteInlineDataPages,
+		RUM_DEFAULT_ENABLE_NEW_BULK_DELETE_INLINE_DATA_PAGES,
+		PGC_USERSET, 0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.vacuum_skip_prune_posting_tree_pages", documentDBRumGucPrefix),
+		"Sets whether or not to delete data pages inline in the new bulkdel framework",
+		NULL,
+		&RumVacuumSkipPrunePostingTreePages,
+		RUM_DEFAULT_SKIP_PRUNE_POSTING_TREE_PAGES,
 		PGC_USERSET, 0,
 		NULL, NULL, NULL);
 

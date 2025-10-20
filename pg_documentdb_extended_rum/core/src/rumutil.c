@@ -61,8 +61,8 @@ _PG_init(void)
 
 	StaticAssertExpr(offsetof(RumPageOpaqueData, dataPageMaxoff) == sizeof(uint64_t),
 					 "maxoff must be the 3rd field with a specific offset");
-	StaticAssertExpr(offsetof(RumPageOpaqueData, entryPageUnused) == sizeof(uint64_t),
-					 "entryPageUnused must be the 3rd field with a specific offset");
+	StaticAssertExpr(offsetof(RumPageOpaqueData, entryPageCycleId) == sizeof(uint64_t),
+					 "entryPageCycleId must be the 3rd field with a specific offset");
 	StaticAssertExpr(offsetof(RumPageOpaqueData, dataPageFreespace) == sizeof(uint64_t) +
 					 sizeof(uint16_t),
 					 "freespace must be the 3rd field with a specific offset");
@@ -72,6 +72,17 @@ _PG_init(void)
 	StaticAssertExpr(sizeof(RumPageOpaqueData) == sizeof(uint64_t) + sizeof(uint64_t),
 					 "RumPageOpaqueData must be the 2 bigint fields worth");
 
+
+	if (!process_shared_preload_libraries_in_progress)
+	{
+		ereport(ERROR, (errmsg(
+							"pg_documentdb_extended_rum_core can only be loaded via shared_preload_libraries"),
+						errdetail_log(
+							"Add the caller library to shared_preload_libraries configuration "
+							"variable in postgresql.conf. ")));
+	}
+
+	InitializeRumVacuumState();
 
 	/* Define custom GUC variables. */
 	RumTrackIncompleteSplit = RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT;

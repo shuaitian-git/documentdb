@@ -537,6 +537,12 @@ entrySplitPage(RumBtree btree, Buffer lbuf, Buffer rbuf,
 	RumInitPage(rPage, RumPageGetOpaque(newlPage)->flags, pageSize);
 	RumInitPage(newlPage, RumPageGetOpaque(rPage)->flags, pageSize);
 
+	if (RumEnableNewBulkDelete)
+	{
+		RumEntryPageGetCycleId(newlPage) = rum_vacuum_get_cycleId(btree->index);
+		RumEntryPageGetCycleId(rPage) = RumEntryPageGetCycleId(newlPage);
+	}
+
 	ptr = tupstore;
 	maxoff++;
 	lsize = 0;

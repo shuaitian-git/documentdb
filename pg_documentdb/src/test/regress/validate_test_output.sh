@@ -116,12 +116,13 @@ for sqlFile in $(ls $check_directory/sql/*.sql); do
     fileNameBase="${fileName%.sql}";
     outFile="$check_directory/expected/$fileNameBase.out";
 
-    if [[ "$fileName" =~ "explain_core.sql" ]]; then
-        echo "Skipping explain_core.sql validation";
-        continue;
-    fi
-
+    includedInFiles=$(grep -l ${fileName} $check_directory/sql/*.sql || true)
     if [ ! -f "$outFile" ]; then
+        if [ "${includedInFiles:-}" != "" ]; then
+            echo "Skipping requirement for adding to schedule for $fileName since it's included in $includedInFiles"
+            continue;
+        fi
+
         echo "Test file '$sqlFile' does not have a corresponding expected output file '$outFile'. Please add to the schedule file and run tests.";
         exit 1;
     fi
