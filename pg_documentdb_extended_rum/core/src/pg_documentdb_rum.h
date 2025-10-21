@@ -1584,6 +1584,7 @@ extern Datum FunctionCall10Coll(FmgrInfo *flinfo, Oid collation,
 #define PROGRESS_RUM_PHASE_MERGE_1 4
 #define PROGRESS_RUM_PHASE_PERFORMSORT_2 5
 #define PROGRESS_RUM_PHASE_MERGE_2 6
+#define PROGRESS_RUM_PHASE_WRITE_WAL 7
 
 struct ExplainState;
 extern PGDLLIMPORT void try_explain_documentdb_rum_index(IndexScanDesc scan,

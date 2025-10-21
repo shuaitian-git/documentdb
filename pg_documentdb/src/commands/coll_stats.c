@@ -674,7 +674,7 @@ CollStatsWorker(void *fcinfoPointer)
 	 * the coordinator in a multi-node setup to be on the latest version.
 	 */
 	CollStatsAggMode mode = CollStatsAggMode_CountAndStorage;
-	if (IsClusterVersionAtleast(DocDB_V0, 109, 0) ||
+	if (IsClusterVersionAtleast(DocDB_V0, 108, 0) ||
 		DefaultInlineWriteOperations)
 	{
 		/* Ensure proper conversion to enum */
