@@ -41,7 +41,8 @@ use std::{path::Path, sync::Arc};
 
 use arc_swap::ArcSwap;
 use openssl::{
-    pkey::{PKey, PKeyRef, Private},
+    hash::{Hasher, MessageDigest},
+    pkey::{Id, PKey, PKeyRef, Private},
     ssl::{SslAcceptor, SslAcceptorBuilder, SslCipherRef},
     x509::X509,
 };
@@ -248,9 +249,11 @@ pub async fn create_tls_acceptor_builder(
 ///
 /// The provider uses `ArcSwap` to allow atomic updates of the SSL acceptor
 /// without blocking ongoing connections.
+#[derive(Clone)]
 pub struct TlsProvider {
     tls_acceptor: Arc<ArcSwap<SslAcceptor>>,
     ciphersuite_mapping: Option<fn(Option<&str>) -> i32>,
+    certificate_bundle: Arc<ArcSwap<CertificateBundle>>,
 }
 
 impl TlsProvider {
@@ -291,6 +294,12 @@ impl TlsProvider {
         let mut last_key_modified = Self::get_modified_time(&cert_store.private_key_path).await?;
         let tls_acceptor_arc_clone = Arc::clone(&tls_acceptor_arc);
 
+        let certificate_bundle = Arc::new(ArcSwap::from_pointee(
+            CertificateBundle::from_cert_store(&cert_store).await?,
+        ));
+
+        let certificate_bundle_clone = Arc::clone(&certificate_bundle);
+
         tokio::spawn(async move {
             let mut certs_changed_watch = tokio::time::interval(tokio::time::Duration::from_secs(
                 CERT_FILES_CHANGE_WATCH_INTERVAL,
@@ -317,6 +326,8 @@ impl TlsProvider {
                                         .store(Arc::new(new_tls_acceptor.build()));
                                     last_cert_modified = cert_m;
                                     last_key_modified = key_m;
+                                    certificate_bundle_clone.store(Arc::new(new_bundle));
+
                                     log::info!("TLS certificates reloaded.");
                                 }
                                 Err(e) => log::error!("Failed to create TLS acceptor: {e:?}."),
@@ -331,6 +342,7 @@ impl TlsProvider {
         Ok(Self {
             tls_acceptor: tls_acceptor_arc,
             ciphersuite_mapping,
+            certificate_bundle,
         })
     }
 
@@ -359,6 +371,47 @@ impl TlsProvider {
     pub fn ciphersuite_to_i32(&self, ciphersuite: Option<&SslCipherRef>) -> i32 {
         self.ciphersuite_mapping
             .map_or(0, |mapping| mapping(ciphersuite.map(SslCipherRef::name)))
+    }
+
+    pub fn is_valid_certificate(&self) -> bool {
+        let bundle = self.certificate_bundle.load();
+        let certificate = bundle.certificate();
+
+        // private key is RSA
+        let is_private_rsa = bundle.private_key.id() == Id::RSA;
+
+        // certificate public key is RSA (and obtainable)
+        let pubkey = match bundle.certificate.public_key() {
+            Ok(k) => k,
+            Err(_) => {
+                log::error!("Detected invalid certificate. Failed to obtain public key.");
+                return false;
+            }
+        };
+
+        let is_pub_rsa = pubkey.id() == Id::RSA;
+
+        // private key matches the certificate’s public key
+        let matches_cert = pubkey.public_eq(&bundle.private_key);
+
+        let result = is_private_rsa && is_pub_rsa && matches_cert;
+
+        if !result {
+            match TlsProvider::sha1_thumbprint(&certificate) {
+                Ok(thumbprint) => log::error!("Detected invalid certificate. Thumbprint: {:?}", thumbprint),
+                Err(e) => log::error!("Detected invalid certificate. Failed to generate certificate. Thumbprint: {:?}", e),
+            }
+        }
+
+        result
+    }
+
+    fn sha1_thumbprint(cert: &X509) -> Result<String> {
+        let der = cert.to_der()?;
+        let mut h = Hasher::new(MessageDigest::sha1())?;
+        h.update(&der)?;
+        let digest = h.finish()?;
+        Ok(hex::encode_upper(digest))
     }
 
     async fn get_modified_time(path: &str) -> Result<std::time::SystemTime> {

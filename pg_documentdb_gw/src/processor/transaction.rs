@@ -71,9 +71,9 @@ pub async fn handle(
                 ));
             }
 
-            let collection = match request_info.collection() {
-                Ok(c) if !c.is_empty() => c.to_string(),
-                _ => String::new(),
+            let collection: &str = match request_info.collection() {
+                Ok(c) if !c.is_empty() => c,
+                _ => "",
             };
 
             if collection == "system.profile" {
