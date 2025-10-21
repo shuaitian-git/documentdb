@@ -706,11 +706,6 @@ command_index_build_is_in_progress(PG_FUNCTION_ARGS)
 	}
 	int indexId = DatumGetInt32(PG_GETARG_DATUM(0));
 
-	if (!IsClusterVersionAtleast(DocDB_V0, 15, 0))
-	{
-		PG_RETURN_BOOL(false);
-	}
-
 	PG_RETURN_BOOL(IndexBuildIsInProgress(indexId));
 }
 

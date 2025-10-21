@@ -385,7 +385,6 @@ dollar_support(PG_FUNCTION_ARGS)
 			}
 		}
 		else if (SetSelectivityForFullScan &&
-				 IsClusterVersionAtleast(DocDB_V0, 10, 0) &&
 				 req->funcid == BsonRangeMatchFunctionId())
 		{
 			/* For fullScan for orderby, we want to ensure we mark the
@@ -406,7 +405,6 @@ dollar_support(PG_FUNCTION_ARGS)
 		 */
 		SupportRequestCost *req = (SupportRequestCost *) supportRequest;
 		if (SetSelectivityForFullScan &&
-			IsClusterVersionAtleast(DocDB_V0, 10, 0) &&
 			req->funcid == BsonRangeMatchFunctionId() && req->node != NULL &&
 			IsA(req->node, FuncExpr))
 		{
@@ -735,8 +733,7 @@ CheckRestrictionPathNodeForIndexOperation(Expr *currentExpr,
 			context->forceIndexQueryOpData.path = NULL;
 			context->forceIndexQueryOpData.opExtraState = hintContext;
 		}
-		else if (IsClusterVersionAtleast(DocDB_V0, 10, 0) &&
-				 funcExpr->funcid == ApiBsonSearchParamFunctionId())
+		else if (funcExpr->funcid == ApiBsonSearchParamFunctionId())
 		{
 			/* Just validate indexHint is incompatible with vector search but don't set
 			 * the forceIndexQueryOpData.type to vector search yet to keep compatibility.

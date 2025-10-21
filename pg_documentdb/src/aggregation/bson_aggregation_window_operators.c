@@ -971,8 +971,7 @@ UpdatePartitionAndSortClauses(Query *query, Expr *docExpr,
 			SetWindowFieldSortOption *sortOption =
 				(SetWindowFieldSortOption *) lfirst(lc);
 			List *args = NIL;
-			bool applyCollationToSort = IsCollationApplicable(collationString) &&
-										IsClusterVersionAtleast(DocDB_V0, 104, 0);
+			bool applyCollationToSort = IsCollationApplicable(collationString);
 
 			Oid sortFunctionOid = InvalidOid;
 			if (isRangeWindow)
