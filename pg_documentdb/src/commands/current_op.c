@@ -1467,6 +1467,10 @@ PhaseToUserMessage(const char *phaseString)
 	{
 		return "Merging tuples into index (building index).";
 	}
+	else if (strstr(phaseString, "writing WAL files") != NULL)
+	{
+		return "Writing WAL files (building index).";
+	}
 	else if (strcmp(phaseString, "cleaning up") == 0)
 	{
 		return "Cleaning up.";

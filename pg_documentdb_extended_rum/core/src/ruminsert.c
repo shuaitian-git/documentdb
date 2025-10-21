@@ -2411,6 +2411,9 @@ rumbuild_parallel(Relation heap, Relation index, struct IndexInfo *indexInfo,
 	buildstate->buildStats.nTotalPages = RelationGetNumberOfBlocks(index);
 	rumUpdateStats(index, &buildstate->buildStats, true);
 
+	pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE,
+								 PROGRESS_RUM_PHASE_WRITE_WAL);
+
 	/*
 	 * We didn't write WAL records as we built the index, so if WAL-logging is
 	 * required, write all pages to the WAL now.

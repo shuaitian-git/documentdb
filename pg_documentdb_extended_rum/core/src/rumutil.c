@@ -1286,6 +1286,11 @@ rumbuildphasename(int64 phasenum)
 			return "merging tuples";
 		}
 
+		case PROGRESS_RUM_PHASE_WRITE_WAL:
+		{
+			return "writing WAL files";
+		}
+
 		default:
 			return NULL;
 	}
