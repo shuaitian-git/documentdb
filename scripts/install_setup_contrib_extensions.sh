@@ -18,6 +18,7 @@ scriptDir="$( cd -P "$( dirname "$source" )" && pwd )"
 
 CONTRIB_EXTENSIONS=(
     tsm_system_rows
+    pageinspect
 )
 
 . $scriptDir/install_setup_contrib_extensions_core.sh

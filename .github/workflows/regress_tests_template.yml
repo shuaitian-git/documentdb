@@ -82,8 +82,9 @@ jobs:
           sudo INSTALL_DEPENDENCIES_ROOT=$INSTALL_DEPENDENCIES_ROOT PGVERSION=$PG_VERSION /tmp/install_setup/install_setup_citus_core_oss.sh ${CITUS_VERSION}
           cp ./scripts/install_citus_indent.sh /tmp/install_setup/
           sudo INSTALL_DEPENDENCIES_ROOT=$INSTALL_DEPENDENCIES_ROOT /tmp/install_setup/install_citus_indent.sh
-          cp ./scripts/install_setup_system_rows.sh /tmp/install_setup/
-          sudo INSTALL_DEPENDENCIES_ROOT=$INSTALL_DEPENDENCIES_ROOT PGVERSION=$PG_VERSION /tmp/install_setup/install_setup_system_rows.sh
+          cp ./scripts/install_setup_contrib_extensions_core.sh /tmp/install_setup/
+          cp ./scripts/install_setup_contrib_extensions.sh /tmp/install_setup/
+          sudo INSTALL_DEPENDENCIES_ROOT=$INSTALL_DEPENDENCIES_ROOT PGVERSION=$PG_VERSION /tmp/install_setup/install_setup_contrib_extensions.sh
           cp ./scripts/install_setup_pg_cron.sh /tmp/install_setup/
           sudo INSTALL_DEPENDENCIES_ROOT=$INSTALL_DEPENDENCIES_ROOT PGVERSION=$PG_VERSION /tmp/install_setup/install_setup_pg_cron.sh
           cp ./scripts/install_setup_intel_decimal_math_lib.sh /tmp/install_setup/
