@@ -79,6 +79,8 @@ extern bool DefaultInlineWriteOperations;
 extern int MaxAggregationStagesAllowed;
 extern bool EnableIndexOrderbyPushdown;
 extern bool EnableIndexHintSupport;
+extern bool EnableConversionStreamableToSingleBatch;
+extern bool EnableFindProjectionAfterOffset;
 
 /* GUC to config tdigest compression */
 extern int TdigestCompressionAccuracy;
@@ -99,7 +101,8 @@ typedef void (*PipelineStagesPreCheckFunc)(const bson_value_t *existingValue,
 /*
  * Whether or not the stage requires persistence on the cursor.
  */
-typedef bool (*RequiresPersistentCursorFunc)(const bson_value_t *existingValue);
+typedef bool (*RequiresPersistentCursorFunc)(const bson_value_t *existingValue,
+											 bool *isSingleRowResult);
 
 /*
  * Whether or not the stage can be inlined for a lookup stage
@@ -209,10 +212,18 @@ static Query * HandleMatchAggregationStage(const bson_value_t *existingValue,
 										   Query *query,
 										   AggregationPipelineBuildContext *context);
 
-static bool RequiresPersistentCursorFalse(const bson_value_t *pipelineValue);
-static bool RequiresPersistentCursorTrue(const bson_value_t *pipelineValue);
-static bool RequiresPersistentCursorLimit(const bson_value_t *pipelineValue);
-static bool RequiresPersistentCursorSkip(const bson_value_t *pipelineValue);
+static bool RequiresPersistentCursorFalse(const bson_value_t *pipelineValue,
+										  bool *isSingleRowResult);
+static bool RequiresPersistentCursorTrue(const bson_value_t *pipelineValue,
+										 bool *isSingleRowResult);
+static bool RequiresPersistentCursorLimit(const bson_value_t *pipelineValue,
+										  bool *isSingleRowResult);
+static bool RequiresPersistentCursorSkip(const bson_value_t *pipelineValue,
+										 bool *isSingleRowResult);
+static bool RequiresPersistentCursorFalseNoSingleRow(const bson_value_t *pipelineValue,
+													 bool *isSingleRowResult);
+static bool RequiresPersistentCursorTrueSingleRow(const bson_value_t *pipelineValue,
+												  bool *isSingleRowResult);
 
 static bool CanInlineLookupStageProjection(const bson_value_t *stageValue, const
 										   StringView *lookupPath, bool hasLet);
@@ -332,7 +343,7 @@ static const AggregationStageDefinition StageDefinitions[] =
 	{
 		.stage = "$changeStream",
 		.mutateFunc = &HandleChangeStream,
-		.requiresPersistentCursor = &RequiresPersistentCursorFalse,
+		.requiresPersistentCursor = &RequiresPersistentCursorFalseNoSingleRow,
 		.canInlineLookupStageFunc = NULL,
 		.preservesStableSortOrder = false,
 		.canHandleAgnosticQueries = true,
@@ -345,7 +356,7 @@ static const AggregationStageDefinition StageDefinitions[] =
 	{
 		.stage = "$collStats",
 		.mutateFunc = &HandleCollStats,
-		.requiresPersistentCursor = &RequiresPersistentCursorTrue,
+		.requiresPersistentCursor = &RequiresPersistentCursorTrueSingleRow,
 		.canInlineLookupStageFunc = NULL,
 		.preservesStableSortOrder = false,
 		.canHandleAgnosticQueries = false,
@@ -358,7 +369,7 @@ static const AggregationStageDefinition StageDefinitions[] =
 	{
 		.stage = "$count",
 		.mutateFunc = &HandleCount,
-		.requiresPersistentCursor = &RequiresPersistentCursorTrue,
+		.requiresPersistentCursor = &RequiresPersistentCursorTrueSingleRow,
 
 		/* Changes the projector - can't be inlined */
 		.canInlineLookupStageFunc = NULL,
@@ -506,7 +517,7 @@ static const AggregationStageDefinition StageDefinitions[] =
 	{
 		.stage = "$inverseMatch",
 		.mutateFunc = &HandleInverseMatch,
-		.requiresPersistentCursor = &RequiresPersistentCursorFalse,
+		.requiresPersistentCursor = &RequiresPersistentCursorFalseNoSingleRow,
 
 		/* can always be inlined since it doesn't change the projector */
 		.canInlineLookupStageFunc = &CanInlineLookupStageTrue,
@@ -800,7 +811,7 @@ static const AggregationStageDefinition StageDefinitions[] =
 	{
 		.stage = "$unionWith",
 		.mutateFunc = &HandleUnionWith,
-		.requiresPersistentCursor = &RequiresPersistentCursorFalse,
+		.requiresPersistentCursor = &RequiresPersistentCursorFalseNoSingleRow,
 		.canInlineLookupStageFunc = NULL,
 		.preservesStableSortOrder = false,
 		.canHandleAgnosticQueries = false,
@@ -1147,7 +1158,8 @@ MutateQueryWithPipeline(Query *query, List *aggregationStages,
 
 		context->requiresPersistentCursor =
 			context->requiresPersistentCursor ||
-			definition->requiresPersistentCursor(&stage->stageValue);
+			definition->requiresPersistentCursor(&stage->stageValue,
+												 &context->isSingleRowResult);
 
 		if (!definition->preservesStableSortOrder)
 		{
@@ -1373,6 +1385,13 @@ GenerateAggregationQuery(text *database, pgbson *aggregationSpec, QueryData *que
 		queryData->cursorKind =
 			context.requiresPersistentCursor || isCollectionAgnosticQuery ?
 			QueryCursorType_Persistent : QueryCursorType_Streamable;
+	}
+
+	if (queryData->cursorKind == QueryCursorType_Streamable &&
+		context.isSingleRowResult && EnableConversionStreamableToSingleBatch &&
+		queryData->batchSize >= 1)
+	{
+		queryData->cursorKind = QueryCursorType_SingleBatch;
 	}
 
 	queryData->namespaceName = context.namespaceName;
@@ -1796,17 +1815,18 @@ default_find_case:
 
 	context.variableSpec = (Expr *) MakeBsonConst(parsedVariables);
 
+	context.isSingleRowResult = false;
 	if (sort.value_type != BSON_TYPE_EOD)
 	{
 		context.requiresPersistentCursor = true;
 	}
 
-	if (RequiresPersistentCursorSkip(&skip))
+	if (RequiresPersistentCursorSkip(&skip, &context.isSingleRowResult))
 	{
 		context.requiresPersistentCursor = true;
 	}
 
-	if (RequiresPersistentCursorLimit(&limit))
+	if (RequiresPersistentCursorLimit(&limit, &context.isSingleRowResult))
 	{
 		context.requiresPersistentCursor = true;
 	}
@@ -1855,16 +1875,28 @@ default_find_case:
 		context.stageNum++;
 	}
 
-	/* finally update projection */
-	if (projection.value_type != BSON_TYPE_EOD)
-	{
-		query = HandleProjectFind(&projection, &filter, query, &context);
-	}
-
 	/* $near and $nearSphere add sort clause to query, for them we need persistent cursor. */
 	if (query->sortClause)
 	{
 		context.requiresPersistentCursor = true;
+	}
+
+	/* finally update projection */
+	if (projection.value_type != BSON_TYPE_EOD)
+	{
+		/* Before applying projection - check if we need to
+		 * push to a subquery. We do this only if we have
+		 * skip to avoid projecting on documents we won't need.
+		 */
+		if (context.requiresSubQuery &&
+			context.requiresPersistentCursor &&
+			query->limitOffset != NULL &&
+			EnableFindProjectionAfterOffset)
+		{
+			query = MigrateQueryToSubQuery(query, &context);
+		}
+
+		query = HandleProjectFind(&projection, &filter, query, &context);
 	}
 
 	if (rt_fetch(1, query->rtable)->rtekind != RTE_RELATION)
@@ -1887,6 +1919,13 @@ default_find_case:
 		 * Mark the query for a point read plan.
 		 */
 		queryData->cursorKind = QueryCursorType_PointRead;
+	}
+
+	if (queryData->cursorKind == QueryCursorType_Streamable &&
+		context.isSingleRowResult && EnableConversionStreamableToSingleBatch &&
+		queryData->batchSize >= 1)
+	{
+		queryData->cursorKind = QueryCursorType_SingleBatch;
 	}
 
 	if (addCursorParams)
@@ -2076,7 +2115,7 @@ GenerateCountQuery(text *databaseDatum, pgbson *countSpec, bool setStatementTime
 		{
 			query = HandleLimit(&limit, query, &context);
 			context.stageNum++;
-			if (RequiresPersistentCursorLimit(&limit))
+			if (RequiresPersistentCursorLimit(&limit, &context.isSingleRowResult))
 			{
 				context.requiresPersistentCursor = true;
 			}
@@ -6361,8 +6400,19 @@ IsPartitionByFieldsOnShardKey(const pgbson *partitionByFields, const
  * A simple function that never requires persistent cursors
  */
 static bool
-RequiresPersistentCursorFalse(const bson_value_t *pipelineValue)
+RequiresPersistentCursorFalse(const bson_value_t *pipelineValue, bool *isSingleRowResult)
 {
+	/* This path doesn't consider singleRow - defers to other stages but doesn't exclude it */
+	return false;
+}
+
+
+static bool
+RequiresPersistentCursorFalseNoSingleRow(const bson_value_t *pipelineValue,
+										 bool *isSingleRowResult)
+{
+	/* This path doesn't consider single row output but excludes singleBatch */
+	*isSingleRowResult = false;
 	return false;
 }
 
@@ -6371,8 +6421,20 @@ RequiresPersistentCursorFalse(const bson_value_t *pipelineValue)
  * A simple function that always requires persistent cursors
  */
 static bool
-RequiresPersistentCursorTrue(const bson_value_t *pipelineValue)
+RequiresPersistentCursorTrue(const bson_value_t *pipelineValue, bool *isSingleRowResult)
 {
+	/* A persisted cursor for now assumes multi-row */
+	*isSingleRowResult = false;
+	return true;
+}
+
+
+static bool
+RequiresPersistentCursorTrueSingleRow(const bson_value_t *pipelineValue,
+									  bool *isSingleRowResult)
+{
+	/* A persisted cursor that produces a single row response */
+	*isSingleRowResult = true;
 	return true;
 }
 
@@ -6381,12 +6443,22 @@ RequiresPersistentCursorTrue(const bson_value_t *pipelineValue)
  * Checks that the limit stage requires persistence (true if it's not limit 1).
  */
 static bool
-RequiresPersistentCursorLimit(const bson_value_t *pipelineValue)
+RequiresPersistentCursorLimit(const bson_value_t *pipelineValue, bool *isSingleRowResult)
 {
 	if (pipelineValue->value_type != BSON_TYPE_EOD &&
 		BsonValueIsNumber(pipelineValue))
 	{
 		int32_t limit = BsonValueAsInt32(pipelineValue);
+		if (limit == 1)
+		{
+			/* For special case limit 1 - this can be a singleBatch cursor
+			 * instead of streaming.
+			 */
+			*isSingleRowResult = true;
+			return false;
+		}
+
+		/* Defer to prior */
 		return limit != 1 && limit != 0;
 	}
 
@@ -6398,8 +6470,9 @@ RequiresPersistentCursorLimit(const bson_value_t *pipelineValue)
  * Checks that the skip stage requires persistence (true if it's not skip 0).
  */
 static bool
-RequiresPersistentCursorSkip(const bson_value_t *pipelineValue)
+RequiresPersistentCursorSkip(const bson_value_t *pipelineValue, bool *isSingleRowResult)
 {
+	/* Skip doesn't make any judgements on singleRowResults */
 	if (pipelineValue->value_type != BSON_TYPE_EOD &&
 		BsonValueIsNumber(pipelineValue))
 	{

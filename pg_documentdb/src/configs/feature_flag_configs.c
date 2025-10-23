@@ -162,6 +162,13 @@ bool UseFileBasedPersistedCursors = DEFAULT_USE_FILE_BASED_PERSISTED_CURSORS;
 #define DEFAULT_ENABLE_INDEX_HINT_SUPPORT true
 bool EnableIndexHintSupport = DEFAULT_ENABLE_INDEX_HINT_SUPPORT;
 
+#define DEFAULT_ENABLE_CONVERSION_STREAMABLE_SINGLE_BATCH true
+bool EnableConversionStreamableToSingleBatch =
+	DEFAULT_ENABLE_CONVERSION_STREAMABLE_SINGLE_BATCH;
+
+#define DEFAULT_ENABLE_FIND_PROJECTION_AFTER_OFFSET true
+bool EnableFindProjectionAfterOffset = DEFAULT_ENABLE_FIND_PROJECTION_AFTER_OFFSET;
+
 /* Remove after v109 */
 #define DEFAULT_ENABLE_DELAYED_HOLD_PORTAL true
 bool EnableDelayedHoldPortal = DEFAULT_ENABLE_DELAYED_HOLD_PORTAL;
@@ -519,6 +526,22 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable index hint support for index pushdown."),
 		NULL, &EnableIndexHintSupport, DEFAULT_ENABLE_INDEX_HINT_SUPPORT,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableConversionStreamableToSingleBatch", newGucPrefix),
+		gettext_noop(
+			"Whether to enable conversion streamable to single batch queries."),
+		NULL, &EnableConversionStreamableToSingleBatch,
+		DEFAULT_ENABLE_CONVERSION_STREAMABLE_SINGLE_BATCH,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableFindProjectionAfterOffset", newGucPrefix),
+		gettext_noop(
+			"Whether to enable pushing projection as a subquery after offset."),
+		NULL, &EnableFindProjectionAfterOffset,
+		DEFAULT_ENABLE_FIND_PROJECTION_AFTER_OFFSET,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
