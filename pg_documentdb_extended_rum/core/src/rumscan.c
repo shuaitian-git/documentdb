@@ -42,6 +42,9 @@ rumbeginscan(Relation rel, int nkeys, int norderbys)
 	so->sortedEntries = NULL;
 	so->orderByScanData = NULL;
 	so->scanLoops = 0;
+	so->killedItems = NULL;
+	so->numKilled = 0;
+	so->killedItemsSkipped = 0;
 	so->orderByKeyIndex = -1;
 	so->orderScanDirection = ForwardScanDirection;
 	so->tempCtx = RumContextCreate(CurrentMemoryContext,
@@ -135,6 +138,7 @@ rumFillScanEntry(RumScanOpaque so, OffsetNumber attnum,
 	scanEntry->gdi = NULL;
 	scanEntry->stack = NULL;
 	scanEntry->nlist = 0;
+	scanEntry->cachedLsn = InvalidXLogRecPtr;
 	scanEntry->offset = InvalidOffsetNumber;
 	scanEntry->isFinished = false;
 	scanEntry->reduceResult = false;
@@ -425,6 +429,20 @@ freeScanEntries(RumScanEntry *entries, uint32 nentries)
 void
 freeScanKeys(RumScanOpaque so)
 {
+	if (RumEnableSupportDeadIndexItems &&
+		so->orderByScanData && so->numKilled > 0 &&
+		so->orderByScanData->isPageValid &&
+		so->orderByScanData->orderByEntryPageCopy &&
+		so->orderByScanData->orderStack)
+	{
+		/* last chance to kill entries - needs to be called
+		 * before freeScanEntries releases buffer pins.
+		 */
+		LockBuffer(so->orderByScanData->orderStack->buffer, RUM_SHARE);
+		RumKillEntryItems(so, so->orderByScanData);
+		LockBuffer(so->orderByScanData->orderStack->buffer, RUM_UNLOCK);
+	}
+
 	freeScanEntries(so->entries, so->totalentries);
 
 	if (so->orderByScanData)
@@ -441,6 +459,13 @@ freeScanKeys(RumScanOpaque so)
 
 		pfree(so->orderByScanData);
 		so->orderByScanData = NULL;
+	}
+
+	if (so->killedItems != NULL)
+	{
+		pfree(so->killedItems);
+		so->killedItems = NULL;
+		so->numKilled = 0;
 	}
 
 	MemoryContextReset(so->keyCtx);
@@ -937,6 +962,7 @@ rumrescan(IndexScanDesc scan, ScanKey scankey, int nscankeys,
 	RumScanOpaque so = (RumScanOpaque) scan->opaque;
 
 	so->firstCall = true;
+	so->ignoreKilledTuples = scan->ignore_killed_tuples;
 
 	freeScanKeys(so);
 
@@ -1021,6 +1047,12 @@ try_explain_documentdb_rum_index(IndexScanDesc scan, ExplainState *es)
 	const char *scanType = "unknown";
 	RumScanOpaque so = (RumScanOpaque) scan->opaque;
 	ExplainPropertyInteger("innerScanLoops", "loops", so->scanLoops, es);
+
+	if (so->killedItemsSkipped > 0)
+	{
+		ExplainPropertyInteger("deadEntriesOrPagesSkipped", "items",
+							   so->killedItemsSkipped, es);
+	}
 
 	switch (so->scanType)
 	{

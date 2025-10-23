@@ -38,6 +38,7 @@ PGDLLEXPORT bool RumInjectPageSplitIncomplete =
 
 /* rumdatapage.c */
 PGDLLEXPORT int RumDataPageIntermediateSplitSize = -1;
+PGDLLEXPORT bool RumSkipResetOnDeadEntryPage = RUM_DEFAULT_SKIP_RESET_ON_DEAD_ENTRY_PAGE;
 
 /* rumget.c */
 PGDLLEXPORT int RumFuzzySearchLimit = 0;
@@ -61,6 +62,10 @@ PGDLLEXPORT bool RumNewBulkDeleteInlineDataPages =
 	RUM_DEFAULT_ENABLE_NEW_BULK_DELETE_INLINE_DATA_PAGES;
 PGDLLEXPORT bool RumVacuumSkipPrunePostingTreePages =
 	RUM_DEFAULT_SKIP_PRUNE_POSTING_TREE_PAGES;
+
+/* rumget.c */
+PGDLLEXPORT bool RumEnableSupportDeadIndexItems =
+	RUM_DEFAULT_ENABLE_SUPPORT_DEAD_INDEX_ITEMS;
 
 PGDLLEXPORT rum_format_log_hook rum_unredacted_log_emit_hook = NULL;
 
@@ -241,6 +246,24 @@ InitializeCommonDocumentDBGUCs(const char *rumGucPrefix, const
 		NULL,
 		&RumVacuumSkipPrunePostingTreePages,
 		RUM_DEFAULT_SKIP_PRUNE_POSTING_TREE_PAGES,
+		PGC_USERSET, 0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enable_support_dead_index_items", documentDBRumGucPrefix),
+		"Sets whether or not to enable support for handling LP_DEAD items",
+		NULL,
+		&RumEnableSupportDeadIndexItems,
+		RUM_DEFAULT_ENABLE_SUPPORT_DEAD_INDEX_ITEMS,
+		PGC_USERSET, 0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.skip_reset_dead_page_flag", documentDBRumGucPrefix),
+		"Sets whether or not to enable support for handling LP_DEAD items",
+		NULL,
+		&RumSkipResetOnDeadEntryPage,
+		RUM_DEFAULT_SKIP_RESET_ON_DEAD_ENTRY_PAGE,
 		PGC_USERSET, 0,
 		NULL, NULL, NULL);
 

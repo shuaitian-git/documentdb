@@ -8,13 +8,6 @@ CREATE OR REPLACE FUNCTION documentdb_api_internal.rum_prune_empty_entries_on_in
 RETURNS void
 LANGUAGE c
 AS '$libdir/pg_documentdb_extended_rum_core', 'documentdb_rum_prune_empty_entries_on_index';
-ALTER SYSTEM set autovacuum to off;
-SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
- t
-(1 row)
-
 SELECT name, setting, reset_val, boot_val FROM pg_settings WHERE name in ('documentdb_rum.track_incomplete_split', 'documentdb_rum.fix_incomplete_split');
                  name                  | setting | reset_val | boot_val 
 ---------------------------------------+---------+-----------+----------
@@ -28,8 +21,18 @@ SELECT documentdb_api.drop_collection('pvacuum_db', 'pclean');
  t
 (1 row)
 
+SELECT documentdb_api.create_collection('pvacuum_db', 'pclean');
+psql:sql/rum_vacuum_cleanup_tests_core.sql:10: NOTICE:  creating collection
+ create_collection 
+-------------------
+ t
+(1 row)
+
+SELECT collection_id AS vacuum_col FROM documentdb_api_catalog.collections WHERE database_name = 'pvacuum_db' AND collection_name = 'pclean' \gset
+-- disable autovacuum to have predicatability
+SELECT FORMAT('ALTER TABLE documentdb_data.documents_%s set (autovacuum_enabled = off)', :vacuum_col) \gexec
+ALTER TABLE documentdb_data.documents_500 set (autovacuum_enabled = off)
 SELECT COUNT(documentdb_api.insert_one('pvacuum_db', 'pclean',  FORMAT('{ "_id": %s, "a": %s }', i, i)::bson)) FROM generate_series(1, 1000) AS i;
-psql:sql/rum_vacuum_cleanup_tests_core.sql:13: NOTICE:  creating collection
  count 
 -------
   1000
@@ -43,7 +46,6 @@ SELECT documentdb_api_internal.create_indexes_non_concurrently(
  { "raw" : { "defaultShard" : { "numIndexesBefore" : { "$numberInt" : "1" }, "numIndexesAfter" : { "$numberInt" : "2" }, "createdCollectionAutomatically" : false, "ok" : { "$numberInt" : "1" } } }, "ok" : { "$numberInt" : "1" } }
 (1 row)
 
-SELECT collection_id AS vacuum_col FROM documentdb_api_catalog.collections WHERE database_name = 'pvacuum_db' AND collection_name = 'pclean' \gset
 SELECT index_id AS vacuum_index_id FROM documentdb_api_catalog.collection_indexes WHERE collection_id = :vacuum_col AND index_id != :vacuum_col \gset
 -- use the index - 
 set documentdb_rum.vacuum_cleanup_entries to off;
@@ -223,9 +225,9 @@ set documentdb_rum.prune_rum_empty_pages to on;
 set client_min_messages to DEBUG1;
 SELECT FORMAT('VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_%s;', :vacuum_col) \gexec
 VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_500;
-psql:sql/rum_vacuum_cleanup_tests_core.sql:79: DEBUG:  [RUM] Vacuum posting tree void pages 0, deleted pages 0
-psql:sql/rum_vacuum_cleanup_tests_core.sql:79: LOG:  Vacuum found emptyEntryPages=17, emptyEntries=36, emptyPostingTrees=1, prunedEntries=18, prunedPages=15,prunedPostingTrees=1, postingPagesDeleted=0, emptyPostingPages=0, numBacktracks=0 isNewBulkDelete=1 for index=19052
-psql:sql/rum_vacuum_cleanup_tests_core.sql:79: LOG:  Vacuum pages - marked 1 pages as reusable
+psql:sql/rum_vacuum_cleanup_tests_core.sql:82: DEBUG:  [RUM] Vacuum posting tree void pages 0, deleted pages 0
+psql:sql/rum_vacuum_cleanup_tests_core.sql:82: LOG:  Vacuum found emptyEntryPages=17, emptyEntries=36, emptyPostingTrees=1, prunedEntries=18, prunedPages=15,prunedPostingTrees=1, postingPagesDeleted=0, emptyPostingPages=0, numBacktracks=0 isNewBulkDelete=1 for index=19052
+psql:sql/rum_vacuum_cleanup_tests_core.sql:82: LOG:  Vacuum pages - marked 1 pages as reusable
 reset client_min_messages;
 -- delete one more row to ensure vacuum has a chance to clean up
 reset documentdb.forceDisableSeqScan;
@@ -238,7 +240,7 @@ SELECT documentdb_api.delete('pvacuum_db', '{ "delete": "pclean", "deletes": [ {
 set client_min_messages to DEBUG1;
 SELECT FORMAT('VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_%s;', :vacuum_col) \gexec
 VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_500;
-psql:sql/rum_vacuum_cleanup_tests_core.sql:86: LOG:  Vacuum pages - marked 16 pages as reusable
+psql:sql/rum_vacuum_cleanup_tests_core.sql:89: LOG:  Vacuum pages - marked 16 pages as reusable
 reset client_min_messages;
 set documentdb.forceDisableSeqScan to on;
 SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
@@ -321,7 +323,7 @@ reset documentdb.forceDisableSeqScan;
 -- call the repair function.
 set documentdb_rum.vacuum_cleanup_entries to on;
 SELECT documentdb_api_internal.rum_prune_empty_entries_on_index(('documentdb_data.documents_rum_index_' || :vacuum_index_id)::regclass);
-psql:sql/rum_vacuum_cleanup_tests_core.sql:116: INFO:  Vacuum found 20 empty pages, 3000 empty entries, 2980 pruned entries, 0 pruned pages, 0 pruned posting trees
+psql:sql/rum_vacuum_cleanup_tests_core.sql:119: INFO:  Vacuum found 20 empty pages, 3000 empty entries, 2980 pruned entries, 0 pruned pages, 0 pruned posting trees
  rum_prune_empty_entries_on_index 
 ----------------------------------
  
@@ -348,7 +350,7 @@ SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, AN
 reset documentdb.forceDisableSeqScan;
 set documentdb_rum.prune_rum_empty_pages to on;
 SELECT documentdb_api_internal.rum_prune_empty_entries_on_index(('documentdb_data.documents_rum_index_' || :vacuum_index_id)::regclass);
-psql:sql/rum_vacuum_cleanup_tests_core.sql:124: INFO:  Vacuum found 20 empty pages, 20 empty entries, 0 pruned entries, 18 pruned pages, 0 pruned posting trees
+psql:sql/rum_vacuum_cleanup_tests_core.sql:127: INFO:  Vacuum found 20 empty pages, 20 empty entries, 0 pruned entries, 18 pruned pages, 0 pruned posting trees
  rum_prune_empty_entries_on_index 
 ----------------------------------
  
@@ -372,10 +374,3 @@ SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, AN
 (11 rows)
 
 reset documentdb.forceDisableSeqScan;
-ALTER SYSTEM set autovacuum to on;
-SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
- t
-(1 row)
-

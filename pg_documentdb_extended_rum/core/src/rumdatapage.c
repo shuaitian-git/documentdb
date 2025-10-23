@@ -934,6 +934,11 @@ dataPlaceToPage(RumBtree btree, Page page, OffsetNumber off)
 
 	dataPrepareData(btree, page, off);
 
+	if (!RumSkipResetOnDeadEntryPage)
+	{
+		RumDataPageEntryRevive(page);
+	}
+
 	if (RumPageIsLeaf(page))
 	{
 		Pointer ptr = RumDataPageGetData(page),
@@ -1189,6 +1194,13 @@ dataSplitPageLeaf(RumBtree btree, Buffer lbuf, Buffer rbuf,
 	RumDataPageMaxOff(newlPage) = 0;
 	RumDataPageMaxOff(rPage) = 0;
 
+	if (!RumSkipResetOnDeadEntryPage)
+	{
+		/* Paranoia: Set the revive flags on the child splits */
+		RumDataPageEntryRevive(newlPage);
+		RumDataPageEntryRevive(rPage);
+	}
+
 	/* Calculate the whole size we're going to place */
 	copyPtr = RumDataPageGetData(lpageCopy);
 	RumItemSetMin(&item);
@@ -1399,6 +1411,13 @@ dataSplitPageInternal(RumBtree btree, Buffer lbuf, Buffer rbuf,
 
 	RumInitPage(rPage, RumPageGetOpaque(newlPage)->flags, pageSize);
 	RumInitPage(newlPage, RumPageGetOpaque(rPage)->flags, pageSize);
+
+	if (!RumSkipResetOnDeadEntryPage)
+	{
+		/* Paranoia: Set the revive flags on the child splits */
+		RumDataPageEntryRevive(newlPage);
+		RumDataPageEntryRevive(rPage);
+	}
 
 	ptr = RumDataPageGetItem(newlPage, FirstOffsetNumber);
 	memcpy(ptr, vector, separator * sizeofitem);
@@ -1666,6 +1685,17 @@ rumInsertItemPointers(RumState *rumstate,
 			 * gdi->btree.items[gdi->btree.curitem] already exists in index
 			 */
 			gdi->btree.curitem++;
+
+			/* Before we unlock, ensure that the page is revived if needed */
+			if (!RumSkipResetOnDeadEntryPage &&
+				RumDataPageEntryIsDead(BufferGetPage(gdi->stack->buffer)))
+			{
+				GenericXLogState *state = GenericXLogStart(gdi->btree.index);
+				Page page = GenericXLogRegisterBuffer(state, gdi->stack->buffer, 0);
+				RumDataPageEntryRevive(page);
+				GenericXLogFinish(state);
+			}
+
 			LockBuffer(gdi->stack->buffer, RUM_UNLOCK);
 			freeRumBtreeStack(gdi->stack);
 		}

@@ -27,7 +27,6 @@
 #endif
 #include "pg_documentdb_rum.h"
 
-
 typedef enum RumIndexTransformOperation
 {
 	RumIndexTransform_IndexGenerateSkipBound = 1
@@ -53,7 +52,8 @@ static bool scanPage(RumState *rumstate, RumScanEntry entry, RumItem *item,
 static void insertScanItem(RumScanOpaque so, bool recheck);
 static int scan_entry_cmp(const void *p1, const void *p2, void *arg);
 static void entryGetItem(RumState *rumstate, RumScanEntry entry, bool *nextEntryList,
-						 Snapshot snapshot, RumItem *advancePast);
+						 Snapshot snapshot, RumItem *advancePast,
+						 RumScanOpaque so);
 static void entryFindItem(RumState *rumstate, RumScanEntry entry, RumItem *item, Snapshot
 						  snapshot);
 
@@ -86,6 +86,23 @@ static void entryFindItem(RumState *rumstate, RumScanEntry entry, RumItem *item,
 			(item).keyCategory = category; \
 		} \
 	} while (0)
+
+
+inline static bool
+IsEntryDeadForKilledTuple(bool ignoreKilledTuples, ItemId itemId)
+{
+	return RumEnableSupportDeadIndexItems && ignoreKilledTuples && \
+		   RumIndexEntryIsDead(itemId);
+}
+
+
+inline static bool
+IsDataPageDeadForKilledTuple(bool ignoreKilledTuples, Page dataPage)
+{
+	return RumEnableSupportDeadIndexItems && ignoreKilledTuples && \
+		   RumDataPageEntryIsDead(dataPage);
+}
+
 
 static bool
 callAddInfoConsistentFn(RumState *rumstate, RumScanKey key)
@@ -311,7 +328,8 @@ static void
 scanPostingTree(Relation index, RumScanEntry scanEntry,
 				BlockNumber rootPostingTree, OffsetNumber attnum,
 				RumState *rumstate, Datum idatum, RumNullCategory icategory,
-				Snapshot snapshot, RumItemScanEntryBounds *scanEntryBounds)
+				Snapshot snapshot, bool ignoreKilledTuples,
+				RumItemScanEntryBounds *scanEntryBounds)
 {
 	RumPostingTreeScan *gdi;
 	Buffer buffer;
@@ -357,6 +375,11 @@ scanPostingTree(Relation index, RumScanEntry scanEntry,
 			shouldScanPage = IsEntryInBounds(rumstate, scanEntry,
 											 RumDataPageGetRightBound(page),
 											 scanEntryBounds, checkMaximum);
+		}
+
+		if (IsDataPageDeadForKilledTuple(ignoreKilledTuples, page))
+		{
+			shouldScanPage = false;
 		}
 
 		if (shouldScanPage && RumPageIsNotDeleted(page) && maxoff >= FirstOffsetNumber)
@@ -424,7 +447,7 @@ scanPostingTree(Relation index, RumScanEntry scanEntry,
  */
 static bool
 collectMatchBitmap(RumBtreeData *btree, RumBtreeStack *stack,
-				   RumScanEntry scanEntry, Snapshot snapshot,
+				   bool ignoreKilledTuples, RumScanEntry scanEntry, Snapshot snapshot,
 				   RumItemScanEntryBounds *scanEntryBounds)
 {
 	OffsetNumber attnum;
@@ -468,6 +491,7 @@ collectMatchBitmap(RumBtreeData *btree, RumBtreeStack *stack,
 		Page page;
 		IndexTuple itup;
 		Datum idatum;
+		ItemId itemId;
 		RumNullCategory icategory;
 
 		/*
@@ -479,7 +503,8 @@ collectMatchBitmap(RumBtreeData *btree, RumBtreeStack *stack,
 		}
 
 		page = BufferGetPage(stack->buffer);
-		itup = (IndexTuple) PageGetItem(page, PageGetItemId(page, stack->off));
+		itemId = PageGetItemId(page, stack->off);
+		itup = (IndexTuple) PageGetItem(page, itemId);
 
 		/*
 		 * If tuple stores another attribute then stop scan
@@ -487,6 +512,13 @@ collectMatchBitmap(RumBtreeData *btree, RumBtreeStack *stack,
 		if (rumtuple_get_attrnum(rumstate, itup) != attnum)
 		{
 			return true;
+		}
+
+		/* If the request is to ignore killed tuples, check that */
+		if (IsEntryDeadForKilledTuple(ignoreKilledTuples, itemId))
+		{
+			stack->off++;
+			continue;
 		}
 
 		/* Safe to fetch attribute value */
@@ -570,7 +602,8 @@ collectMatchBitmap(RumBtreeData *btree, RumBtreeStack *stack,
 
 			/* Collect all the TIDs in this entry's posting tree */
 			scanPostingTree(btree->index, scanEntry, rootPostingTree, attnum,
-							rumstate, idatum, icategory, snapshot, scanEntryBounds);
+							rumstate, idatum, icategory, snapshot, ignoreKilledTuples,
+							scanEntryBounds);
 
 			/*
 			 * We lock again the entry page and while it was unlocked insert
@@ -599,12 +632,14 @@ collectMatchBitmap(RumBtreeData *btree, RumBtreeStack *stack,
 					elog(ERROR, "lost saved point in index");   /* must not happen !!! */
 				}
 				page = BufferGetPage(stack->buffer);
-				itup = (IndexTuple) PageGetItem(page, PageGetItemId(page, stack->off));
+				itemId = PageGetItemId(page, stack->off);
+				itup = (IndexTuple) PageGetItem(page, itemId);
 
 				if (rumtuple_get_attrnum(rumstate, itup) != attnum)
 				{
 					elog(ERROR, "lost saved point in index");   /* must not happen !!! */
 				}
+
 				newDatum = rumtuple_get_key(rumstate, itup,
 											&newCategory);
 
@@ -730,8 +765,8 @@ setListPositionScanEntry(RumState *rumstate, RumScanEntry entry)
  * used in partialMatch scenarios
  */
 static void
-startScanEntry(RumState *rumstate, RumScanEntry entry, Snapshot snapshot,
-			   RumItemScanEntryBounds *scanEntryBounds)
+startScanEntry(RumState *rumstate, bool ignoreKilledTuples, RumScanEntry entry,
+			   Snapshot snapshot, RumItemScanEntryBounds *scanEntryBounds)
 {
 	RumBtreeData btreeEntry;
 	RumBtreeStack *stackEntry;
@@ -746,6 +781,7 @@ restartScanEntry:
 	entry->gdi = NULL;
 	entry->stack = NULL;
 	entry->nlist = 0;
+	entry->cachedLsn = InvalidXLogRecPtr;
 	entry->matchSortstate = NULL;
 	entry->reduceResult = false;
 	entry->predictNumberResult = 0;
@@ -779,7 +815,8 @@ restartScanEntry:
 		 * for the entry type.
 		 */
 		btreeEntry.findItem(&btreeEntry, stackEntry);
-		if (collectMatchBitmap(&btreeEntry, stackEntry, entry, snapshot,
+		if (collectMatchBitmap(&btreeEntry, stackEntry, ignoreKilledTuples, entry,
+							   snapshot,
 							   scanEntryBounds) == false)
 		{
 			/*
@@ -820,6 +857,11 @@ restartScanEntry:
 		 */
 		if (entry->queryCategory == RUM_CAT_EMPTY_QUERY &&
 			!ItemIdHasStorage(itemid))
+		{
+			goto endScanEntry;
+		}
+
+		if (IsEntryDeadForKilledTuple(ignoreKilledTuples, itemid))
 		{
 			goto endScanEntry;
 		}
@@ -874,8 +916,26 @@ restartScanEntry:
 			entry->list = (RumItem *) palloc(BLCKSZ * sizeof(RumItem));
 			maxoff = RumDataPageMaxOff(pageInner);
 			entry->nlist = maxoff;
+			entry->cachedLsn = PageGetLSN(pageInner);
 
-			if (RumUseNewItemPtrDecoding)
+			if (IsDataPageDeadForKilledTuple(ignoreKilledTuples, pageInner) &&
+				maxoff >= FirstOffsetNumber)
+			{
+				/* In this path, the first page is dead, but rather than
+				 * moving left right away, we add the first tuple here
+				 * and let entryGetItem do the heavy lifting.
+				 */
+				ptr = RumDataPageGetData(pageInner);
+
+				/* Ensure the first entry is 0 initialized */
+				memset(&entry->list[0], 0, sizeof(RumItem));
+
+				ptr = rumDataPageLeafRead(ptr, entry->attnum, &item, true,
+										  rumstate);
+				entry->list[0] = item;
+				entry->nlist = 1;
+			}
+			else if (RumUseNewItemPtrDecoding)
 			{
 				rumPopulateDataPage(rumstate, entry, entry->nlist, pageInner);
 			}
@@ -903,6 +963,7 @@ restartScanEntry:
 		else if (RumGetNPosting(itup) > 0)
 		{
 			entry->nlist = RumGetNPosting(itup);
+			entry->cachedLsn = InvalidXLogRecPtr;
 			entry->predictNumberResult = (uint32) entry->nlist;
 			entry->list = (RumItem *) palloc(sizeof(RumItem) * entry->nlist);
 
@@ -1097,7 +1158,8 @@ startScanEntryExtended(IndexScanDesc scan, RumState *rumstate, RumScanOpaque so)
 	{
 		if (!so->entries[i]->isPartialMatch)
 		{
-			startScanEntry(rumstate, so->entries[i], scan->xs_snapshot,
+			startScanEntry(rumstate, so->ignoreKilledTuples, so->entries[i],
+						   scan->xs_snapshot,
 						   NULL);
 		}
 		else if (minPartialMatchIndex < 0)
@@ -1138,7 +1200,8 @@ startScanEntryExtended(IndexScanDesc scan, RumState *rumstate, RumScanOpaque so)
 			 * When initializing it, if we're doing an index intersection with a non-partial match
 			 * and the overall state allows for a tidbitmap instead of a tuplestore.
 			 */
-			startScanEntry(rumstate, so->entries[i], scan->xs_snapshot,
+			startScanEntry(rumstate, so->ignoreKilledTuples, so->entries[i],
+						   scan->xs_snapshot,
 						   entryBoundsPtr);
 		}
 	}
@@ -1521,6 +1584,7 @@ PrepareOrderedMatchedEntry(RumScanOpaque so, RumScanEntry entry,
 		entry->list = (RumItem *) palloc(BLCKSZ * sizeof(RumItem));
 		maxoff = RumDataPageMaxOff(pageInner);
 		entry->nlist = maxoff;
+		entry->cachedLsn = PageGetLSN(pageInner);
 
 		if (RumUseNewItemPtrDecoding)
 		{
@@ -1550,6 +1614,7 @@ PrepareOrderedMatchedEntry(RumScanOpaque so, RumScanEntry entry,
 	else if (RumGetNPosting(itup) > 0)
 	{
 		entry->nlist = RumGetNPosting(itup);
+		entry->cachedLsn = InvalidXLogRecPtr;
 		entry->predictNumberResult += (uint32) entry->nlist;
 		entry->list = (RumItem *) palloc(sizeof(RumItem) * entry->nlist);
 
@@ -1564,6 +1629,7 @@ PrepareOrderedMatchedEntry(RumScanOpaque so, RumScanEntry entry,
 	{
 		/* No postings, so mark entry as finished */
 		entry->nlist = 0;
+		entry->cachedLsn = InvalidXLogRecPtr;
 		entry->isFinished = true;
 	}
 }
@@ -1588,6 +1654,7 @@ startScanEntryOrderedCore(RumScanOpaque so, RumScanEntry minScanEntry, Snapshot 
 	entry->gdi = NULL;
 	entry->stack = NULL;
 	entry->nlist = 0;
+	entry->cachedLsn = InvalidXLogRecPtr;
 	entry->matchSortstate = NULL;
 	entry->reduceResult = false;
 	entry->predictNumberResult = 0;
@@ -1850,7 +1917,8 @@ startScan(IndexScanDesc scan)
 	{
 		for (i = 0; i < so->totalentries; i++)
 		{
-			startScanEntry(rumstate, so->entries[i], scan->xs_snapshot,
+			startScanEntry(rumstate, so->ignoreKilledTuples, so->entries[i],
+						   scan->xs_snapshot,
 						   NULL);
 		}
 	}
@@ -1947,7 +2015,7 @@ startScan(IndexScanDesc scan)
 			if (!so->sortedEntries[i]->isFinished)
 			{
 				entryGetItem(&so->rumstate, so->sortedEntries[i], NULL,
-							 scan->xs_snapshot, NULL);
+							 scan->xs_snapshot, NULL, so);
 			}
 		}
 		qsort_arg(so->sortedEntries, so->totalentries, sizeof(RumScanEntry),
@@ -1958,6 +2026,220 @@ startScan(IndexScanDesc scan)
 }
 
 
+static int
+KillItemPointerSortComparer(const void *left, const void *right)
+{
+	ItemPointer leftPtr = (ItemPointer) left;
+	ItemPointer rightPtr = (ItemPointer) right;
+
+	return ItemPointerCompare(leftPtr, rightPtr);
+}
+
+
+static bool
+PostingListHasAliveTuples(RumScanOpaque so, Pointer postingPtr,
+						  int numPostings, OffsetNumber attnum,
+						  int numKilled)
+{
+	RumItem item;
+	Pointer ptr = postingPtr;
+	int j = 0, k = 0;
+	InitBlockNumberIncrZero(blockNumberIncr);
+	bool hasAliveTuples = false;
+
+	/* If the total number of killed tuples is less than postings,
+	 * there *must* be some alive tuples by definition.
+	 */
+	if (numKilled < numPostings)
+	{
+		return true;
+	}
+
+	RumItemSetInvalid(&item);
+	while (!hasAliveTuples && k < numKilled &&
+		   j < numPostings)
+	{
+		int cmp;
+		if (!ItemPointerIsValid(&item.iptr))
+		{
+			ptr = rumDataPageLeafReadWithBlockNumberIncr(
+				ptr, attnum, &item, false, &so->rumstate, &blockNumberIncr);
+		}
+
+		cmp = ItemPointerCompare(&item.iptr, &so->killedItems[k]);
+		if (cmp < 0)
+		{
+			/* item pointer is smaller than killed items - at least one
+			 * item pointer is alive break.
+			 */
+			hasAliveTuples = true;
+			break;
+		}
+		else if (cmp > 0)
+		{
+			/* Item pointer is bigger than killed items a later killed item may match */
+			k++;
+		}
+		else
+		{
+			/* Advance to the next tuple */
+			RumItemSetInvalid(&item);
+			k++;
+			j++;
+		}
+	}
+
+	/* Some tuples are still alive on a TID bigger than killed tuples
+	 * OR some tuples are smaller - the tuple is considered alive.
+	 */
+	return hasAliveTuples || j < numPostings;
+}
+
+
+static void
+RumKillDataPageItems(RumScanOpaque so, XLogRecPtr cachedPageLsn, Buffer buffer,
+					 OffsetNumber attnum)
+{
+	Pointer ptr;
+	int numPostings;
+	XLogRecPtr latestLsn;
+	Page page = BufferGetPage(buffer);
+	int numKilled = so->numKilled;
+	so->numKilled = 0;
+
+	if (so->killedItems == NULL ||
+		numKilled == 0 ||
+		!RumEnableSupportDeadIndexItems ||
+		cachedPageLsn == InvalidXLogRecPtr)
+	{
+		return;
+	}
+
+	/* We have share lock on current buffer */
+	if (RumDataPageMaxOff(page) < FirstOffsetNumber)
+	{
+		return;
+	}
+
+	/* We have share lock on current buffer. Ensure contents unchanged */
+	latestLsn = BufferGetLSNAtomic(buffer);
+	Assert(!XLogRecPtrIsInvalid(cachedPageLsn));
+	Assert(cachedPageLsn <= latestLsn);
+	if (cachedPageLsn != latestLsn)
+	{
+		/* Modified while not pinned means hinting is not safe. */
+		return;
+	}
+
+	page = BufferGetPage(buffer);
+
+	numPostings = RumDataPageMaxOff(page);
+	if (numKilled < numPostings)
+	{
+		return;
+	}
+
+	ptr = RumDataPageGetData(page);
+
+	/* Sort killed items to make things easier */
+	qsort(so->killedItems, numKilled, sizeof(ItemPointerData),
+		  KillItemPointerSortComparer);
+
+	if (PostingListHasAliveTuples(so, ptr, numPostings, attnum, numKilled))
+	{
+		return;
+	}
+
+	/* Note we don't generate WAL records and let checkpoint handle this.*/
+	RumDataPageEntryMarkDead(page);
+	MarkBufferDirtyHint(buffer, true);
+}
+
+
+void
+RumKillEntryItems(RumScanOpaque so, RumOrderByScanData *scanData)
+{
+	XLogRecPtr latestLsn, cachedLsn;
+	Buffer buffer = scanData->orderStack->buffer;
+	OffsetNumber i;
+	Page page;
+	bool killedsomething = false;
+	int numKilled = so->numKilled;
+	so->numKilled = 0;
+
+	if (so->killedItems == NULL ||
+		numKilled == 0 ||
+		!RumEnableSupportDeadIndexItems)
+	{
+		return;
+	}
+
+	/* We have share lock on current buffer. Ensure contents unchanged */
+	latestLsn = BufferGetLSNAtomic(buffer);
+	cachedLsn = PageGetLSN(scanData->orderByEntryPageCopy);
+	Assert(!XLogRecPtrIsInvalid(cachedLsn));
+	Assert(cachedLsn <= latestLsn);
+	if (cachedLsn != latestLsn)
+	{
+		/* Modified while not pinned means hinting is not safe. */
+		return;
+	}
+
+	/* Sort killed items to make things easier */
+	qsort(so->killedItems, numKilled, sizeof(ItemPointerData),
+		  KillItemPointerSortComparer);
+
+	page = BufferGetPage(buffer);
+	for (i = FirstOffsetNumber; i <= PageGetMaxOffsetNumber(page); i++)
+	{
+		ItemId curItem = PageGetItemId(page, i);
+		IndexTuple itup;
+		Pointer ptr;
+		int32_t numPostings;
+		if (!ItemIdHasStorage(curItem))
+		{
+			continue;
+		}
+
+		itup = (IndexTuple) PageGetItem(page, curItem);
+		if (RumIsPostingTree(itup))
+		{
+			/* Posting tree entries do not get set as dead */
+			continue;
+		}
+
+		numPostings = RumGetNPosting(itup);
+		if (numPostings < 1 || numKilled < numPostings)
+		{
+			continue;
+		}
+
+		ptr = RumGetPosting(itup);
+		if (PostingListHasAliveTuples(
+				so, ptr, numPostings, scanData->orderByEntry->attnum, numKilled))
+		{
+			continue;
+		}
+
+		/* If we got here, j == numPostings and hasAliveTuples never got set,
+		 * mark the hint bits on the tuple. Note we don't generate WAL records
+		 * and let checkpoint handle this.
+		 */
+		if (!RumIndexEntryIsDead(curItem))
+		{
+			/* found the item/all posting list items */
+			RumIndexEntryMarkDead(curItem);
+			killedsomething = true;
+		}
+	}
+
+	if (killedsomething)
+	{
+		MarkBufferDirtyHint(buffer, true);
+	}
+}
+
+
 /*
  * Gets next ItemPointer from PostingTree. Note, that we copy
  * page into RumScanEntry->list array and unlock page, but keep it pinned
@@ -1965,7 +2247,7 @@ startScan(IndexScanDesc scan)
  */
 static void
 entryGetNextItem(RumState *rumstate, RumScanEntry entry, Snapshot snapshot,
-				 RumItem *advancePast)
+				 RumItem *advancePast, RumScanOpaque so)
 {
 	Page page;
 
@@ -1973,6 +2255,7 @@ entryGetNextItem(RumState *rumstate, RumScanEntry entry, Snapshot snapshot,
 	{
 		RumItem *comparePast;
 		bool equalOk;
+		bool shouldScanPage = true;
 
 		if (entry->offset >= 0 && entry->offset < entry->nlist)
 		{
@@ -2018,10 +2301,22 @@ entryGetNextItem(RumState *rumstate, RumScanEntry entry, Snapshot snapshot,
 			equalOk = true;
 		}
 
-		if (scanPage(rumstate, entry, comparePast, equalOk))
+		if (IsDataPageDeadForKilledTuple(so->ignoreKilledTuples, page))
+		{
+			so->killedItemsSkipped++;
+			shouldScanPage = false;
+		}
+
+		if (shouldScanPage && scanPage(rumstate, entry, comparePast, equalOk))
 		{
 			LockBuffer(entry->buffer, RUM_UNLOCK);
 			return;
+		}
+
+		/* before we advance further, handle deletes */
+		if (RumEnableSupportDeadIndexItems && so->numKilled > 0)
+		{
+			RumKillDataPageItems(so, entry->cachedLsn, entry->buffer, entry->attnum);
 		}
 
 		for (;;)
@@ -2063,6 +2358,7 @@ entryGetNextItem(RumState *rumstate, RumScanEntry entry, Snapshot snapshot,
 
 			entry->offset = -1;
 			maxoff = RumDataPageMaxOff(page);
+			entry->cachedLsn = PageGetLSN(page);
 			entry->nlist = maxoff;
 			ItemPointerSetMin(&item.iptr);
 			ptr = RumDataPageGetData(page);
@@ -2094,6 +2390,13 @@ entryGetNextItem(RumState *rumstate, RumScanEntry entry, Snapshot snapshot,
 					LockBuffer(entry->buffer, RUM_UNLOCK);
 					break;
 				}
+			}
+
+			if (IsDataPageDeadForKilledTuple(so->ignoreKilledTuples, page))
+			{
+				/* go on next page */
+				LockBuffer(entry->buffer, RUM_UNLOCK);
+				break;
 			}
 
 			for (i = FirstOffsetNumber; i <= maxoff; i = OffsetNumberNext(i))
@@ -2164,6 +2467,7 @@ ResetEntryItem(RumScanEntry entry)
 		pfree(entry->list);
 		entry->list = NULL;
 		entry->nlist = 0;
+		entry->cachedLsn = InvalidXLogRecPtr;
 	}
 	entry->matchSortstate = NULL;
 	entry->reduceResult = false;
@@ -2267,6 +2571,7 @@ entryGetNextItemList(RumState *rumstate, RumScanEntry entry, Snapshot snapshot)
 		entry->list = (RumItem *) palloc(BLCKSZ * sizeof(RumItem));
 		maxoff = RumDataPageMaxOff(pageInner);
 		entry->nlist = maxoff;
+		entry->cachedLsn = PageGetLSN(pageInner);
 
 		if (RumUseNewItemPtrDecoding)
 		{
@@ -2292,6 +2597,7 @@ entryGetNextItemList(RumState *rumstate, RumScanEntry entry, Snapshot snapshot)
 	else if (RumGetNPosting(itup) > 0)
 	{
 		entry->nlist = RumGetNPosting(itup);
+		entry->cachedLsn = InvalidXLogRecPtr;
 		entry->predictNumberResult = (uint32) entry->nlist;
 		entry->list = (RumItem *) palloc(sizeof(RumItem) * entry->nlist);
 
@@ -2340,7 +2646,7 @@ entryGetNextItemList(RumState *rumstate, RumScanEntry entry, Snapshot snapshot)
 static void
 entryGetItem(RumState *rumstate, RumScanEntry entry,
 			 bool *nextEntryList, Snapshot snapshot,
-			 RumItem *advancePast)
+			 RumItem *advancePast, RumScanOpaque so)
 {
 	Assert(!entry->isFinished);
 
@@ -2549,7 +2855,7 @@ entryGetItem(RumState *rumstate, RumScanEntry entry,
 	else
 	{
 		do {
-			entryGetNextItem(rumstate, entry, snapshot, advancePast);
+			entryGetNextItem(rumstate, entry, snapshot, advancePast, so);
 		} while (entry->isFinished == false &&
 				 entry->reduceResult == true &&
 				 dropItem(entry));
@@ -2738,7 +3044,7 @@ scanGetItemRegular(IndexScanDesc scan, RumItem *advancePast,
 				else
 				{
 					entryGetItem(rumstate, entry, NULL, scan->xs_snapshot,
-								 &myIntermediatePast);
+								 &myIntermediatePast, so);
 				}
 
 				if (!ItemPointerIsValid(&myAdvancePast.iptr))
@@ -2880,7 +3186,8 @@ scanGetItemRegular(IndexScanDesc scan, RumItem *advancePast,
 					   compareRumItem(rumstate, key->attnumOrig,
 									  &entry->curItem, item) < 0)
 				{
-					entryGetItem(rumstate, entry, NULL, scan->xs_snapshot, NULL);
+					entryGetItem(rumstate, entry, NULL, scan->xs_snapshot, NULL,
+								 so);
 				}
 			}
 		}
@@ -2981,6 +3288,7 @@ scanPage(RumState *rumstate, RumScanEntry entry, RumItem *item, bool equalOk)
 	}
 
 	entry->nlist = maxoff - first + 1;
+	entry->cachedLsn = PageGetLSN(page);
 	bound = -1;
 	for (i = first; i <= maxoff; i++)
 	{
@@ -3265,7 +3573,8 @@ entryShift(int i, RumScanOpaque so, bool find, Snapshot snapshot)
 	}
 	else if (!so->sortedEntries[minIndex]->isFinished)
 	{
-		entryGetItem(rumstate, so->sortedEntries[minIndex], NULL, snapshot, NULL);
+		entryGetItem(rumstate, so->sortedEntries[minIndex], NULL, snapshot, NULL,
+					 so);
 	}
 
 	/* Restore order of so->sortedEntries */
@@ -3460,7 +3769,8 @@ scanGetItemFull(IndexScanDesc scan, RumItem *advancePast,
 		return false;
 	}
 
-	entryGetItem(&so->rumstate, entry, &nextEntryList, scan->xs_snapshot, NULL);
+	entryGetItem(&so->rumstate, entry, &nextEntryList, scan->xs_snapshot, NULL,
+				 so);
 
 	if (entry->isFinished)
 	{
@@ -3497,7 +3807,8 @@ scanGetItemFull(IndexScanDesc scan, RumItem *advancePast,
 				compareCurRumItemScanDirection(&so->rumstate, orderEntry,
 											   &entry->curItem) < 0))
 		{
-			entryGetItem(&so->rumstate, orderEntry, NULL, scan->xs_snapshot, NULL);
+			entryGetItem(&so->rumstate, orderEntry, NULL, scan->xs_snapshot, NULL,
+						 so);
 		}
 	}
 
@@ -3576,6 +3887,12 @@ MoveBuffersForOrderedScan(RumScanOpaque so, RumBtree btree)
 		boundTupleOffset = FirstOffsetNumber;
 	}
 
+	/* About to move pages, handle kill item stuff */
+	if (RumEnableSupportDeadIndexItems && so->numKilled > 0)
+	{
+		RumKillEntryItems(so, scanData);
+	}
+
 	/* Now do the step to the direction requested */
 	scanData->orderStack->buffer = rumStep(
 		scanData->orderStack->buffer, btree->index, RUM_SHARE,
@@ -3650,6 +3967,7 @@ MoveScanForward(RumScanOpaque so, Snapshot snapshot)
 		 * stack->off points to the interested entry, buffer is already locked
 		 */
 		bool moveResult = MoveBuffersForOrderedScan(so, &btree);
+		ItemId itemId;
 		if (!moveResult)
 		{
 			return false;
@@ -3657,12 +3975,12 @@ MoveScanForward(RumScanOpaque so, Snapshot snapshot)
 
 		page = so->orderByScanData->orderByEntryPageCopy;
 
-		itup = (IndexTuple) PageGetItem(page, PageGetItemId(page,
-															so->orderByScanData->
-															orderStack->off));
+		itemId = PageGetItemId(page, so->orderByScanData->orderStack->off);
+		itup = (IndexTuple) PageGetItem(page, itemId);
 
 		/*
-		 * If tuple stores another attribute then stop scan
+		 * If tuple stores another attribute then stop scan (or walk back)
+		 * for reverse scan.
 		 */
 		if (rumtuple_get_attrnum(btree.rumstate, itup) != entry->attnum)
 		{
@@ -3675,6 +3993,14 @@ MoveScanForward(RumScanOpaque so, Snapshot snapshot)
 			ItemPointerSetInvalid(&entry->curItem.iptr);
 			entry->isFinished = true;
 			return false;
+		}
+
+		/* If the request is to ignore killed tuples, check that */
+		if (IsEntryDeadForKilledTuple(so->ignoreKilledTuples, itemId))
+		{
+			so->orderByScanData->orderStack->off += so->orderScanDirection;
+			so->killedItemsSkipped++;
+			continue;
 		}
 
 		/* Check if the current tuple matches */
@@ -3812,7 +4138,7 @@ MoveScanForward(RumScanOpaque so, Snapshot snapshot)
 			while (!entry->isFinished && entry->nlist == 0)
 			{
 				/* Rev the entry until we have an nlist that is > 0 or the item is finished */
-				entryGetItem(&so->rumstate, entry, NULL, snapshot, NULL);
+				entryGetItem(&so->rumstate, entry, NULL, snapshot, NULL, so);
 			}
 
 			if (entry->isFinished)
@@ -3849,7 +4175,7 @@ scanGetItemOrdered(IndexScanDesc scan, RumItem *advancePast,
 	if (!so->orderByScanData->orderByEntry->isFinished)
 	{
 		entryGetItem(&so->rumstate, so->orderByScanData->orderByEntry, NULL,
-					 scan->xs_snapshot, NULL);
+					 scan->xs_snapshot, NULL, so);
 	}
 
 	if (so->orderByScanData->orderByEntry->isFinished)
@@ -4245,6 +4571,23 @@ rumgettuple(IndexScanDesc scan, ScanDirection direction)
 
 	if (so->useSimpleScan)
 	{
+		if (scan->kill_prior_tuple && RumEnableSupportDeadIndexItems)
+		{
+			/* Remember it for later. (We'll deal with all such
+			 * tuples at once right before leaving the index page.)
+			 */
+			if (so->killedItems == NULL)
+			{
+				so->killedItems = (ItemPointerData *) palloc(MaxTIDsPerRumPage *
+															 sizeof(ItemPointerData));
+			}
+
+			if (so->numKilled < MaxTIDsPerRumPage)
+			{
+				so->killedItems[so->numKilled++] = so->item.iptr;
+			}
+		}
+
 		if (scanGetItem(scan, &so->item, &so->item, &recheck, &recheckOrderby))
 		{
 			SET_SCAN_TID(scan, so->item.iptr);

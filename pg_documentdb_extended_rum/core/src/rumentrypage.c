@@ -469,6 +469,7 @@ entryPlaceToPage(RumBtree btree, Page page, OffsetNumber off)
 			 RelationGetRelationName(btree->index));
 	}
 
+	Assert(ItemIdIsNormal(PageGetItemId(page, off)));
 	btree->entry = NULL;
 }
 
@@ -550,6 +551,7 @@ entrySplitPage(RumBtree btree, Buffer lbuf, Buffer rbuf,
 	page = newlPage;
 	for (i = FirstOffsetNumber; i <= maxoff; i++)
 	{
+		PG_USED_FOR_ASSERTS_ONLY OffsetNumber writtenoffset = InvalidOffsetNumber;
 		itup = (IndexTuple) ptr;
 
 		if (lsize > totalsize / 2)
@@ -566,12 +568,15 @@ entrySplitPage(RumBtree btree, Buffer lbuf, Buffer rbuf,
 			lsize += MAXALIGN(IndexTupleSize(itup)) + sizeof(ItemIdData);
 		}
 
-		if (PageAddItem(page, (Item) itup, IndexTupleSize(itup), InvalidOffsetNumber,
-						false, false) == InvalidOffsetNumber)
+		if ((writtenoffset = PageAddItem(page, (Item) itup, IndexTupleSize(itup),
+										 InvalidOffsetNumber,
+										 false, false)) == InvalidOffsetNumber)
 		{
 			elog(ERROR, "failed to add item to index page in \"%s\"",
 				 RelationGetRelationName(btree->index));
 		}
+
+		Assert(ItemIdIsNormal(PageGetItemId(page, writtenoffset)));
 		ptr += MAXALIGN(IndexTupleSize(itup));
 	}
 

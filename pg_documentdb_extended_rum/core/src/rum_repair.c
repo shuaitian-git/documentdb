@@ -35,6 +35,7 @@
 
 PG_FUNCTION_INFO_V1(documentdb_rum_prune_empty_entries_on_index);
 PG_FUNCTION_INFO_V1(documentdb_rum_repair_incomplete_split_on_index);
+PG_FUNCTION_INFO_V1(documentdb_rum_repair_revive_all_pages_and_tuples);
 
 
 static void rumRepairLostPathOnIndex(Relation index, bool trackDataPages, bool
@@ -44,6 +45,7 @@ static void MarkIncompleteSplitOnPage(RumState *rumState,
 									  BlockNumber targetRightBlockNo);
 static void CheckTreeAtLevel(RumState *rumState, BlockNumber blockNumber, int level,
 							 bool trackDataPages, bool dryrunMode);
+static void RumReviveAllPagesAndTuplesOnIndex(Relation rel, bool dryrunMode);
 
 
 /*
@@ -70,6 +72,35 @@ documentdb_rum_prune_empty_entries_on_index(PG_FUNCTION_ARGS)
 		/* This call at least validates the meta page state */
 		rumGetStats(indrel, &statsData);
 		rumVacuumPruneEmptyEntries(indrel);
+	}
+
+	index_close(indrel, RowExclusiveLock);
+	PG_RETURN_VOID();
+}
+
+
+/* Given an index, walks the leaf pages and checks if it needs to
+ * Revive any pages based on the LP_DEAD hints being set and revives
+ * all the pages and flushes to wal.
+ */
+PGDLLEXPORT Datum
+documentdb_rum_repair_revive_all_pages_and_tuples(PG_FUNCTION_ARGS)
+{
+	Relation indrel;
+	Oid indexRelId = PG_GETARG_OID(0);
+	bool dryrunMode = PG_GETARG_BOOL(1);
+
+	indrel = index_open(indexRelId, RowExclusiveLock);
+	if (indrel->rd_index->indisready)
+	{
+		RumStatsData statsData;
+
+		/* This call at least validates the meta page state */
+		rumGetStats(indrel, &statsData);
+
+		elog(INFO, "Reviving all pages in index with dryRunMode %d",
+			 dryrunMode);
+		RumReviveAllPagesAndTuplesOnIndex(indrel, dryrunMode);
 	}
 
 	index_close(indrel, RowExclusiveLock);
@@ -343,4 +374,150 @@ rumRepairLostPathOnIndex(Relation index, bool trackDataPages, bool dryrunMode)
 	int level = 0;
 	initRumState(&rumState, index);
 	CheckTreeAtLevel(&rumState, RUM_ROOT_BLKNO, level, trackDataPages, dryrunMode);
+}
+
+
+static void
+RumRevivePage(Relation index, BlockNumber blockNumber, bool dryrunMode)
+{
+	Buffer buffer;
+	Page page;
+	GenericXLogState *state;
+
+	OffsetNumber i, maxoff;
+	bool hasChanges = false;
+	Page tmppage;
+
+	/* Check for interrupts before getting any buffer locks */
+	CHECK_FOR_INTERRUPTS();
+	buffer = ReadBufferExtended(index, MAIN_FORKNUM, blockNumber,
+								RBM_NORMAL, NULL);
+	LockBuffer(buffer, RUM_SHARE);
+
+	page = BufferGetPage(buffer);
+
+	if (PageIsNew(page))
+	{
+		UnlockReleaseBuffer(buffer);
+		return;
+	}
+
+	if (!RumPageIsLeaf(page))
+	{
+		UnlockReleaseBuffer(buffer);
+		return;
+	}
+
+	if (RumPageIsData(page))
+	{
+		if (RumDataPageEntryIsDead(page))
+		{
+			elog(dryrunMode ? NOTICE : DEBUG1,
+				 "modifying block %u with updates for revive", blockNumber);
+			if (!dryrunMode)
+			{
+				LockBuffer(buffer, RUM_UNLOCK);
+				LockBuffer(buffer, RUM_EXCLUSIVE);
+				state = GenericXLogStart(index);
+				page = GenericXLogRegisterBuffer(state, buffer, 0);
+				RumDataPageEntryRevive(page);
+				GenericXLogFinish(state);
+			}
+		}
+
+		UnlockReleaseBuffer(buffer);
+		return;
+	}
+
+	/* Leaf entry page - need to walk tuples */
+	/* First pass - walk with share lock to ensure we need to do something */
+	maxoff = PageGetMaxOffsetNumber(page);
+	for (i = FirstOffsetNumber; i <= maxoff; i++)
+	{
+		ItemId itemId = PageGetItemId(page, i);
+		if (RumIndexEntryIsDead(itemId))
+		{
+			hasChanges = true;
+			break;
+		}
+	}
+
+	if (!hasChanges)
+	{
+		UnlockReleaseBuffer(buffer);
+		return;
+	}
+
+	/* Relock it with exclusive lock and walk it */
+	LockBuffer(buffer, RUM_UNLOCK);
+	LockBuffer(buffer, RUM_EXCLUSIVE);
+	page = BufferGetPage(buffer);
+	tmppage = page;
+
+	maxoff = PageGetMaxOffsetNumber(page);
+	for (i = FirstOffsetNumber; i <= maxoff; i++)
+	{
+		ItemId itemId = PageGetItemId(tmppage, i);
+		if (RumIndexEntryIsDead(itemId))
+		{
+			if (dryrunMode)
+			{
+				elog(NOTICE, "Would revive entry at offset %d on block %u", i,
+					 blockNumber);
+			}
+			else
+			{
+				if (tmppage == page)
+				{
+					tmppage = PageGetTempPageCopy(page);
+					itemId = PageGetItemId(tmppage, i);
+				}
+
+				RumIndexEntryRevive(itemId);
+			}
+		}
+	}
+
+	if (tmppage != page)
+	{
+		elog(dryrunMode ? NOTICE : DEBUG1, "modifying block %u with updates for revive",
+			 blockNumber);
+		if (!dryrunMode)
+		{
+			state = GenericXLogStart(index);
+			page = GenericXLogRegisterBuffer(state, buffer, 0);
+			PageRestoreTempPage(tmppage, page);
+			GenericXLogFinish(state);
+		}
+	}
+
+	UnlockReleaseBuffer(buffer);
+}
+
+
+static void
+RumReviveAllPagesAndTuplesOnIndex(Relation rel, bool dryrunMode)
+{
+	BlockNumber scanblkno = RUM_ROOT_BLKNO;
+	for (;;)
+	{
+		BlockNumber num_pages = 0;
+
+		/* Get the current relation length */
+		LockRelationForExtension(rel, ExclusiveLock);
+		num_pages = RelationGetNumberOfBlocks(rel);
+		UnlockRelationForExtension(rel, ExclusiveLock);
+
+		/* Quit if we've scanned the whole relation */
+		if (scanblkno >= num_pages)
+		{
+			break;
+		}
+
+		/* Iterate over pages, then loop back to recheck length */
+		for (; scanblkno < num_pages; scanblkno++)
+		{
+			RumRevivePage(rel, scanblkno, dryrunMode);
+		}
+	}
 }

@@ -4,20 +4,23 @@ RETURNS void
 LANGUAGE c
 AS '$libdir/pg_documentdb_extended_rum_core', 'documentdb_rum_prune_empty_entries_on_index';
 
-ALTER SYSTEM set autovacuum to off;
-SELECT pg_reload_conf();
-
 SELECT name, setting, reset_val, boot_val FROM pg_settings WHERE name in ('documentdb_rum.track_incomplete_split', 'documentdb_rum.fix_incomplete_split');
 
 SELECT documentdb_api.drop_collection('pvacuum_db', 'pclean');
+SELECT documentdb_api.create_collection('pvacuum_db', 'pclean');
+
+SELECT collection_id AS vacuum_col FROM documentdb_api_catalog.collections WHERE database_name = 'pvacuum_db' AND collection_name = 'pclean' \gset
+
+-- disable autovacuum to have predicatability
+SELECT FORMAT('ALTER TABLE documentdb_data.documents_%s set (autovacuum_enabled = off)', :vacuum_col) \gexec
+
+
 SELECT COUNT(documentdb_api.insert_one('pvacuum_db', 'pclean',  FORMAT('{ "_id": %s, "a": %s }', i, i)::bson)) FROM generate_series(1, 1000) AS i;
 
 SELECT documentdb_api_internal.create_indexes_non_concurrently(
     'pvacuum_db',
     '{ "createIndexes": "pclean", "indexes": [ { "key": { "a": 1 }, "name": "a_1", "enableCompositeTerm": true } ] }', TRUE);
 
-
-SELECT collection_id AS vacuum_col FROM documentdb_api_catalog.collections WHERE database_name = 'pvacuum_db' AND collection_name = 'pclean' \gset
 SELECT index_id AS vacuum_index_id FROM documentdb_api_catalog.collection_indexes WHERE collection_id = :vacuum_col AND index_id != :vacuum_col \gset
 
 -- use the index - 
@@ -126,6 +129,3 @@ SELECT documentdb_api_internal.rum_prune_empty_entries_on_index(('documentdb_dat
 set documentdb.forceDisableSeqScan to on;
 SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
 reset documentdb.forceDisableSeqScan;
-
-ALTER SYSTEM set autovacuum to on;
-SELECT pg_reload_conf();

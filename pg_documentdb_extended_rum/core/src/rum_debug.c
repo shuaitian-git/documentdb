@@ -124,6 +124,12 @@ RumPageFlagsToString(Page page)
 		separator = "|";
 	}
 
+	if (RumDataPageEntryIsDead(page))
+	{
+		appendStringInfo(flagsStr, "%sDATA_PAGE_ENTRY_DEAD", separator);
+		separator = "|";
+	}
+
 	return flagsStr->data;
 }
 
@@ -336,9 +342,9 @@ static Jsonb *
 RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid)
 {
 	OffsetNumber offset = (OffsetNumber) (counter + 1);
-	int nargs = 7;
-	char *args[7] = { 0 };
-	JsonbValue values[7] = { 0 };
+	int nargs = 8;
+	char *args[8] = { 0 };
+	JsonbValue values[8] = { 0 };
 	IndexTuple tuple;
 
 	Datum firstEntryDatum, firstEntryCStringDatum;
@@ -350,6 +356,7 @@ RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid)
 	char itemPointerToString[128] = { 0 };
 	Assert(counter < PageGetMaxOffsetNumber(page));
 
+	ItemId itemId = PageGetItemId(page, offset);
 	tuple = (IndexTuple) PageGetItem(page, PageGetItemId(page, offset));
 
 	args[0] = "offset";
@@ -431,6 +438,10 @@ RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid)
 	values[6].type = jbvString;
 	values[6].val.string.len = strlen(firstEntryCString);
 	values[6].val.string.val = firstEntryCString;
+
+	args[7] = "entryFlags";
+	values[7].type = jbvNumeric;
+	values[7].val.numeric = int64_to_numeric(itemId->lp_flags);
 
 	return GetResultJsonB(nargs, args, values);
 }

@@ -77,7 +77,13 @@ typedef RumPageOpaqueData *RumPageOpaque;
 #define RUM_DELETED (1 << 2)
 #define RUM_META (1 << 3)
 
+/* The page has only dead tuples (the equivalent)
+ * of LP_DEAD for posting tree pages.
+ */
+
 /* DEPRECATED (REUSABLE): #define RUM_LIST (1 << 4) */
+#define RUM_PAGE_IS_DEAD_ROWS (1 << 4)
+
 /* DEPRECATED (REUSABLE): #define RUM_LIST_FULLROW (1 << 5) */
 #define RUM_HALF_DEAD (1 << 6)
 #define RUM_INCOMPLETE_SPLIT (1 << 7)   /* page was split, but parent not updated */
@@ -179,6 +185,30 @@ typedef struct RumMetaPageData
 
 #define RumPageRightMost(page) (RumPageGetOpaque(page)->rightlink == InvalidBlockNumber)
 #define RumPageLeftMost(page) (RumPageGetOpaque(page)->leftlink == InvalidBlockNumber)
+
+/* Dealing with LP_DEAD on entry tree */
+#define RumIndexEntryIsDead(itemId) (ItemIdIsDead(itemId))
+#define RumIndexEntryMarkDead(itemId) (ItemIdMarkDead(itemId))
+#define RumIndexEntryRevive(itemId) \
+	( \
+		(itemId)->lp_flags = LP_NORMAL \
+	)
+
+
+/* Dealing with LP_DEAD on Posting tree page */
+#define RumDataPageEntryIsDead(page) ((RumPageGetOpaque(page)->flags & \
+									   RUM_PAGE_IS_DEAD_ROWS) != 0)
+#define RumDataPageEntryMarkDead(page) (RumPageGetOpaque(page)->flags |= \
+											RUM_PAGE_IS_DEAD_ROWS)
+#define RumDataPageEntryRevive(page) (RumPageGetOpaque(page)->flags &= \
+										  ~RUM_PAGE_IS_DEAD_ROWS)
+
+/* Upper bound for number of TIDs per page. beyond this if the Postinglist
+ * compresses, we won't store them.
+ * various code already assumes BLCKSZ * RumItem for the in memory cached
+ * set of TIDs per page so reuse that here.
+ */
+#define MaxTIDsPerRumPage BLCKSZ
 
 /*
  * We use our own ItemPointerGet(BlockNumber|GetOffsetNumber)
@@ -799,6 +829,7 @@ typedef struct RumScanEntryData
 	RumItem *list;
 	int16 nlist;
 	int16 offset;
+	XLogRecPtr cachedLsn;
 
 	ScanDirection scanDirection;
 	bool isFinished;
@@ -907,6 +938,12 @@ typedef struct RumScanOpaqueData
 	/* documentdb: whether or not to use a simple scanGetNextItem in rumgettuple */
 	bool useSimpleScan;
 
+	/* LP_DEAD stuff */
+	ItemPointerData *killedItems;
+	int numKilled;
+	bool ignoreKilledTuples;
+	uint32_t killedItemsSkipped;
+
 	/* stateContext to hold state from rumstate (documentdb: This is new ) */
 	MemoryContext rumStateCtx;
 
@@ -928,6 +965,7 @@ extern void freeScanKeys(RumScanOpaque so);
 /* rumget.c */
 extern int64 rumgetbitmap(IndexScanDesc scan, TIDBitmap *tbm);
 extern bool rumgettuple(IndexScanDesc scan, ScanDirection direction);
+extern void RumKillEntryItems(RumScanOpaque so, RumOrderByScanData *scanData);
 
 /* rumvacuum.c */
 extern IndexBulkDeleteResult * rumbulkdelete(IndexVacuumInfo *info,
@@ -1044,6 +1082,8 @@ extern RumItem * rumGetBAEntry(BuildAccumulator *accum,
 #define RUM_DEFAULT_ENABLE_NEW_BULK_DELETE false
 #define RUM_DEFAULT_ENABLE_NEW_BULK_DELETE_INLINE_DATA_PAGES true
 #define RUM_DEFAULT_SKIP_PRUNE_POSTING_TREE_PAGES false
+#define RUM_DEFAULT_ENABLE_SUPPORT_DEAD_INDEX_ITEMS false
+#define RUM_DEFAULT_SKIP_RESET_ON_DEAD_ENTRY_PAGE false
 
 /* GUC parameters */
 extern PGDLLIMPORT int RumFuzzySearchLimit;
@@ -1067,6 +1107,8 @@ extern PGDLLIMPORT bool RumEnableCustomCostEstimate;
 extern PGDLLIMPORT bool RumEnableNewBulkDelete;
 extern PGDLLIMPORT bool RumNewBulkDeleteInlineDataPages;
 extern PGDLLIMPORT bool RumVacuumSkipPrunePostingTreePages;
+extern PGDLLIMPORT bool RumEnableSupportDeadIndexItems;
+extern PGDLLIMPORT bool RumSkipResetOnDeadEntryPage;
 
 /*
  * Functions for reading ItemPointers with additional information. Used in

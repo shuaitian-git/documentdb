@@ -638,7 +638,9 @@ rumEntryInsert(RumState *rumstate,
 
 		if (RumIsPostingTree(itup))
 		{
-			/* add entries to existing posting tree */
+			/* add entries to existing posting tree
+			 * Note: Posting tree entries are never marked dead.
+			 */
 			BlockNumber rootPostingTree = RumGetPostingTree(itup);
 			RumPostingTreeScan *gdi;
 
