@@ -26,18 +26,13 @@ permissions:
   id-token: write
 
 jobs:
-  build-packages:
-    name: Build ${{ matrix.pkg_type }} for ${{ matrix.os }}-${{ matrix.arch }}-PG${{ matrix.pg_version }}
+  build-deb-packages:
+    name: Build DEB for ${{ matrix.os }}-${{ matrix.arch }}-PG${{ matrix.pg_version }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        pkg_type: [deb, rpm]
-        os:
-          - ${{ matrix.pkg_type == 'deb' && 'deb11' || 'rhel8' }}
-          - ${{ matrix.pkg_type == 'deb' && 'deb12' || 'rhel9' }}
-          - ${{ matrix.pkg_type == 'deb' && 'ubuntu22.04' || '' }}
-          - ${{ matrix.pkg_type == 'deb' && 'ubuntu24.04' || '' }}
+        os: [deb11, deb12, ubuntu22.04, ubuntu24.04]
         arch: [amd64, arm64]
         pg_version: [15, 16, 17, 18]
         include:
@@ -45,9 +40,6 @@ jobs:
             runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
-        exclude:
-          - pkg_type: rpm
-            os: ''
     
     steps:
       - name: Checkout repository
@@ -80,16 +72,69 @@ jobs:
       - name: Upload Package as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.pkg_type }}-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ env.DOCUMENTDB_VERSION }}
+          name: deb-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ env.DOCUMENTDB_VERSION }}
           path: |
-            packaging/*.${{ matrix.pkg_type }}
+            packaging/*.deb
+          retention-days: 90
+          if-no-files-found: error
+          compression-level: 0
+
+  build-rpm-packages:
+    name: Build RPM for ${{ matrix.os }}-${{ matrix.arch }}-PG${{ matrix.pg_version }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [rhel8, rhel9]
+        arch: [amd64, arm64]
+        pg_version: [15, 16, 17, 18]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: |
+          git fetch --tags --force
+          git status
+
+      - name: Extract Version
+        id: extract_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            DOCUMENTDB_VERSION="${{ inputs.version }}"
+          else
+            DOCUMENTDB_VERSION=$(grep -E "^default_version" pg_documentdb_core/documentdb_core.control | sed -E "s/.*'([0-9]+\.[0-9]+-[0-9]+)'.*/\1/")
+            DOCUMENTDB_VERSION=$(echo $DOCUMENTDB_VERSION | sed "s/-/./g")
+          fi
+          echo "Extracted Version: $DOCUMENTDB_VERSION"
+          echo "DOCUMENTDB_VERSION=$DOCUMENTDB_VERSION" >> $GITHUB_ENV
+          echo "version=$DOCUMENTDB_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build Package
+        run: |
+          ./packaging/build_packages.sh --os ${{ matrix.os }} --pg ${{ matrix.pg_version }} --version ${{ env.DOCUMENTDB_VERSION }}
+
+      - name: Upload Package as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ env.DOCUMENTDB_VERSION }}
+          path: |
+            packaging/*.rpm
           retention-days: 90
           if-no-files-found: error
           compression-level: 0
 
   create-release:
     name: Create GitHub Release
-    needs: build-packages
+    needs: [build-deb-packages, build-rpm-packages]
     runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.create_release)
     
@@ -174,7 +219,7 @@ jobs:
 
   publish-to-pages:
     name: Publish Packages to GitHub Pages
-    needs: build-packages
+    needs: [build-deb-packages, build-rpm-packages]
     runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     
