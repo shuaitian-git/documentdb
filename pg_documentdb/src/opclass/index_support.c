@@ -536,13 +536,16 @@ OpExprForAggregationStageSupportFunction(Node *supportRequest)
 	}
 
 	Oid operatorOid = -1;
+	BsonIndexStrategy strategy = BSON_INDEX_STRATEGY_INVALID;
 	if (req->funcid == BsonDollarLookupJoinFilterFunctionOid())
 	{
 		operatorOid = BsonInMatchFunctionId();
+		strategy = BSON_INDEX_STRATEGY_DOLLAR_IN;
 	}
 	else if (req->funcid == BsonDollarMergeJoinFunctionOid())
 	{
 		operatorOid = BsonEqualMatchIndexFunctionId();
+		strategy = BSON_INDEX_STRATEGY_DOLLAR_EQUAL;
 	}
 	else
 	{
@@ -578,7 +581,7 @@ OpExprForAggregationStageSupportFunction(Node *supportRequest)
 		return NULL;
 	}
 
-	if (!ValidateIndexForQualifierPathForDollarIn(options, &pathView))
+	if (!ValidateIndexForQualifierPathForEquality(options, &pathView, strategy))
 	{
 		return NULL;
 	}
@@ -2059,14 +2062,25 @@ PopulateQueryPathAndValueFromOpExpr(OpExpr *opExpr, const char **queryPathString
 			Expr *secondArg = lsecond(funcExpr->args);
 			if (IsA(secondArg, Const) && !castNode(Const, secondArg)->constisnull)
 			{
-				Const *thirdConst = (Const *) secondArg;
+				Const *secondConst = (Const *) secondArg;
 
 				pgbsonelement queryElement;
 				PgbsonToSinglePgbsonElementWithCollation(DatumGetPgBson(
-															 thirdConst->
+															 secondConst->
 															 constvalue),
 														 &queryElement);
 				*queryPathString = queryElement.path;
+				return true;
+			}
+		}
+		else if (funcExpr->funcid == BsonDollarMergeExtractFilterFunctionOid() &&
+				 list_length(funcExpr->args) >= 2)
+		{
+			Expr *secondArg = lsecond(funcExpr->args);
+			if (IsA(secondArg, Const) && !castNode(Const, secondArg)->constisnull)
+			{
+				Const *secondConst = (Const *) secondArg;
+				*queryPathString = TextDatumGetCString(secondConst->constvalue);
 				return true;
 			}
 		}

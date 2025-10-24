@@ -2055,6 +2055,12 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 		}
 	}
 
+	if (indexDef->enableCompositeTerm == BoolIndexOption_Undefined &&
+		indexDef->key->isIdIndex)
+	{
+		indexDef->enableCompositeTerm = BoolIndexOption_False;
+	}
+
 	if (indexDef->enableCompositeTerm == BoolIndexOption_True ||
 		(indexDef->enableCompositeTerm == BoolIndexOption_Undefined &&
 		 DefaultUseCompositeOpClass))
@@ -2538,6 +2544,7 @@ ParseIndexDefKeyDocument(const bson_iter_t *indexDefDocIter)
 	MongoIndexKind allindexKinds = MongoIndexKind_Unknown;
 	MongoIndexKind lastIndexKind = MongoIndexKind_Unknown;
 	MongoIndexKind wildcardIndexKind = 0;
+	bool hasIdPath = false;
 
 	bson_iter_t indexDefKeyIter;
 	bson_iter_recurse(indexDefDocIter, &indexDefKeyIter);
@@ -2672,6 +2679,8 @@ ParseIndexDefKeyDocument(const bson_iter_t *indexDefDocIter)
 							errmsg(
 								"Index keys are not allowed to be completely empty fields.")));
 		}
+
+		hasIdPath = hasIdPath || (keyPath && (strcmp(keyPath, "_id") == 0));
 
 		/*
 		 * TODO: Also need to parse value of indexDefKeyIter for the index
@@ -2917,6 +2926,9 @@ ParseIndexDefKeyDocument(const bson_iter_t *indexDefDocIter)
 
 		indexDefKey->isWildcard = isWildcardKeyPath;
 		indexDefKey->wildcardIndexKind = wildcardIndexKind;
+
+		/* An _id index is one that has exactly one key and has the path _id */
+		indexDefKey->isIdIndex = list_length(indexDefKey->keyPathList) == 1 && hasIdPath;
 	}
 
 	/* Check the number of types of indexes excluding the "Regular" index kind */

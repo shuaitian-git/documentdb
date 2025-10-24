@@ -1029,7 +1029,8 @@ ValidateIndexForQualifierElement(bytea *indexOptions, pgbsonelement *filterEleme
  * checks if a path can be pushed to an index given the options for a $in type query.
  */
 bool
-ValidateIndexForQualifierPathForDollarIn(bytea *indexOptions, const StringView *queryPath)
+ValidateIndexForQualifierPathForEquality(bytea *indexOptions, const StringView *queryPath,
+										 BsonIndexStrategy strat)
 {
 	if (indexOptions == NULL)
 	{
@@ -1107,8 +1108,7 @@ ValidateIndexForQualifierPathForDollarIn(bytea *indexOptions, const StringView *
 			int32_t compositeColumnIgnore;
 			bson_value_t unspecifiedValue = { 0 };
 			traverse = GetCompositePathIndexTraverseOption(
-				BSON_INDEX_STRATEGY_DOLLAR_IN, options,
-				queryPath->string,
+				strat, options, queryPath->string,
 				queryPath->length,
 				&unspecifiedValue,
 				&compositeColumnIgnore);

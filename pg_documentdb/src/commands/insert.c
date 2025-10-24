@@ -154,7 +154,6 @@ bool EnableCreateCollectionOnInsert = true;
 extern bool UseLocalExecutionShardQueries;
 extern bool EnableBypassDocumentValidation;
 extern bool EnableSchemaValidation;
-extern bool EnableInsertCustomPlan;
 
 /*
  * command_insert handles the insert command invocation through a PostgreSQL function.
@@ -600,7 +599,7 @@ DoMultiInsertWithoutTransactionId(MongoCollection *collection, List *inserts, Oi
 		paramListInfo->numParams = paramIndex;
 
 		uint64_t rowsProcessed = 0;
-		if (!EnableInsertCustomPlan || shardOid == InvalidOid)
+		if (shardOid == InvalidOid)
 		{
 			Query *query = CreateInsertQuery(collection, shardOid,
 											 valuesList);
@@ -917,7 +916,7 @@ ProcessInsertion(MongoCollection *collection,
 													 collection->
 													 mongoDataCreationTimeVarAttrNumber);
 
-		if (!EnableInsertCustomPlan || optionalInsertShardOid == InvalidOid)
+		if (optionalInsertShardOid == InvalidOid)
 		{
 			Query *query = CreateInsertQuery(collection, optionalInsertShardOid,
 											 list_make1(

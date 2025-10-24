@@ -129,10 +129,6 @@ bool UseNewElemMatchIndexPushdown = DEFAULT_USE_NEW_ELEMMATCH_INDEX_PUSHDOWN;
 bool UseNewElemMatchIndexOperatorOnPushdown =
 	DEFAULT_USE_NEW_ELEMMATCH_INDEX_OPERATOR_ON_PUSHDOWN;
 
-/* Can be removed in v110 (keep for a few releases for stability) */
-#define DEFAULT_ENABLE_INSERT_CUSTOM_PLAN true
-bool EnableInsertCustomPlan = DEFAULT_ENABLE_INSERT_CUSTOM_PLAN;
-
 #define DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING true
 bool EnableIndexPriorityOrdering = DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING;
 
@@ -483,14 +479,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether to enable the $bucketAuto stage."),
 		NULL, &EnableBucketAutoStage,
 		DEFAULT_ENABLE_BUCKET_AUTO_STAGE,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enableInsertCustomPlan", newGucPrefix),
-		gettext_noop(
-			"Whether to use custom insert plan for insert commands."),
-		NULL, &EnableInsertCustomPlan,
-		DEFAULT_ENABLE_INSERT_CUSTOM_PLAN,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
