@@ -48,7 +48,7 @@ jobs:
           cp -r packaging /tmp/packaging-backup
           # Fetch and checkout the tag
           git fetch --tags --force
-          git checkout v0.106-0
+          git checkout v0.105-0
           # Restore the packaging folder from current branch
           rm -rf packaging
           cp -r /tmp/packaging-backup packaging
