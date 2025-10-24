@@ -25,18 +25,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJson(github.event_name == 'pull_request' && '["rhel9"]' || '["rhel8","rhel9"]') }}
+        os: ["rhel8","rhel9"]
         arch: [amd64, arm64]
         include:
           - arch: amd64
             runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
-        pg_version: ${{ fromJson(github.event_name == 'pull_request' && '["17"]' || '["16","17"]') }}
+        pg_version: ["15","16","17"]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Fetch annotated tags
+        run: |
+          git fetch v0.104-0 --force
+          git status
 
       - name: Extract and Format Default Version
         id: extract_version
