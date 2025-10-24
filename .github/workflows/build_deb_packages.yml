@@ -42,10 +42,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Fetch annotated tags
+      - name: Preserve packaging folder and checkout tag
         run: |
+          # Save the packaging folder from current branch
+          cp -r packaging /tmp/packaging-backup
+          # Fetch and checkout the tag
           git fetch --tags --force
           git checkout v0.107-0
+          # Restore the packaging folder from current branch
+          rm -rf packaging
+          cp -r /tmp/packaging-backup packaging
           git status
 
       - name: Extract and Format Default Version

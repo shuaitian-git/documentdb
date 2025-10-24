@@ -181,6 +181,13 @@ while IFS= read -r line; do
                 current_ver="unknown"
             fi
         fi
+        
+        # Normalize version: if it starts with '1.' (e.g. 1.107-0), strip the '1.' to get '0.107-0'
+        # This fixes typos like 'v1.107-0' in CHANGELOG.md which should be 'v0.107-0'
+        if [[ "$current_ver" =~ ^1\.([0-9]+-[0-9]+)$ ]]; then
+            current_ver="0.${BASH_REMATCH[1]}"
+            echo "WARNING: Normalized version from 1.$current_ver to 0.${BASH_REMATCH[1]}" >&2
+        fi
 
         # Extract parenthesized date, if present (use sed for portability)
         current_date_raw=$(printf '%s' "$line" | sed -n 's/.*(\([^)]*\)).*/\1/p' || true)
