@@ -231,6 +231,9 @@ bool UsePgStatsLiveTuplesForCount = DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT;
 #define DEFAULT_ENABLE_PREPARE_UNIQUE false
 bool EnablePrepareUnique = DEFAULT_ENABLE_PREPARE_UNIQUE;
 
+#define DEFAULT_ENABLE_COLLMOD_UNIQUE false
+bool EnableCollModUnique = DEFAULT_ENABLE_COLLMOD_UNIQUE;
+
 /* FEATURE FLAGS END */
 
 void
@@ -638,5 +641,12 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable prepareUnique for coll mod."),
 		NULL, &EnablePrepareUnique, DEFAULT_ENABLE_PREPARE_UNIQUE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableCollModUnique", newGucPrefix),
+		gettext_noop(
+			"Whether to enable unique for coll mod."),
+		NULL, &EnableCollModUnique, DEFAULT_ENABLE_COLLMOD_UNIQUE,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }
