@@ -229,6 +229,8 @@ static char FeatureMapping[MAX_FEATURE_COUNT][MAX_FEATURE_NAME_LENGTH] = {
 	[FEATURE_COMMAND_INSERT_BULK] = "command_insert_bulk",
 	[FEATURE_COMMAND_LIST_COLLECTIONS_CURSOR_FIRST_PAGE] =
 		"command_list_collections_cursor_first_page",
+	[FEATURE_COMMAND_LIST_DATABASES] =
+		"command_list_databases",
 	[FEATURE_COMMAND_LIST_INDEXES_CURSOR_FIRST_PAGE] =
 		"command_list_indexes_cursor_first_page",
 	[FEATURE_COMMAND_SHARD_COLLECTION] = "command_shard_collection",
@@ -248,6 +250,7 @@ static char FeatureMapping[MAX_FEATURE_COUNT][MAX_FEATURE_NAME_LENGTH] = {
 	[FEATURE_COMMAND_COLLMOD_VALIDATION] = "collMod_validation",
 	[FEATURE_COMMAND_COLLMOD_TTL_UPDATE] = "collMod_ttl_update",
 	[FEATURE_COMMAND_COLLMOD_INDEX_HIDDEN] = "collMod_index_hidden",
+	[FEATURE_COMMAND_COLLMOD_INDEX_PREPARE_UNIQUE] = "collMod_index_prepare_unique",
 
 	/* Feature Connection Status */
 	[FEATURE_CONNECTION_STATUS] = "connection_status",
@@ -261,6 +264,7 @@ static char FeatureMapping[MAX_FEATURE_COUNT][MAX_FEATURE_NAME_LENGTH] = {
 	[FEATURE_CREATE_INDEX_TEXT] = "create_index_text",
 	[FEATURE_CREATE_INDEX_TTL] = "create_index_ttl",
 	[FEATURE_CREATE_INDEX_UNIQUE] = "create_index_unique",
+	[FEATURE_CREATE_INDEX_BUILD_AS_UNIQUE] = "create_index_build_as_unique",
 	[FEATURE_CREATE_INDEX_VECTOR] = "create_index_vector",
 	[FEATURE_CREATE_INDEX_VECTOR_COS] = "create_index_vector_cos",
 	[FEATURE_CREATE_INDEX_VECTOR_COMPRESSION_HALF] =

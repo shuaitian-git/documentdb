@@ -93,6 +93,13 @@ bool EnableIndexOrderByReverse = DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE;
 #define DEFAULT_ENABLE_INDEX_ONLY_SCAN true
 bool EnableIndexOnlyScan = DEFAULT_ENABLE_INDEX_ONLY_SCAN;
 
+/* Note: this is a long term feature flag since we need to validate compatiblity
+ * in mixed mode for older indexes - once this is
+ * enabled by default - please move this to testing_configs.
+ */
+#define DEFAULT_ENABLE_VALUE_ONLY_INDEX_TERMS true
+bool EnableValueOnlyIndexTerms = DEFAULT_ENABLE_VALUE_ONLY_INDEX_TERMS;
+
 /*
  * SECTION: Planner feature flags
  */
@@ -159,6 +166,10 @@ bool EnableIndexHintSupport = DEFAULT_ENABLE_INDEX_HINT_SUPPORT;
 #define DEFAULT_ENABLE_DELAYED_HOLD_PORTAL true
 bool EnableDelayedHoldPortal = DEFAULT_ENABLE_DELAYED_HOLD_PORTAL;
 
+/* Remove after v109 */
+#define DEFAULT_FORCE_COLL_STATS_DATA_COLLECTION false
+bool ForceCollStatsDataCollection = DEFAULT_FORCE_COLL_STATS_DATA_COLLECTION;
+
 
 /*
  * SECTION: Let support feature flags
@@ -213,6 +224,9 @@ bool EnableSchemaEnforcementForCSFLE = DEFAULT_ENABLE_SCHEMA_ENFORCEMENT_FOR_CSF
 
 #define DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT true
 bool UsePgStatsLiveTuplesForCount = DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT;
+
+#define DEFAULT_ENABLE_PREPARE_UNIQUE false
+bool EnablePrepareUnique = DEFAULT_ENABLE_PREPARE_UNIQUE;
 
 /* FEATURE FLAGS END */
 
@@ -560,6 +574,13 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		psprintf("%s.forceCollStatsDataCollection", newGucPrefix),
+		gettext_noop(
+			"Whether to force fetching metadata during collstats operations."),
+		NULL, &ForceCollStatsDataCollection, DEFAULT_FORCE_COLL_STATS_DATA_COLLECTION,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		psprintf("%s.enableExprLookupIndexPushdown", newGucPrefix),
 		gettext_noop(
 			"Whether to expr and lookup pushdown to the index."),
@@ -592,5 +613,19 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable the update_bson_document command."),
 		NULL, &EnableUpdateBsonDocument, DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableValueOnlyIndexTerms", newGucPrefix),
+		gettext_noop(
+			"Whether to enable index terms that are value only."),
+		NULL, &EnableValueOnlyIndexTerms, DEFAULT_ENABLE_VALUE_ONLY_INDEX_TERMS,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enablePrepareUnique", newGucPrefix),
+		gettext_noop(
+			"Whether to enable prepareUnique for coll mod."),
+		NULL, &EnablePrepareUnique, DEFAULT_ENABLE_PREPARE_UNIQUE,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }

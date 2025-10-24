@@ -618,6 +618,12 @@ typedef struct DocumentDBApiOidCacheData
 	/* OID of the float8 >= float8 operator */
 	Oid Float8GreaterThanEqualOperatorId;
 
+	/* OID of the bson_unique_index_equal operator =?= */
+	Oid BsonUniqueIndexEqualOperatorId;
+
+	/* OID of the bson_unique_shard_path_equal operator =#= */
+	Oid BsonUniqueShardPathEqualOperatorId;
+
 	/* OID of the array_append postgres function */
 	Oid PostgresArrayAppendFunctionOid;
 
@@ -1980,6 +1986,33 @@ BsonRangeMatchOperatorOid(void)
 {
 	return GetBinaryOperatorId(&Cache.BsonRangeMatchOperatorOid,
 							   BsonTypeId(), "@<>", BsonTypeId());
+}
+
+
+/* Returns the OID of bson_dollar_unique_index_equal operator =?= */
+Oid
+BsonUniqueIndexEqualOperatorId(void)
+{
+	/* Initially we defined this one in the catalog schema, then we moved it to the internal schema. */
+	Oid result = GetBinaryOperatorId(&Cache.BsonUniqueIndexEqualOperatorId, BsonTypeId(),
+									 "=?=", BsonTypeId());
+
+	if (result == InvalidOid)
+	{
+		result = GetInternalBinaryOperatorId(&Cache.BsonUniqueIndexEqualOperatorId,
+											 BsonTypeId(), "=?=", BsonTypeId());
+	}
+
+	return result;
+}
+
+
+/* Returns the OID of ApiInternalSchema.bson_dollar_unique_shard_path_equal operator =#= */
+Oid
+BsonUniqueShardPathEqualOperatorId(void)
+{
+	return GetInternalBinaryOperatorId(&Cache.BsonUniqueShardPathEqualOperatorId,
+									   BsonTypeId(), "=#=", BsonTypeId());
 }
 
 

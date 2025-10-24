@@ -19,10 +19,9 @@
 
 #include "pg_documentdb_rum.h"
 
-PGDLLEXPORT bool RumTrackIncompleteSplit = RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT;
-PGDLLEXPORT bool RumFixIncompleteSplit = RUM_DEFAULT_FIX_INCOMPLETE_SPLIT;
-PGDLLEXPORT bool RumInjectPageSplitIncomplete =
-	RUM_DEFAULT_ENABLE_INJECT_PAGE_SPLIT_INCOMPLETE;
+extern bool RumTrackIncompleteSplit;
+extern bool RumFixIncompleteSplit;
+extern bool RumInjectPageSplitIncomplete;
 
 static void rumFinishOldSplit(RumBtree btree, RumBtreeStack *stack, BlockNumber rootBlkno,
 							  RumStatsData *buildStats, int access);
@@ -82,6 +81,7 @@ rumPrepareFindLeafPage(RumBtree btree, BlockNumber blkno)
 
 /*
  * Locates leaf page contained tuple
+ * Note: This only works for data pages.
  */
 RumBtreeStack *
 rumReFindLeafPage(RumBtree btree, RumBtreeStack *stack)
@@ -106,7 +106,7 @@ rumReFindLeafPage(RumBtree btree, RumBtreeStack *stack)
 		pfree(ptr);
 
 		page = BufferGetPage(stack->buffer);
-		maxoff = RumPageGetOpaque(page)->maxoff;
+		maxoff = RumDataPageMaxOff(page);
 
 		/*
 		 * We don't know right bound of rightmost pointer. So, we can be sure

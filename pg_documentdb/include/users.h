@@ -57,7 +57,7 @@ typedef struct
 typedef struct
 {
 	StringView user;
-
+	bool showAllUsers;
 	bool showPrivileges;
 } GetUserSpec;
 

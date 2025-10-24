@@ -38,6 +38,7 @@
 #include "collation/collation.h"
 
 extern bool EnableExprLookupIndexPushdown;
+extern bool EnableValueOnlyIndexTerms;
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -1147,6 +1148,8 @@ GetIndexTermMetadata(void *indexOptions)
 		StringView pathPrefix = { 0 };
 		bool isWildcard = false;
 		bool isWildcardProjection = false;
+		bool allowValueOnly = false;
+		int32_t truncationLimit = options->indexTermTruncateLimit;
 		if (options->type == IndexOptionsType_SinglePath)
 		{
 			/* For single path indexes, we can elide the index path prefix */
@@ -1168,6 +1171,14 @@ GetIndexTermMetadata(void *indexOptions)
 		{
 			pathPrefix.string = "$";
 			pathPrefix.length = 1;
+			allowValueOnly = EnableValueOnlyIndexTerms;
+			if (allowValueOnly)
+			{
+				/* Since we lose one character on valueOnly scenarios for the path,
+				 * reduce the truncation limit to ensure the overall value stays the same.
+				 */
+				truncationLimit--;
+			}
 		}
 		else if (options->type == IndexOptionsType_Wildcard)
 		{
@@ -1187,12 +1198,13 @@ GetIndexTermMetadata(void *indexOptions)
 			wildcardIndexTruncatedPathLimit;
 
 		return (IndexTermCreateMetadata) {
-				   .indexTermSizeLimit = options->indexTermTruncateLimit,
+				   .indexTermSizeLimit = truncationLimit,
 				   .wildcardIndexTruncatedPathLimit = wildcardIndexTruncatedPathLimit,
 				   .pathPrefix = pathPrefix,
 				   .isWildcard = isWildcard,
 				   .isWildcardProjection = isWildcardProjection,
-				   .indexVersion = options->version
+				   .indexVersion = options->version,
+				   .allowValueOnly = allowValueOnly
 		};
 	}
 

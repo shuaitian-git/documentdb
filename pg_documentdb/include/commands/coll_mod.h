@@ -10,7 +10,15 @@
 #ifndef DOCUMENTDB_COLL_MOD_H
 #define DOCUMENTDB_COLL_MOD_H
 
-void UpdatePostgresIndexCore(uint64_t collectionId, int indexId, bool hidden, bool
+typedef enum IndexMetadataUpdateOperation
+{
+	INDEX_METADATA_UPDATE_OPERATION_UNKNOWN = 0,
+	INDEX_METADATA_UPDATE_OPERATION_HIDDEN = 1,
+	INDEX_METADATA_UPDATE_OPERATION_PREPARE_UNIQUE = 2,
+} IndexMetadataUpdateOperation;
+
+void UpdatePostgresIndexCore(uint64_t collectionId, int indexId,
+							 IndexMetadataUpdateOperation operation, bool value, bool
 							 ignoreMissingShards);
 
 #endif

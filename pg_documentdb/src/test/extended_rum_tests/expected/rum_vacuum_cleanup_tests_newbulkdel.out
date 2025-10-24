@@ -1,0 +1,376 @@
+SET search_path TO documentdb_api_catalog, documentdb_core, public;
+SET documentdb.next_collection_id TO 500;
+SET documentdb.next_collection_index_id TO 500;
+set documentdb_rum.enable_new_bulk_delete to on;
+set documentdb_rum.enable_new_bulk_delete_inline_data_pages to on;
+\i sql/rum_vacuum_cleanup_tests_core.sql
+CREATE OR REPLACE FUNCTION documentdb_api_internal.rum_prune_empty_entries_on_index(index_relid regclass)
+RETURNS void
+LANGUAGE c
+AS '$libdir/pg_documentdb_extended_rum_core', 'documentdb_rum_prune_empty_entries_on_index';
+SELECT name, setting, reset_val, boot_val FROM pg_settings WHERE name in ('documentdb_rum.track_incomplete_split', 'documentdb_rum.fix_incomplete_split');
+                 name                  | setting | reset_val | boot_val 
+---------------------------------------+---------+-----------+----------
+ documentdb_rum.fix_incomplete_split   | on      | on        | on
+ documentdb_rum.track_incomplete_split | on      | on        | on
+(2 rows)
+
+SELECT documentdb_api.drop_collection('pvacuum_db', 'pclean');
+ drop_collection 
+-----------------
+ t
+(1 row)
+
+SELECT documentdb_api.create_collection('pvacuum_db', 'pclean');
+psql:sql/rum_vacuum_cleanup_tests_core.sql:10: NOTICE:  creating collection
+ create_collection 
+-------------------
+ t
+(1 row)
+
+SELECT collection_id AS vacuum_col FROM documentdb_api_catalog.collections WHERE database_name = 'pvacuum_db' AND collection_name = 'pclean' \gset
+-- disable autovacuum to have predicatability
+SELECT FORMAT('ALTER TABLE documentdb_data.documents_%s set (autovacuum_enabled = off)', :vacuum_col) \gexec
+ALTER TABLE documentdb_data.documents_500 set (autovacuum_enabled = off)
+SELECT COUNT(documentdb_api.insert_one('pvacuum_db', 'pclean',  FORMAT('{ "_id": %s, "a": %s }', i, i)::bson)) FROM generate_series(1, 1000) AS i;
+ count 
+-------
+  1000
+(1 row)
+
+SELECT documentdb_api_internal.create_indexes_non_concurrently(
+    'pvacuum_db',
+    '{ "createIndexes": "pclean", "indexes": [ { "key": { "a": 1 }, "name": "a_1", "enableCompositeTerm": true } ] }', TRUE);
+                                                                                                   create_indexes_non_concurrently                                                                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ { "raw" : { "defaultShard" : { "numIndexesBefore" : { "$numberInt" : "1" }, "numIndexesAfter" : { "$numberInt" : "2" }, "createdCollectionAutomatically" : false, "ok" : { "$numberInt" : "1" } } }, "ok" : { "$numberInt" : "1" } }
+(1 row)
+
+SELECT index_id AS vacuum_index_id FROM documentdb_api_catalog.collection_indexes WHERE collection_id = :vacuum_col AND index_id != :vacuum_col \gset
+-- use the index - 
+set documentdb_rum.vacuum_cleanup_entries to off;
+set documentdb.enableExtendedExplainPlans to on;
+set documentdb.forceDisableSeqScan to on;
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                run_explain_and_trim                                 
+-------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1000 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 1000 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 1000)]
+         ->  Bitmap Heap Scan on documents_500 collection (actual rows=1000 loops=1)
+               Recheck Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Blocks: exact=10
+               ->  Bitmap Index Scan on a_1 (actual rows=1000 loops=1)
+                     Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+(13 rows)
+
+-- drop all the rows now
+reset documentdb.forceDisableSeqScan;
+SELECT documentdb_api.delete('pvacuum_db', '{ "delete": "pclean", "deletes": [ { "q": { "_id": { "$gte": 10 } }, "limit": 0 } ]}');
+                                          delete                                          
+------------------------------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""991"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" } }",t)
+(1 row)
+
+set documentdb.forceDisableSeqScan to on;
+-- query again (should return 10 rows with 1000 loops)
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                run_explain_and_trim                                
+------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=9 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 1000 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 1000)]
+         ->  Bitmap Heap Scan on documents_500 collection (actual rows=9 loops=1)
+               Recheck Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Blocks: exact=10
+               ->  Bitmap Index Scan on a_1 (actual rows=1000 loops=1)
+                     Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+(13 rows)
+
+-- vacuum the collection
+SELECT FORMAT('VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_%s;', :vacuum_col) \gexec
+VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_500;
+-- query again (should return 10 rows but still with 1000 loops since we don't clean entries).
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                   run_explain_and_trim                                    
+-------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=9 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 1000 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 9)]
+         ->  Index Only Scan using a_1 on documents_500 collection (actual rows=9 loops=1)
+               Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Fetches: 0
+(11 rows)
+
+reset documentdb.forceDisableSeqScan;
+SELECT COUNT(documentdb_api.insert_one('pvacuum_db', 'pclean',  FORMAT('{ "_id": %s, "a": %s }', i, i)::bson)) FROM generate_series(1001, 2000) AS i;
+ count 
+-------
+  1000
+(1 row)
+
+SELECT documentdb_api.delete('pvacuum_db', '{ "delete": "pclean", "deletes": [ { "q": { "_id": { "$gte": 1010 } }, "limit": 0 } ]}');
+                                          delete                                          
+------------------------------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""991"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" } }",t)
+(1 row)
+
+set documentdb.forceDisableSeqScan to on;
+-- now set the guc to clean the entries
+set documentdb_rum.vacuum_cleanup_entries to on;
+SELECT FORMAT('VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_%s;', :vacuum_col) \gexec
+VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_500;
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                    run_explain_and_trim                                    
+--------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=18 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 31 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 18)]
+         ->  Index Only Scan using a_1 on documents_500 collection (actual rows=18 loops=1)
+               Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Fetches: 0
+(11 rows)
+
+-- repeat one more time
+reset documentdb.forceDisableSeqScan;
+SELECT COUNT(documentdb_api.insert_one('pvacuum_db', 'pclean',  FORMAT('{ "_id": %s, "a": %s }', i, i)::bson)) FROM generate_series(2001, 3000) AS i;
+ count 
+-------
+  1000
+(1 row)
+
+SELECT documentdb_api.delete('pvacuum_db', '{ "delete": "pclean", "deletes": [ { "q": { "_id": { "$gte": 2010 } }, "limit": 0 } ]}');
+                                          delete                                          
+------------------------------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""991"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" } }",t)
+(1 row)
+
+set documentdb.forceDisableSeqScan to on;
+-- now set the guc to clean the entries
+set documentdb_rum.vacuum_cleanup_entries to on;
+SELECT FORMAT('VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_%s;', :vacuum_col) \gexec
+VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_500;
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                    run_explain_and_trim                                    
+--------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=27 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 45 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 27)]
+         ->  Index Only Scan using a_1 on documents_500 collection (actual rows=27 loops=1)
+               Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Fetches: 0
+(11 rows)
+
+reset documentdb.forceDisableSeqScan;
+-- insert some entries to create posting trees.
+SELECT COUNT(documentdb_api.insert_one('pvacuum_db', 'pclean',  FORMAT('{ "_id": -%s, "a": 500 }', i)::bson)) FROM generate_series(1, 3000) AS i;
+ count 
+-------
+  3000
+(1 row)
+
+-- now delete everything includig posting tree entries.
+SELECT documentdb_api.delete('pvacuum_db', '{ "delete": "pclean", "deletes": [ { "q": { "_id": { "$lt": 2000 } }, "limit": 0 } ]}');
+                                          delete                                           
+-------------------------------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""3018"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" } }",t)
+(1 row)
+
+set documentdb.forceDisableSeqScan to on;
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                run_explain_and_trim                                
+------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=9 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 46 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 3027)]
+         ->  Bitmap Heap Scan on documents_500 collection (actual rows=9 loops=1)
+               Recheck Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Blocks: exact=29
+               ->  Bitmap Index Scan on a_1 (actual rows=3027 loops=1)
+                     Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+(13 rows)
+
+-- now set the guc to clean up entry pages
+set documentdb_rum.prune_rum_empty_pages to on;
+set client_min_messages to DEBUG1;
+SELECT FORMAT('VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_%s;', :vacuum_col) \gexec
+VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_500;
+psql:sql/rum_vacuum_cleanup_tests_core.sql:82: DEBUG:  [RUM] Vacuum posting tree void pages 0, deleted pages 0
+psql:sql/rum_vacuum_cleanup_tests_core.sql:82: LOG:  Vacuum found emptyEntryPages=17, emptyEntries=36, emptyPostingTrees=1, prunedEntries=18, prunedPages=15,prunedPostingTrees=1, postingPagesDeleted=0, emptyPostingPages=0, numBacktracks=0 isNewBulkDelete=1 for index=19052
+psql:sql/rum_vacuum_cleanup_tests_core.sql:82: LOG:  Vacuum pages - marked 1 pages as reusable
+reset client_min_messages;
+-- delete one more row to ensure vacuum has a chance to clean up
+reset documentdb.forceDisableSeqScan;
+SELECT documentdb_api.delete('pvacuum_db', '{ "delete": "pclean", "deletes": [ { "q": { "_id": { "$lte": 2000 } }, "limit": 0 } ]}');
+                                         delete                                         
+----------------------------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""0"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" } }",t)
+(1 row)
+
+set client_min_messages to DEBUG1;
+SELECT FORMAT('VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_%s;', :vacuum_col) \gexec
+VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_500;
+psql:sql/rum_vacuum_cleanup_tests_core.sql:89: LOG:  Vacuum pages - marked 16 pages as reusable
+reset client_min_messages;
+set documentdb.forceDisableSeqScan to on;
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                   run_explain_and_trim                                    
+-------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=9 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 12 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 9)]
+         ->  Index Only Scan using a_1 on documents_500 collection (actual rows=9 loops=1)
+               Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Fetches: 0
+(11 rows)
+
+-- introduce dead pages and use the repair functions to clean up the index.
+reset documentdb.forceDisableSeqScan;
+SELECT FORMAT('TRUNCATE documentdb_data.documents_%s;', :vacuum_col) \gexec
+TRUNCATE documentdb_data.documents_500;
+-- insert 3000 docs
+SELECT COUNT(documentdb_api.insert_one('pvacuum_db', 'pclean',  FORMAT('{ "_id": %s, "a": %s }', i, i)::bson)) FROM generate_series(1, 3000) AS i;
+ count 
+-------
+  3000
+(1 row)
+
+set documentdb.forceDisableSeqScan to on;
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                run_explain_and_trim                                 
+-------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=3000 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 3000 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 3000)]
+         ->  Bitmap Heap Scan on documents_500 collection (actual rows=3000 loops=1)
+               Recheck Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Blocks: exact=29
+               ->  Bitmap Index Scan on a_1 (actual rows=3000 loops=1)
+                     Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+(13 rows)
+
+reset documentdb.forceDisableSeqScan;
+-- delete 3000 docs
+set documentdb_rum.vacuum_cleanup_entries to off;
+set documentdb_rum.prune_rum_empty_pages to off;
+SELECT documentdb_api.delete('pvacuum_db', '{ "delete": "pclean", "deletes": [ { "q": { "_id": { "$exists": true } }, "limit": 0 } ]}');
+                                          delete                                           
+-------------------------------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""3000"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" } }",t)
+(1 row)
+
+SELECT FORMAT('VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_%s;', :vacuum_col) \gexec
+VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_500;
+-- we should have a lot of empty pages
+set documentdb.forceDisableSeqScan to on;
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                   run_explain_and_trim                                    
+-------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 3000 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 0)]
+         ->  Index Only Scan using a_1 on documents_500 collection (actual rows=0 loops=1)
+               Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Fetches: 0
+(11 rows)
+
+reset documentdb.forceDisableSeqScan;
+-- call the repair function.
+set documentdb_rum.vacuum_cleanup_entries to on;
+SELECT documentdb_api_internal.rum_prune_empty_entries_on_index(('documentdb_data.documents_rum_index_' || :vacuum_index_id)::regclass);
+psql:sql/rum_vacuum_cleanup_tests_core.sql:119: INFO:  Vacuum found 20 empty pages, 3000 empty entries, 2980 pruned entries, 0 pruned pages, 0 pruned posting trees
+ rum_prune_empty_entries_on_index 
+----------------------------------
+ 
+(1 row)
+
+-- should have fewer entries due to pruning.
+set documentdb.forceDisableSeqScan to on;
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                   run_explain_and_trim                                    
+-------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 20 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 0)]
+         ->  Index Only Scan using a_1 on documents_500 collection (actual rows=0 loops=1)
+               Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Fetches: 0
+(11 rows)
+
+reset documentdb.forceDisableSeqScan;
+set documentdb_rum.prune_rum_empty_pages to on;
+SELECT documentdb_api_internal.rum_prune_empty_entries_on_index(('documentdb_data.documents_rum_index_' || :vacuum_index_id)::regclass);
+psql:sql/rum_vacuum_cleanup_tests_core.sql:127: INFO:  Vacuum found 20 empty pages, 20 empty entries, 0 pruned entries, 18 pruned pages, 0 pruned posting trees
+ rum_prune_empty_entries_on_index 
+----------------------------------
+ 
+(1 row)
+
+set documentdb.forceDisableSeqScan to on;
+SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
+                                   run_explain_and_trim                                    
+-------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
+         indexName: a_1
+         isMultiKey: false
+         indexBounds: ["a": [MinKey, MaxKey]]
+         innerScanLoops: 2 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 0)]
+         ->  Index Only Scan using a_1 on documents_500 collection (actual rows=0 loops=1)
+               Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
+               Heap Fetches: 0
+(11 rows)
+
+reset documentdb.forceDisableSeqScan;

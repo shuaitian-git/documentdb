@@ -150,6 +150,8 @@ Oid BsonLessThanOperatorId(void);
 Oid BsonGreaterThanEqualOperatorId(void);
 Oid BsonLessThanEqualOperatorId(void);
 Oid BsonGetValueFunctionOid(void);
+Oid BsonUniqueIndexEqualOperatorId(void);
+Oid BsonUniqueShardPathEqualOperatorId(void);
 Oid PostgresInt4PlusFunctionOid(void);
 Oid PostgresInt4LessOperatorOid(void);
 Oid PostgresInt4LessOperatorFunctionOid(void);

@@ -1942,7 +1942,9 @@ GenerateCountQuery(text *databaseDatum, pgbson *countSpec, bool setStatementTime
 		{
 			EnsureTopLevelFieldType("query", &countIterator, BSON_TYPE_DOCUMENT);
 			filter = *value;
-			hasQueryModifier = true;
+
+			/* Only do runtime count if there's a non-empty filter */
+			hasQueryModifier = hasQueryModifier || !IsBsonValueEmptyDocument(value);
 		}
 		else if (StringViewEqualsCString(&keyView, "limit"))
 		{
@@ -1958,6 +1960,7 @@ GenerateCountQuery(text *databaseDatum, pgbson *countSpec, bool setStatementTime
 		}
 		else if (StringViewEqualsCString(&keyView, "hint"))
 		{
+			hasQueryModifier = true;
 			ProcessIndexHint(&countIterator, &indexHint);
 		}
 		else if (StringViewEqualsCString(&keyView, "fields"))
@@ -4775,8 +4778,7 @@ HandleSort(const bson_value_t *existingValue, Query *query,
 			List *args = NIL;
 
 			/* apply collation to the sort comparison */
-			if (IsCollationApplicable(context->collationString) &&
-				IsClusterVersionAtleast(DocDB_V0, 104, 0))
+			if (IsCollationApplicable(context->collationString))
 			{
 				funcOid = BsonOrderByWithCollationFunctionOid();
 				Const *collationConst = MakeTextConst(context->collationString,
@@ -4815,10 +4817,7 @@ HandleSort(const bson_value_t *existingValue, Query *query,
 				 * If there's an orderby pushdown to the index, add a full scan clause iff
 				 * the query has no filters yet.
 				 */
-				if (CanPushSortFilterToIndex(query, context) && (
-						IsClusterVersionAtLeastPatch(DocDB_V0, 103, 1) ||
-						IsClusterVersionAtLeastPatch(DocDB_V0, 104, 1) ||
-						IsClusterVersionAtleast(DocDB_V0, 105, 0)))
+				if (CanPushSortFilterToIndex(query, context))
 				{
 					List *rangeArgs = list_make2(sortInput, sortBson);
 					Expr *fullScanExpr = (Expr *) makeFuncExpr(
@@ -4834,7 +4833,7 @@ HandleSort(const bson_value_t *existingValue, Query *query,
 				/* If sort by is descending use the new operators: this allows for
 				 * customization of reverse scan.
 				 */
-				if (IsClusterVersionAtleast(DocDB_V0, 104, 0) && !isAscending)
+				if (!isAscending)
 				{
 					sortByDirection = SORTBY_USING;
 					sortBy->useOp = list_make2(makeString(ApiInternalSchemaNameV2),
@@ -6181,10 +6180,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		 * the query has no filters yet.
 		 */
 		if (isGroupByValidForIndexPushdown &&
-			CanPushSortFilterToIndex(query, context) && (
-				IsClusterVersionAtLeastPatch(DocDB_V0, 103, 1) ||
-				IsClusterVersionAtLeastPatch(DocDB_V0, 104, 1) ||
-				IsClusterVersionAtleast(DocDB_V0, 105, 0)))
+			CanPushSortFilterToIndex(query, context))
 		{
 			pgbsonelement sortElement = { 0 };
 			sortElement.path = idValue.value.v_utf8.str + 1;

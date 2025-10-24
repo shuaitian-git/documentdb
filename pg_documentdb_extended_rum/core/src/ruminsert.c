@@ -39,9 +39,8 @@
 #include "pg_documentdb_rum.h"
 #include "rumbuild_tuplesort.h"
 
-PGDLLEXPORT bool RumEnableParallelIndexBuild = RUM_DEFAULT_ENABLE_PARALLEL_INDEX_BUILD;
-PGDLLEXPORT int RumParallelIndexWorkersOverride =
-	RUM_DEFAULT_PARALLEL_INDEX_WORKERS_OVERRIDE;
+extern bool RumEnableParallelIndexBuild;
+extern int RumParallelIndexWorkersOverride;
 
 extern PGDLLEXPORT void documentdb_rum_parallel_build_main(dsm_segment *seg,
 														   shm_toc *toc);
@@ -249,7 +248,7 @@ createPostingTree(RumState *rumstate, OffsetNumber attnum, Relation index,
 
 	blkno = BufferGetBlockNumber(buffer);
 
-	RumPageGetOpaque(page)->maxoff = nitems;
+	RumDataPageMaxOff(page) = nitems;
 	ptr = RumDataPageGetData(page);
 	for (i = 0; i < nitems; i++)
 	{
@@ -639,7 +638,9 @@ rumEntryInsert(RumState *rumstate,
 
 		if (RumIsPostingTree(itup))
 		{
-			/* add entries to existing posting tree */
+			/* add entries to existing posting tree
+			 * Note: Posting tree entries are never marked dead.
+			 */
 			BlockNumber rootPostingTree = RumGetPostingTree(itup);
 			RumPostingTreeScan *gdi;
 
@@ -2411,6 +2412,9 @@ rumbuild_parallel(Relation heap, Relation index, struct IndexInfo *indexInfo,
 	 */
 	buildstate->buildStats.nTotalPages = RelationGetNumberOfBlocks(index);
 	rumUpdateStats(index, &buildstate->buildStats, true);
+
+	pgstat_progress_update_param(PROGRESS_CREATEIDX_SUBPHASE,
+								 PROGRESS_RUM_PHASE_WRITE_WAL);
 
 	/*
 	 * We didn't write WAL records as we built the index, so if WAL-logging is

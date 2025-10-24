@@ -124,6 +124,12 @@ RumPageFlagsToString(Page page)
 		separator = "|";
 	}
 
+	if (RumDataPageEntryIsDead(page))
+	{
+		appendStringInfo(flagsStr, "%sDATA_PAGE_ENTRY_DEAD", separator);
+		separator = "|";
+	}
+
 	return flagsStr->data;
 }
 
@@ -134,9 +140,9 @@ documentdb_rum_page_get_stats(PG_FUNCTION_ARGS)
 	bytea *raw_page = PG_GETARG_BYTEA_P(0);
 	Page page = get_page_from_raw(raw_page);
 	char *flagsStr;
-	int nargs = 5;
-	char *args[5] = { 0 };
-	JsonbValue values[5] = { 0 };
+	int nargs = 6;
+	char *args[6] = { 0 };
+	JsonbValue values[6] = { 0 };
 
 	args[0] = "flags";
 	values[0].type = jbvNumeric;
@@ -175,13 +181,27 @@ documentdb_rum_page_get_stats(PG_FUNCTION_ARGS)
 	{
 		args[4] = "nEntries";
 		values[4].type = jbvNumeric;
-		values[4].val.numeric = int64_to_numeric(RumPageGetOpaque(page)->maxoff);
+		values[4].val.numeric = int64_to_numeric(RumDataPageMaxOff(page));
 	}
 	else
 	{
 		args[4] = "nEntries";
 		values[4].type = jbvNumeric;
 		values[4].val.numeric = int64_to_numeric(PageGetMaxOffsetNumber(page));
+	}
+
+	if (RumPageIsData(page))
+	{
+		args[5] = "entryPageCycleId";
+		values[5].type = jbvNumeric;
+		values[5].val.numeric = int64_to_numeric(0);
+	}
+	else
+	{
+		args[5] = "entryPageCycleId";
+		values[5].type = jbvNumeric;
+		values[5].val.numeric = int64_to_numeric(RumPageGetOpaque(
+													 page)->entryPageCycleId);
 	}
 
 	PG_RETURN_POINTER(GetResultJsonB(nargs, args, values));
@@ -252,7 +272,7 @@ documentdb_rum_page_get_data_items(PG_FUNCTION_ARGS)
 		}
 
 		/* data pages use offset 0 to print the right bound */
-		fctx->max_calls = RumPageGetOpaque(page)->maxoff + 1;
+		fctx->max_calls = RumDataPageMaxOff(page) + 1;
 		fctx->user_fctx = page;
 	}
 
@@ -322,9 +342,9 @@ static Jsonb *
 RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid)
 {
 	OffsetNumber offset = (OffsetNumber) (counter + 1);
-	int nargs = 7;
-	char *args[7] = { 0 };
-	JsonbValue values[7] = { 0 };
+	int nargs = 8;
+	char *args[8] = { 0 };
+	JsonbValue values[8] = { 0 };
 	IndexTuple tuple;
 
 	Datum firstEntryDatum, firstEntryCStringDatum;
@@ -336,6 +356,7 @@ RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid)
 	char itemPointerToString[128] = { 0 };
 	Assert(counter < PageGetMaxOffsetNumber(page));
 
+	ItemId itemId = PageGetItemId(page, offset);
 	tuple = (IndexTuple) PageGetItem(page, PageGetItemId(page, offset));
 
 	args[0] = "offset";
@@ -417,6 +438,10 @@ RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid)
 	values[6].type = jbvString;
 	values[6].val.string.len = strlen(firstEntryCString);
 	values[6].val.string.val = firstEntryCString;
+
+	args[7] = "entryFlags";
+	values[7].type = jbvNumeric;
+	values[7].val.numeric = int64_to_numeric(itemId->lp_flags);
 
 	return GetResultJsonB(nargs, args, values);
 }

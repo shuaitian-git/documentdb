@@ -1,2 +1,9 @@
 
 #include "udfs/query/bson_dollar_evaluation--0.109-0.sql"
+
+-- fix the return of gin_bson_compare which was created incorrectly.
+UPDATE pg_proc SET prorettype = 'integer'::regtype WHERE proname = 'gin_bson_compare' AND pronamespace = 'documentdb_api_catalog'::regnamespace;
+
+GRANT UPDATE (indisexclusion) ON pg_catalog.pg_index to __API_ADMIN_ROLE__;
+
+GRANT pg_read_all_stats to __API_BG_WORKER_ROLE__;

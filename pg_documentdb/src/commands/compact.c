@@ -97,7 +97,7 @@ command_compact(PG_FUNCTION_ARGS)
 
 	ReportFeatureUsage(FEATURE_COMMAND_COMPACT);
 
-	if (!EnableCompact || !IsClusterVersionAtleast(DocDB_V0, 104, 0))
+	if (!EnableCompact)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_COMMANDNOTSUPPORTED),
 						errmsg(

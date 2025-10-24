@@ -391,7 +391,7 @@ generate_unique_shard_document(PG_FUNCTION_ARGS)
 			bytea *termBson = DatumGetByteaPP(entry);
 			BsonIndexTerm indexTerm;
 			InitializeBsonIndexTerm(termBson, &indexTerm);
-			if (indexTerm.isIndexTermMetadata)
+			if (IsIndexTermMetadata(&indexTerm))
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR),
 								errmsg(

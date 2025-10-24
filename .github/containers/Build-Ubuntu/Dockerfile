@@ -74,9 +74,10 @@ RUN [ "bin/bash", "-c", "PGVERSION=$PG_VERSION /tmp/install_setup/install_setup_
 COPY scripts/install_citus_indent.sh /tmp/install_setup/
 RUN [ "bin/bash", "-c", "/tmp/install_setup/install_citus_indent.sh" ]
 
-# Install SYSTEM_ROWS
-COPY scripts/install_setup_system_rows.sh /tmp/install_setup/
-RUN [ "bin/bash", "-c", "PGVERSION=$PG_VERSION /tmp/install_setup/install_setup_system_rows.sh" ]
+# Install contrib extensions
+COPY scripts/install_setup_contrib_extensions_core.sh /tmp/install_setup/
+COPY scripts/install_setup_contrib_extensions.sh /tmp/install_setup/
+RUN [ "bin/bash", "-c", "PGVERSION=$PG_VERSION /tmp/install_setup/install_setup_contrib_extensions.sh" ]
 
 # Install PG_CRON
 COPY scripts/install_setup_pg_cron.sh /tmp/install_setup/

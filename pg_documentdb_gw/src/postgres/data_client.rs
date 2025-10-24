@@ -293,6 +293,30 @@ pub trait PgDataClient: Send + Sync {
         connection_context: &ConnectionContext,
     ) -> Result<Response>;
 
+    async fn execute_create_role(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        connection_context: &ConnectionContext,
+    ) -> Result<Response>;
+
+    async fn execute_update_role(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        connection_context: &ConnectionContext,
+    ) -> Result<Response>;
+
+    async fn execute_drop_role(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        connection_context: &ConnectionContext,
+    ) -> Result<Response>;
+
+    async fn execute_roles_info(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        connection_context: &ConnectionContext,
+    ) -> Result<Response>;
+
     async fn run_readonly_if_needed<F, Fut>(
         &self,
         is_read_only_for_disk_full: bool,

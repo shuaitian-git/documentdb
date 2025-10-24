@@ -963,9 +963,9 @@ Check constraints:
 
 --  List All indexes --
 SELECT bson_dollar_unwind(cursorpage, '$cursor.firstBatch') FROM documentdb_api.list_indexes_cursor_first_page('db','{ "listIndexes": "ttlCompositeOrderedScan" }') ORDER BY 1;
-                                                                                                                                                                      bson_dollar_unwind                                                                                                                                                                      
+                                                                                                                                                                        bson_dollar_unwind                                                                                                                                                                        
 ---------------------------------------------------------------------
- { "cursor" : { "id" : { "$numberLong" : "0" }, "ns" : "db.ttlCompositeOrderedScan", "firstBatch" : { "v" : { "$numberInt" : "1" }, "key" : { "ttl" : { "$numberInt" : "1" } }, "name" : "ttl_index", "sparse" : true, "expireAfterSeconds" : { "$numberInt" : "5" }, "enableOrderedIndex" : { "$numberInt" : "1" } } }, "ok" : { "$numberDouble" : "1.0" } }
+ { "cursor" : { "id" : { "$numberLong" : "0" }, "ns" : "db.ttlCompositeOrderedScan", "firstBatch" : { "v" : { "$numberInt" : "1" }, "key" : { "ttl" : { "$numberInt" : "1" } }, "name" : "ttl_index", "sparse" : true, "expireAfterSeconds" : { "$numberInt" : "5" }, "storageEngine" : { "enableOrderedIndex" : true } } }, "ok" : { "$numberDouble" : "1.0" } }
  { "cursor" : { "id" : { "$numberLong" : "0" }, "ns" : "db.ttlCompositeOrderedScan", "firstBatch" : { "v" : { "$numberInt" : "2" }, "key" : { "_id" : { "$numberInt" : "1" } }, "name" : "_id_" } }, "ok" : { "$numberDouble" : "1.0" } }
 (2 rows)
 
