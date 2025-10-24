@@ -21,26 +21,26 @@ on:
       - '*.md'
 
 jobs:
-  runs-on: ${{ matrix.runner }}
-  name: SQL tests on ${{ matrix.arch }} with PG${{ matrix.pg_version }}
-  if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
-  strategy:
-    fail-fast: false
-    matrix:
-      include:
-        - pg_version: 15
-          arch: amd64
-          runner: ubuntu-22.04
-        - pg_version: 16
-          arch: arm64
-          runner: ubuntu-22.04-arm
-        - pg_version: 17
-          arch: amd64
-          runner: ubuntu-22.04
-        - pg_version: 18
-          arch: arm64
-          runner: ubuntu-22.04-arm
-  steps:
+  DocumentDB-unit-tests:
+    runs-on: ${{ matrix.runner }}
+    name: SQL tests on ${{ matrix.arch }} with PG${{ matrix.pg_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pg_version: 15
+            arch: amd64
+            runner: ubuntu-22.04
+          - pg_version: 16
+            arch: arm64
+            runner: ubuntu-22.04-arm
+          - pg_version: 17
+            arch: amd64
+            runner: ubuntu-22.04
+          - pg_version: 18
+            arch: arm64
+            runner: ubuntu-22.04-arm
+    steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
