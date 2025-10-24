@@ -79,6 +79,10 @@ sudo apt-get install -y --no-install-recommends \
     libssl-dev \
     openssl
 
+# Generate locale
+echo "Generating locale..."
+sudo locale-gen en_US.UTF-8
+
 export CLEAN_SETUP=1
 export INSTALL_DEPENDENCIES_ROOT=/tmp/install_setup
 mkdir -p /tmp/install_setup
@@ -161,6 +165,12 @@ sudo INSTALL_DEPENDENCIES_ROOT=$INSTALL_DEPENDENCIES_ROOT PGVERSION=$PG_VERSION 
 # Export pg_config PATH
 echo "Setting up PostgreSQL paths..."
 export PATH="/usr/lib/postgresql/${PG_VERSION}/bin:$PATH"
+
+# Build and install DocumentDB
+echo "Building DocumentDB..."
+which pg_config
+make
+sudo PATH=$PATH make install
 
 echo "DocumentDB build completed successfully!"
 echo "PostgreSQL binaries are in: /usr/lib/postgresql/${PG_VERSION}/bin"
