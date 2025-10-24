@@ -87,7 +87,7 @@ jobs:
       matrix:
         os: [rhel8, rhel9]
         arch: [amd64, arm64]
-        pg_version: [15, 16, 17, 18]
+        pg_version: [16, 17]
         include:
           - arch: amd64
             runner: ubuntu-24.04
