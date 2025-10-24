@@ -11,13 +11,7 @@ on:
       - "main"
     paths:
       - "pg_documentdb_gw/**"
-  pull_request:
-    types: [opened, reopened, synchronize, ready_for_review]
-    paths-ignore:
-      - "docs/**"
-      - ".devcontainer/**"
-      - "*.md"
-
+      
 jobs:
   test-run-in-Ubuntu:
     runs-on: ${{ matrix.runner }}
