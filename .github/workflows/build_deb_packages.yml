@@ -45,7 +45,7 @@ jobs:
       - name: Fetch annotated tags
         run: |
           git fetch --tags --force
-          git checkout v0.104-0
+          git checkout v0.105-0
           git status
 
       - name: Extract and Format Default Version
