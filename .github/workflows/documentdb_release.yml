@@ -1,0 +1,375 @@
+name: DocumentDB Release Pipeline
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub release'
+        required: true
+        type: boolean
+        default: false
+      version:
+        description: 'Version to release (e.g., 0.107.0)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-packages:
+    name: Build ${{ matrix.pkg_type }} for ${{ matrix.os }}-${{ matrix.arch }}-PG${{ matrix.pg_version }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg_type: [deb, rpm]
+        os:
+          - ${{ matrix.pkg_type == 'deb' && 'deb11' || 'rhel8' }}
+          - ${{ matrix.pkg_type == 'deb' && 'deb12' || 'rhel9' }}
+          - ${{ matrix.pkg_type == 'deb' && 'ubuntu22.04' || '' }}
+          - ${{ matrix.pkg_type == 'deb' && 'ubuntu24.04' || '' }}
+        arch: [amd64, arm64]
+        pg_version: [15, 16, 17, 18]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+        exclude:
+          - pkg_type: rpm
+            os: ''
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: |
+          git fetch --tags --force
+          git status
+
+      - name: Extract Version
+        id: extract_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            DOCUMENTDB_VERSION="${{ inputs.version }}"
+          else
+            DOCUMENTDB_VERSION=$(grep -E "^default_version" pg_documentdb_core/documentdb_core.control | sed -E "s/.*'([0-9]+\.[0-9]+-[0-9]+)'.*/\1/")
+            DOCUMENTDB_VERSION=$(echo $DOCUMENTDB_VERSION | sed "s/-/./g")
+          fi
+          echo "Extracted Version: $DOCUMENTDB_VERSION"
+          echo "DOCUMENTDB_VERSION=$DOCUMENTDB_VERSION" >> $GITHUB_ENV
+          echo "version=$DOCUMENTDB_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build Package
+        run: |
+          ./packaging/build_packages.sh --os ${{ matrix.os }} --pg ${{ matrix.pg_version }} --version ${{ env.DOCUMENTDB_VERSION }}
+
+      - name: Upload Package as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.pkg_type }}-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ env.DOCUMENTDB_VERSION }}
+          path: |
+            packaging/*.${{ matrix.pkg_type }}
+          retention-days: 90
+          if-no-files-found: error
+          compression-level: 0
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-packages
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.create_release)
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Version
+        id: extract_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          VERSION_DASH=$(echo $VERSION | sed 's/\./-/')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION_DASH=$VERSION_DASH" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./release-artifacts
+
+      - name: Organize artifacts
+        run: |
+          mkdir -p ./packages
+          # Extract all zip files and find packages
+          cd ./release-artifacts
+          for dir in */; do
+            if [ -d "$dir" ]; then
+              cd "$dir"
+              # Unzip if there are zip files
+              for zipfile in *.zip; do
+                [ -f "$zipfile" ] && unzip -o "$zipfile"
+              done
+              cd ..
+            fi
+          done
+          cd ..
+          # Copy all package files to packages directory
+          find ./release-artifacts -type f \( -name "*.deb" -o -name "*.rpm" \) ! -name "*dbgsym*" -exec cp {} ./packages/ \;
+          ls -lh ./packages/
+          echo "Total packages: $(ls -1 ./packages/ | wc -l)"
+
+      - name: Extract Changelog for Version
+        id: changelog
+        run: |
+          VERSION_DASH="${{ env.VERSION_DASH }}"
+          # Extract the changelog section for this version
+          CHANGELOG_FILE="CHANGELOG.md"
+          
+          if ! grep -q "### documentdb v${VERSION_DASH}" "$CHANGELOG_FILE"; then
+            echo "Warning: Version v${VERSION_DASH} not found in CHANGELOG.md"
+            CHANGELOG_TEXT="Release ${{ env.VERSION }}"
+          else
+            # Extract from this version header to the next version header or end of file
+            CHANGELOG_TEXT=$(awk "/^### documentdb v${VERSION_DASH}/,/^### documentdb v[0-9]/" "$CHANGELOG_FILE" | sed '$d')
+            if [ -z "$CHANGELOG_TEXT" ]; then
+              # If no next version found, get to end of file
+              CHANGELOG_TEXT=$(awk "/^### documentdb v${VERSION_DASH}/,EOF" "$CHANGELOG_FILE")
+            fi
+          fi
+          
+          # Save to file for GitHub release
+          echo "$CHANGELOG_TEXT" > changelog_excerpt.md
+          cat changelog_excerpt.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: DocumentDB v${{ env.VERSION }}
+          body_path: changelog_excerpt.md
+          draft: true
+          prerelease: true
+          files: |
+            ./packages/*
+
+  publish-to-pages:
+    name: Publish Packages to GitHub Pages
+    needs: build-packages
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 0
+
+      - name: Extract Version
+        id: extract_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Extract artifacts
+        run: |
+          # Extract all zip files
+          cd ./artifacts
+          for dir in */; do
+            if [ -d "$dir" ]; then
+              cd "$dir"
+              for zipfile in *.zip; do
+                [ -f "$zipfile" ] && unzip -o "$zipfile"
+              done
+              cd ..
+            fi
+          done
+          cd ..
+          echo "Extracted artifacts:"
+          find ./artifacts -type f \( -name "*.deb" -o -name "*.rpm" \)
+
+      - name: Setup repository structure
+        run: |
+          # Create directory structure for APT repository
+          mkdir -p apt/pool/main
+          mkdir -p apt/dists/{bullseye,bookworm,jammy,noble}/main/binary-{amd64,arm64}
+          
+          # Create directory structure for YUM repository
+          mkdir -p yum/{el8,el9}/{x86_64,aarch64}
+          
+          # Copy DEB packages
+          find ./artifacts -name "*.deb" ! -name "*dbgsym*" -exec cp {} apt/pool/main/ \;
+          echo "Copied $(ls -1 apt/pool/main/*.deb 2>/dev/null | wc -l) DEB packages"
+          
+          # Copy RPM packages
+          find ./artifacts -name "*rhel8*.rpm" -name "*x86_64.rpm" -exec cp {} yum/el8/x86_64/ \;
+          find ./artifacts -name "*rhel8*.rpm" -name "*aarch64.rpm" -exec cp {} yum/el8/aarch64/ \;
+          find ./artifacts -name "*rhel9*.rpm" -name "*x86_64.rpm" -exec cp {} yum/el9/x86_64/ \;
+          find ./artifacts -name "*rhel9*.rpm" -name "*aarch64.rpm" -exec cp {} yum/el9/aarch64/ \;
+          echo "Copied RPM packages:"
+          find yum -name "*.rpm" | wc -l
+
+      - name: Generate APT repository metadata
+        run: |
+          # Install required tools
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev
+          
+          cd apt
+          
+          # Generate Packages files for each distribution and architecture
+          for dist in bullseye bookworm jammy noble; do
+            for arch in amd64 arm64; do
+              dpkg-scanpackages --arch $arch pool/main > dists/$dist/main/binary-$arch/Packages
+              gzip -k -f dists/$dist/main/binary-$arch/Packages
+            done
+            
+            # Generate Release file
+            cat > dists/$dist/Release << EOF
+          Origin: DocumentDB
+          Label: DocumentDB
+          Suite: $dist
+          Codename: $dist
+          Architectures: amd64 arm64
+          Components: main
+          Description: DocumentDB APT Repository
+          Date: $(date -Ru)
+          EOF
+          done
+
+      - name: Generate YUM repository metadata
+        run: |
+          # Install createrepo
+          sudo apt-get install -y createrepo-c
+          
+          # Generate metadata for each EL version and architecture
+          for el in el8 el9; do
+            for arch in x86_64 aarch64; do
+              if [ -d "yum/$el/$arch" ] && [ "$(ls -A yum/$el/$arch/*.rpm 2>/dev/null)" ]; then
+                createrepo_c yum/$el/$arch
+              fi
+            done
+          done
+
+      - name: Create installation documentation
+        run: |
+          cat > README.md << 'EOF'
+          # DocumentDB Package Repository
+
+          ## APT Repository (Debian/Ubuntu)
+
+          ### Debian 11 (Bullseye)
+          ```bash
+          echo "deb [trusted=yes] https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apt bullseye main" | sudo tee /etc/apt/sources.list.d/documentdb.list
+          sudo apt-get update
+          sudo apt-get install postgresql-16-documentdb
+          ```
+
+          ### Debian 12 (Bookworm)
+          ```bash
+          echo "deb [trusted=yes] https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apt bookworm main" | sudo tee /etc/apt/sources.list.d/documentdb.list
+          sudo apt-get update
+          sudo apt-get install postgresql-16-documentdb
+          ```
+
+          ### Ubuntu 22.04 (Jammy)
+          ```bash
+          echo "deb [trusted=yes] https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apt jammy main" | sudo tee /etc/apt/sources.list.d/documentdb.list
+          sudo apt-get update
+          sudo apt-get install postgresql-16-documentdb
+          ```
+
+          ### Ubuntu 24.04 (Noble)
+          ```bash
+          echo "deb [trusted=yes] https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apt noble main" | sudo tee /etc/apt/sources.list.d/documentdb.list
+          sudo apt-get update
+          sudo apt-get install postgresql-16-documentdb
+          ```
+
+          ## YUM Repository (RHEL/Rocky/AlmaLinux)
+
+          ### RHEL 8
+          ```bash
+          cat <<REPO | sudo tee /etc/yum.repos.d/documentdb.repo
+          [documentdb]
+          name=DocumentDB Repository - EL8
+          baseurl=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/yum/el8/\$basearch
+          enabled=1
+          gpgcheck=0
+          REPO
+
+          sudo yum install postgresql16-documentdb
+          ```
+
+          ### RHEL 9
+          ```bash
+          cat <<REPO | sudo tee /etc/yum.repos.d/documentdb.repo
+          [documentdb]
+          name=DocumentDB Repository - EL9
+          baseurl=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/yum/el9/\$basearch
+          enabled=1
+          gpgcheck=0
+          REPO
+
+          sudo yum install postgresql16-documentdb
+          ```
+
+          ## Available PostgreSQL Versions
+
+          DocumentDB packages are available for PostgreSQL versions: 15, 16, 17, 18
+
+          Replace `postgresql-16-documentdb` or `postgresql16-documentdb` with your desired version.
+
+          ## Current Release
+
+          Version: ${{ env.VERSION }}
+
+          For more information, visit: https://github.com/${{ github.repository }}
+          EOF
+
+      - name: Commit and push to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add .
+          git commit -m "Release ${{ env.VERSION }} - Update package repositories" || echo "No changes to commit"
+          git push origin gh-pages
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          publish_branch: gh-pages
+          force_orphan: false
