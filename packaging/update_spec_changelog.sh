@@ -63,7 +63,15 @@ mv "$spec_tmp_ver" "$SPEC"
 
 target_header_line=""
 # Find first header line that contains the version string
+# Try exact match first
 target_header_line=$(grep -n '^### ' "$CHANGELOG" | grep -m1 "v${VER_DASH}" | cut -d: -f1 || true)
+
+# If not found and version starts with 0., also try with 1. prefix (common typo in CHANGELOG.md)
+if [[ -z "$target_header_line" && "$VER_DASH" =~ ^0\.([0-9]+-[0-9]+)$ ]]; then
+    ALT_VER="1.${BASH_REMATCH[1]}"
+    echo "WARNING: Version v$VER_DASH not found, trying v$ALT_VER (common typo)" >&2
+    target_header_line=$(grep -n '^### ' "$CHANGELOG" | grep -m1 "v${ALT_VER}" | cut -d: -f1 || true)
+fi
 
 if [[ -z "$target_header_line" ]]; then
     echo "ERROR: Could not find section for version v$VER_DASH in $CHANGELOG" >&2
@@ -164,29 +172,39 @@ flush_section() {
 }
 
 # Read the extracted changelog and parse sections
+first_section=true
 while IFS= read -r line; do
     # header lines start with '###'
     if [[ "$line" =~ ^### ]]; then
         # If we already have a section, flush it
         if [[ -n "$current_ver" ]]; then
             flush_section
-        fi
-        # Extract version: look for 'v' followed by digits.digits- digits (e.g. v0.105-0 or v1.108-0)
-        if [[ "$line" =~ v([0-9]+\.[0-9]+-[0-9]+) ]]; then
-            current_ver="${BASH_REMATCH[1]}"
-        else
-            # fallback: capture anything after 'v' up to a space or '('
-            current_ver=$(printf '%s' "$line" | sed -n 's/.*v\([^ (][^ (]*\).*/\1/p' || true)
-            if [[ -z "$current_ver" ]]; then
-                current_ver="unknown"
-            fi
+            first_section=false
         fi
         
-        # Normalize version: if it starts with '1.' (e.g. 1.107-0), strip the '1.' to get '0.107-0'
-        # This fixes typos like 'v1.107-0' in CHANGELOG.md which should be 'v0.107-0'
-        if [[ "$current_ver" =~ ^1\.([0-9]+-[0-9]+)$ ]]; then
-            current_ver="0.${BASH_REMATCH[1]}"
-            echo "WARNING: Normalized version from 1.$current_ver to 0.${BASH_REMATCH[1]}" >&2
+        # For the FIRST section, use the authoritative version from command line
+        # This ensures the package gets the correct version even if CHANGELOG.md has typos
+        if [[ "$first_section" == "true" ]]; then
+            current_ver="$VER_DASH"
+            echo "Using authoritative version for first section: $current_ver"
+        else
+            # Extract version from subsequent sections: look for 'v' followed by digits.digits-digits
+            if [[ "$line" =~ v([0-9]+\.[0-9]+-[0-9]+) ]]; then
+                current_ver="${BASH_REMATCH[1]}"
+            else
+                # fallback: capture anything after 'v' up to a space or '('
+                current_ver=$(printf '%s' "$line" | sed -n 's/.*v\([^ (][^ (]*\).*/\1/p' || true)
+                if [[ -z "$current_ver" ]]; then
+                    current_ver="unknown"
+                fi
+            fi
+            
+            # Normalize version: if it starts with '1.' (e.g. 1.107-0), strip the '1.' to get '0.107-0'
+            # This fixes typos like 'v1.107-0' in CHANGELOG.md which should be 'v0.107-0'
+            if [[ "$current_ver" =~ ^1\.([0-9]+-[0-9]+)$ ]]; then
+                current_ver="0.${BASH_REMATCH[1]}"
+                echo "WARNING: Normalized version from 1.${BASH_REMATCH[1]} to $current_ver" >&2
+            fi
         fi
 
         # Extract parenthesized date, if present (use sed for portability)
