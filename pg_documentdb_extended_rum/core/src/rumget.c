@@ -4119,11 +4119,16 @@ MoveScanForward(RumScanOpaque so, Snapshot snapshot)
 					}
 					else
 					{
+						OffsetNumber targetOffset = so->orderByScanData->orderStack->off;
 						entryLocateLeafEntryBounds(&btree, page,
 												   so->orderByScanData->orderStack->off,
 												   PageGetMaxOffsetNumber(page),
-												   &so->orderByScanData->orderStack->off);
-						continue;
+												   &targetOffset);
+						if (targetOffset > so->orderByScanData->orderStack->off)
+						{
+							so->orderByScanData->orderStack->off = targetOffset;
+							continue;
+						}
 					}
 				}
 			}

@@ -2963,6 +2963,13 @@ ParseIndexDefKeyDocument(const bson_iter_t *indexDefDocIter)
 							"Only a single index field can be defined when working with cdb indexes.")));
 	}
 
+	if (list_length(indexDefKey->keyPathList) > INDEX_MAX_KEYS)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION13103),
+						errmsg("Index exceeds maximum supported keys of %d",
+							   INDEX_MAX_KEYS)));
+	}
+
 	indexDefKey->hasHashedIndexes = numHashedIndexes > 0;
 	indexDefKey->hasTextIndexes = (allindexKinds & MongoIndexKind_Text) != 0;
 	return indexDefKey;
@@ -5549,11 +5556,13 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 		PgbsonWriterStartArray(&elementListWriter, "", 0, &arrayWriter);
 
 		ListCell *keyPathCell = NULL;
+		int numPaths = 0;
 		foreach(keyPathCell, indexDefKey->keyPathList)
 		{
 			IndexDefKeyPath *indexKeyPath = (IndexDefKeyPath *) lfirst(keyPathCell);
 			char *keyPath = (char *) indexKeyPath->path;
 
+			numPaths++;
 			switch (indexKeyPath->indexKind)
 			{
 				case MongoIndexKind_Regular:
@@ -5589,6 +5598,13 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 										"Unsupported index kind for composite index")));
 				}
 			}
+		}
+
+		if (numPaths > INDEX_MAX_KEYS)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION13103),
+							errmsg("Index exceeds maximum supported keys of %d",
+								   INDEX_MAX_KEYS)));
 		}
 
 		PgbsonWriterEndArray(&elementListWriter, &arrayWriter);

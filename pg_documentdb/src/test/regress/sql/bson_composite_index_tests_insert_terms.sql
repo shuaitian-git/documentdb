@@ -195,3 +195,11 @@ reset documentdb.forceDisableSeqScan;
 
 set documentdb.logRelationIndexesOrder to off;
 set documentdb.defaultUseCompositeOpClass to off;
+
+-- test index limits
+SELECT documentdb_api_internal.create_indexes_non_concurrently(
+    'comp_db', '{ "createIndexes": "cmpcollcreate", "indexes": [ { "name": "comp_index", "key": { "a1": 1, "a2": 1, "a3": 1, "a4": 1, "a5": 1, "a6": 1, "a7": 1, "a8": 1, "a9": 1, "a10": 1, "a11": 1, "a12": 1, "a13": 1, "a14": 1, "a15": 1, "a16": 1, "a17": 1, "a18": 1, "a19": 1, "a20": 1, "a21": 1, "a22": 1, "a23": 1, "a24": 1, "a25": 1, "a26": 1, "a27": 1, "a28": 1, "a29": 1, "a30": 1, "a31": 1, "a32": 1 }, "enableCompositeTerm": true } ] }', TRUE);
+
+-- fails
+SELECT documentdb_api_internal.create_indexes_non_concurrently(
+    'comp_db', '{ "createIndexes": "cmpcollcreate", "indexes": [ { "name": "comp_index22", "key": { "a1": 1, "a2": 1, "a3": 1, "a4": 1, "a5": 1, "a6": 1, "a7": 1, "a8": 1, "a9": 1, "a10": 1, "a11": 1, "a12": 1, "a13": 1, "a14": 1, "a15": 1, "a16": 1, "a17": 1, "a18": 1, "a19": 1, "a20": 1, "a21": 1, "a22": 1, "a23": 1, "a24": 1, "a25": 1, "a26": 1, "a27": 1, "a28": 1, "a29": 1, "a30": 1, "a31": 1, "a32": 1, "a33": 1 }, "enableCompositeTerm": true } ] }', TRUE);

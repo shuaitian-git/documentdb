@@ -1177,7 +1177,8 @@ GetIndexTermMetadata(void *indexOptions)
 				/* Since we lose one character on valueOnly scenarios for the path,
 				 * reduce the truncation limit to ensure the overall value stays the same.
 				 */
-				truncationLimit--;
+				int32_t pathCount = GetCompositeOpClassPathCount(options);
+				truncationLimit -= pathCount;
 			}
 		}
 		else if (options->type == IndexOptionsType_Wildcard)

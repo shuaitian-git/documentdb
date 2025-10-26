@@ -347,7 +347,6 @@ RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid)
 	JsonbValue values[8] = { 0 };
 	IndexTuple tuple;
 
-	Datum firstEntryDatum, firstEntryCStringDatum;
 	char *ptr, *dump, *datacstring, *firstEntryCString;
 	Size dlen;
 	int off;
@@ -402,12 +401,19 @@ RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid)
 		dump += 2;
 	}
 
-	firstEntryDatum = fetch_att(ptr, get_typbyval(firstEntryOid), get_typlen(
-									firstEntryOid));
-	getTypeOutputInfo(firstEntryOid, &typeOutputFunction, &typIsVarlena);
-
-	firstEntryCStringDatum = OidFunctionCall1(typeOutputFunction, firstEntryDatum);
-	firstEntryCString = DatumGetCString(firstEntryCStringDatum);
+	if (firstEntryOid != InvalidOid)
+	{
+		Datum firstEntryDatum, firstEntryCStringDatum;
+		firstEntryDatum = fetch_att(ptr, get_typbyval(firstEntryOid), get_typlen(
+										firstEntryOid));
+		getTypeOutputInfo(firstEntryOid, &typeOutputFunction, &typIsVarlena);
+		firstEntryCStringDatum = OidFunctionCall1(typeOutputFunction, firstEntryDatum);
+		firstEntryCString = DatumGetCString(firstEntryCStringDatum);
+	}
+	else
+	{
+		firstEntryCString = "";
+	}
 
 	values[4].val.string.len = dlen * 2;
 	values[4].val.string.val = datacstring;

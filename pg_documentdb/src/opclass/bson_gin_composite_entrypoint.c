@@ -1008,6 +1008,7 @@ gin_bson_composite_index_term_transform(PG_FUNCTION_ARGS)
 	if (!foundSkipPath)
 	{
 		/* Continue using current path */
+		PG_FREE_IF_COPY(compareKeyValue, 0);
 		PG_RETURN_DATUM(0);
 	}
 
@@ -1045,8 +1046,17 @@ gin_bson_composite_index_term_transform(PG_FUNCTION_ARGS)
 													&singlePathMetadata).indexTermVal;
 			}
 		}
+		else if (i > compareIndex)
+		{
+			/* Pick the smallest value for all the remaining terms */
+			compareTerm[i].element.bsonValue.value_type =
+				singlePathMetadata.isDescending ? BSON_TYPE_MAXKEY : BSON_TYPE_MINKEY;
+			serialized = SerializeBsonIndexTerm(&compareTerm[i].element,
+												&singlePathMetadata).indexTermVal;
+		}
 		else
 		{
+			/* Use the current prefix */
 			serialized = SerializeBsonIndexTerm(&compareTerm[i].element,
 												&singlePathMetadata).indexTermVal;
 		}
@@ -1057,6 +1067,7 @@ gin_bson_composite_index_term_transform(PG_FUNCTION_ARGS)
 	BsonIndexTermSerialized serialized = SerializeCompositeBsonIndexTerm(indexTermDatums,
 																		 runData->metaInfo
 																		 ->numIndexPaths);
+	PG_FREE_IF_COPY(compareKeyValue, 0);
 	PG_RETURN_POINTER(serialized.indexTermVal);
 }
 
@@ -1830,6 +1841,13 @@ FillCompositePathSpec(const char *prefix, void *buffer)
 
 		/* Add 1 byte for the sort order */
 		totalSize += 1;
+	}
+
+	if (pathCount > INDEX_MAX_KEYS)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION13103),
+						errmsg("Exceeded index max number of keys %d. Found %d",
+							   INDEX_MAX_KEYS, pathCount)));
 	}
 
 	if (buffer != NULL)
