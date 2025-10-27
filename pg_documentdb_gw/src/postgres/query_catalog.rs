@@ -49,6 +49,7 @@ pub struct QueryCatalog {
 
     // cursor.rs
     pub cursor_get_more: String,
+    pub kill_cursors: String,
 
     // data_description.rs
     pub create_collection_view: String,
@@ -379,6 +380,10 @@ impl QueryCatalog {
     pub fn compact(&self) -> &str {
         &self.compact
     }
+
+    pub fn kill_cursors(&self) -> &str {
+        &self.kill_cursors
+    }
 }
 
 pub fn create_query_catalog() -> QueryCatalog {
@@ -410,6 +415,7 @@ pub fn create_query_catalog() -> QueryCatalog {
 
             // cursor.rs
             cursor_get_more: "SELECT cursorPage, continuation FROM documentdb_api.cursor_get_more($1, $2, $3)".to_string(),
+            kill_cursors: "SELECT documentdb_api_internal.delete_cursors($1)".to_string(),
 
             // client.rs
             set_search_path_and_timeout: "-c search_path=documentdb_api_catalog,documentdb_api,public -c statement_timeout={timeout} -c idle_in_transaction_session_timeout={transaction_timeout}".to_string(),

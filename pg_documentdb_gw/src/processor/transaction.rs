@@ -37,6 +37,16 @@ pub async fn handle(
             return Ok(());
         }
 
+        if (matches!(request.request_type(), RequestType::KillCursors)
+            && request_transaction_info.start_transaction
+            && !request_transaction_info.auto_commit)
+        {
+            return Err(DocumentDBError::documentdb_error(
+                ErrorCode::OperationNotSupportedInTransaction,
+                "Cannot run command KillCursors at the start of a transaction".to_string(),
+            ));
+        };
+
         if matches!(
             request.request_type(),
             RequestType::ReIndex

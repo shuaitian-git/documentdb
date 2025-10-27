@@ -1062,6 +1062,30 @@ impl PgDataClient for DocumentDBDataClient {
         Ok(Response::Pg(PgResponse::new(compact_rows)))
     }
 
+    async fn execute_kill_cursors(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        connection_context: &ConnectionContext,
+        cursor_ids: &[i64],
+    ) -> Result<Response> {
+        let (_, request_info, request_tracker) = request_context.get_components();
+        let kill_cursors_rows = self
+            .pull_connection(connection_context)
+            .await?
+            .query(
+                connection_context
+                    .service_context
+                    .query_catalog()
+                    .kill_cursors(),
+                &[Type::INT8_ARRAY],
+                &[&cursor_ids],
+                Timeout::command(request_info.max_time_ms),
+                request_tracker,
+            )
+            .await?;
+        Ok(Response::Pg(PgResponse::new(kill_cursors_rows)))
+    }
+
     async fn execute_create_role(
         &self,
         request_context: &mut RequestContext<'_>,
