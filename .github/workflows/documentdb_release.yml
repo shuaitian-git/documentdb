@@ -18,6 +18,16 @@ on:
         description: 'Version to release (e.g., 0.107.0)'
         required: false
         type: string
+      target_repo:
+        description: 'Target repository for packages (e.g., documentdb/packages or same for current repo)'
+        required: false
+        type: string
+        default: 'documentdb/packages'
+      target_branch:
+        description: 'Target branch for packages (default: main)'
+        required: false
+        type: string
+        default: 'main'
 
 permissions:
   contents: write
@@ -224,10 +234,32 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     
     steps:
-      - name: Checkout repository
+      - name: Determine target repository
+        id: target
+        run: |
+          TARGET_REPO="${{ inputs.target_repo }}"
+          TARGET_BRANCH="${{ inputs.target_branch }}"
+          
+          # If workflow_dispatch not used or target_repo is 'same', use current repo
+          if [ -z "$TARGET_REPO" ] || [ "$TARGET_REPO" == "same" ]; then
+            TARGET_REPO="${{ github.repository }}"
+          fi
+          
+          # Default to gh-pages if not specified
+          if [ -z "$TARGET_BRANCH" ]; then
+            TARGET_BRANCH="gh-pages"
+          fi
+          
+          echo "repo=$TARGET_REPO" >> $GITHUB_OUTPUT
+          echo "branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+          echo "📦 Target: $TARGET_REPO @ $TARGET_BRANCH"
+
+      - name: Checkout target repository
         uses: actions/checkout@v4
         with:
-          ref: gh-pages
+          repository: ${{ steps.target.outputs.repo }}
+          ref: ${{ steps.target.outputs.branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Extract Version
@@ -328,93 +360,48 @@ jobs:
 
       - name: Create installation documentation
         run: |
-          cat > README.md << 'EOF'
-          # DocumentDB Package Repository
-
-          ## APT Repository (Debian/Ubuntu)
-
-          ### Debian 11 (Bullseye)
-          ```bash
-          echo "deb [trusted=yes] https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apt bullseye main" | sudo tee /etc/apt/sources.list.d/documentdb.list
-          sudo apt-get update
-          sudo apt-get install postgresql-16-documentdb
-          ```
-
-          ### Debian 12 (Bookworm)
-          ```bash
-          echo "deb [trusted=yes] https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apt bookworm main" | sudo tee /etc/apt/sources.list.d/documentdb.list
-          sudo apt-get update
-          sudo apt-get install postgresql-16-documentdb
-          ```
-
-          ### Ubuntu 22.04 (Jammy)
-          ```bash
-          echo "deb [trusted=yes] https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apt jammy main" | sudo tee /etc/apt/sources.list.d/documentdb.list
-          sudo apt-get update
-          sudo apt-get install postgresql-16-documentdb
-          ```
-
-          ### Ubuntu 24.04 (Noble)
-          ```bash
-          echo "deb [trusted=yes] https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/apt noble main" | sudo tee /etc/apt/sources.list.d/documentdb.list
-          sudo apt-get update
-          sudo apt-get install postgresql-16-documentdb
-          ```
-
-          ## YUM Repository (RHEL/Rocky/AlmaLinux)
-
-          ### RHEL 8
-          ```bash
-          cat <<REPO | sudo tee /etc/yum.repos.d/documentdb.repo
-          [documentdb]
-          name=DocumentDB Repository - EL8
-          baseurl=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/yum/el8/\$basearch
-          enabled=1
-          gpgcheck=0
-          REPO
-
-          sudo yum install postgresql16-documentdb
-          ```
-
-          ### RHEL 9
-          ```bash
-          cat <<REPO | sudo tee /etc/yum.repos.d/documentdb.repo
-          [documentdb]
-          name=DocumentDB Repository - EL9
-          baseurl=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/yum/el9/\$basearch
-          enabled=1
-          gpgcheck=0
-          REPO
-
-          sudo yum install postgresql16-documentdb
-          ```
-
-          ## Available PostgreSQL Versions
-
-          DocumentDB packages are available for PostgreSQL versions: 15, 16, 17, 18
-
-          Replace `postgresql-16-documentdb` or `postgresql16-documentdb` with your desired version.
-
-          ## Current Release
-
-          Version: ${{ env.VERSION }}
-
-          For more information, visit: https://github.com/${{ github.repository }}
+          # Determine the base URL for packages
+          TARGET_REPO="${{ steps.target.outputs.repo }}"
+          REPO_OWNER=$(echo $TARGET_REPO | cut -d'/' -f1)
+          REPO_NAME=$(echo $TARGET_REPO | cut -d'/' -f2)
+          
+          # For org.github.io repos, URL is org.github.io/repo
+          # For user repos, URL is user.github.io/repo
+          BASE_URL="https://${REPO_OWNER}.github.io/${REPO_NAME}"
+          
+          # Copy the template README from source repo
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/.github/workflows/PACKAGES_REPO_README.md -o README.md
+          
+          # Replace placeholder URL with actual URL
+          sed -i "s|https://documentdb.github.io/packages/|${BASE_URL}/|g" README.md
+          
+          # Add version information
+          cat >> README.md << EOF
+          
+          ---
+          
+          ## 📦 Latest Release
+          
+          **Version**: ${{ env.VERSION }}  
+          **Release Date**: $(date -u +"%B %d, %Y")  
+          **Source**: [github.com/${{ github.repository }}](https://github.com/${{ github.repository }})
+          
           EOF
 
-      - name: Commit and push to gh-pages
+      - name: Commit and push to target repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           git add .
           git commit -m "Release ${{ env.VERSION }} - Update package repositories" || echo "No changes to commit"
-          git push origin gh-pages
+          git push origin ${{ steps.target.outputs.branch }}
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .
-          publish_branch: gh-pages
+          publish_branch: ${{ steps.target.outputs.branch }}
+          external_repository: ${{ steps.target.outputs.repo != github.repository && steps.target.outputs.repo || '' }}
           force_orphan: false
