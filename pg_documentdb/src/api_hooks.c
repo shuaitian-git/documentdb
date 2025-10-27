@@ -69,6 +69,7 @@ ShouldScheduleIndexBuilds_HookType should_schedule_index_builds_hook = NULL;
 
 GettShardIndexOids_HookType get_shard_index_oids_hook = NULL;
 UpdatePostgresIndex_HookType update_postgres_index_hook = NULL;
+GetOperationCancellationQuery_HookType get_operation_cancellation_query_hook = NULL;
 
 UserNameValidation_HookType
 	username_validation_hook = NULL;
@@ -598,4 +599,24 @@ UpdatePostgresIndexWithOverride(uint64_t collectionId, int indexId, int operatio
 	{
 		default_update(collectionId, indexId, operation, value);
 	}
+}
+
+
+const char *
+GetOperationCancellationQuery(int64 shardId, StringView *opIdView, int *nargs,
+							  Oid **argTypes,
+							  Datum **argValues, char **argNulls,
+							  const char *(*default_get_query)(int64, StringView *, int *,
+															   Oid **, Datum **, char **))
+{
+	if (get_operation_cancellation_query_hook != NULL)
+	{
+		return get_operation_cancellation_query_hook(shardId, opIdView, nargs, argTypes,
+													 argValues, argNulls);
+	}
+	else if (default_get_query == NULL)
+	{
+		return NULL;
+	}
+	return default_get_query(shardId, opIdView, nargs, argTypes, argValues, argNulls);
 }

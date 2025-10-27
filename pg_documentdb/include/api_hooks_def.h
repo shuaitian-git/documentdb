@@ -260,4 +260,11 @@ typedef void (*UpdatePostgresIndex_HookType)(uint64_t collectionId, int indexId,
 											 operation, bool value);
 extern UpdatePostgresIndex_HookType update_postgres_index_hook;
 
+typedef const char *(*GetOperationCancellationQuery_HookType)(int64 shardId,
+															  StringView *opIdString,
+															  int *nargs, Oid **argTypes,
+															  Datum **argValues,
+															  char **argNulls);
+extern GetOperationCancellationQuery_HookType get_operation_cancellation_query_hook;
+
 #endif

@@ -25,3 +25,4 @@ test: user_crud_commands
 test: commands_create_role
 test: commands_roles_info
 test: commands_drop_role
+test: commands_killop
