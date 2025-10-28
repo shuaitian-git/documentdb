@@ -83,8 +83,8 @@ git checkout FETCH_HEAD
 echo "building and installing postgresql ref $POSTGRESQL_REF and installing to $postgresqlInstallDir..."
 
 if [ "$withasan" == "true" ]; then
-  export CPPFLAGS="-Og -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fno-sanitize=nonnull-attribute -fstack-protector"
-  export LDFLAGS="-fsanitize=address -fsanitize=undefined -static-libasan"
+  export CPPFLAGS="-ggdb -Og -g3 -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fno-sanitize=nonnull-attribute -fstack-protector"
+  export LDFLAGS="-fsanitize=address -fsanitize=undefined -lstdc++ -static-libasan"
   ./configure --enable-debug --enable-cassert --enable-tap-tests --with-openssl --prefix="$postgresqlInstallDir" --with-icu
 elif [ "$debug" == "true" ]; then
   ./configure --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -Og -g3 -fno-omit-frame-pointer" --with-openssl --prefix="$postgresqlInstallDir" --with-icu
