@@ -63,11 +63,12 @@ typedef struct RumPageOpaqueData
 		                                     * or number of PostingItems on RUM_DATA &
 		                                     * ~RUM_LEAF page. */
 
-		RumVacuumCycleId entryPageCycleId;  /* for entry Pages, the vacuum cycleId */
+		OffsetNumber entryPageUnused;
 	};
 
 	OffsetNumber dataPageFreespace;
 	uint16 flags;               /* see bit definitions below */
+	RumVacuumCycleId cycleId; /* The vacuum cycleId */
 }   RumPageOpaqueData;
 
 typedef RumPageOpaqueData *RumPageOpaque;
@@ -173,7 +174,7 @@ typedef struct RumMetaPageData
 #define RumPageIsIncompleteSplit(page) ((RumPageGetOpaque(page)->flags & \
 										 RUM_INCOMPLETE_SPLIT) != 0)
 
-#define RumEntryPageGetCycleId(page) (RumPageGetOpaque(page)->entryPageCycleId)
+#define RumPageGetCycleId(page) (RumPageGetOpaque(page)->cycleId)
 
 /*
  * Set the XMIN based of the half-dead page based on maxoff and freespace (these are only

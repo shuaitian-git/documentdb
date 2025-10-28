@@ -190,19 +190,10 @@ documentdb_rum_page_get_stats(PG_FUNCTION_ARGS)
 		values[4].val.numeric = int64_to_numeric(PageGetMaxOffsetNumber(page));
 	}
 
-	if (RumPageIsData(page))
-	{
-		args[5] = "entryPageCycleId";
-		values[5].type = jbvNumeric;
-		values[5].val.numeric = int64_to_numeric(0);
-	}
-	else
-	{
-		args[5] = "entryPageCycleId";
-		values[5].type = jbvNumeric;
-		values[5].val.numeric = int64_to_numeric(RumPageGetOpaque(
-													 page)->entryPageCycleId);
-	}
+	args[5] = "cycleId";
+	values[5].type = jbvNumeric;
+	values[5].val.numeric = int64_to_numeric(RumPageGetOpaque(
+												 page)->cycleId);
 
 	PG_RETURN_POINTER(GetResultJsonB(nargs, args, values));
 }

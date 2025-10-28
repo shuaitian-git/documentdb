@@ -61,7 +61,7 @@ _PG_init(void)
 
 	StaticAssertExpr(offsetof(RumPageOpaqueData, dataPageMaxoff) == sizeof(uint64_t),
 					 "maxoff must be the 3rd field with a specific offset");
-	StaticAssertExpr(offsetof(RumPageOpaqueData, entryPageCycleId) == sizeof(uint64_t),
+	StaticAssertExpr(offsetof(RumPageOpaqueData, entryPageUnused) == sizeof(uint64_t),
 					 "entryPageCycleId must be the 3rd field with a specific offset");
 	StaticAssertExpr(offsetof(RumPageOpaqueData, dataPageFreespace) == sizeof(uint64_t) +
 					 sizeof(uint16_t),
@@ -69,6 +69,10 @@ _PG_init(void)
 	StaticAssertExpr(offsetof(RumPageOpaqueData, flags) == sizeof(uint64_t) +
 					 sizeof(uint32_t),
 					 "flags must be the 3rd field with a specific offset");
+
+	StaticAssertExpr(offsetof(RumPageOpaqueData, cycleId) == sizeof(uint64_t) +
+					 sizeof(uint32_t) + sizeof(uint16_t),
+					 "cycleId must be the 4th field with a specific offset");
 	StaticAssertExpr(sizeof(RumPageOpaqueData) == sizeof(uint64_t) + sizeof(uint64_t),
 					 "RumPageOpaqueData must be the 2 bigint fields worth");
 

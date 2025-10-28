@@ -18,3 +18,4 @@ s/\"sn\" : \{ \"\$date\" : \{ \"\$numberLong\" : \"[0-9]*\" \} \}/\"sn\" : NOW_S
 s/Vacuum found (.+) for index=[0-9]+/Vacuum found \1 for index=xxx/g
 s/coord_combine_agg\('[0-9]+'/coord_combine_agg\('xxxx'/g
 s/worker_partial_agg\('[0-9]+'/coord_combine_agg\('xxxx'/g
+s/Vacuum\[index=[0-9]+,vacuumCleanup=/Vacuum\[index=xxx,vacuumCleanup=/g
