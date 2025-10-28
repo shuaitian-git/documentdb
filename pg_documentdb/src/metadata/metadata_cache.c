@@ -813,6 +813,12 @@ typedef struct DocumentDBApiOidCacheData
 	/* OID of the BSONSUM aggregate function */
 	Oid ApiCatalogBsonSumAggregateFunctionOid;
 
+	/* OID of the BSONCOMMANDCOUNT aggregate function */
+	Oid ApiCatalogBsonCommandCountAggregateFunctionOid;
+
+	/* OID of the BSONCOUNT aggregate function */
+	Oid ApiCatalogBsonCountAggregateFunctionOid;
+
 	/* OID of the bson_linear_fill window function */
 	Oid ApiCatalogBsonLinearFillFunctionOid;
 
@@ -3879,6 +3885,23 @@ BsonSumAggregateFunctionOid(void)
 {
 	return GetAggregateFunctionByName(&Cache.ApiCatalogBsonSumAggregateFunctionOid,
 									  ApiCatalogSchemaName, "bsonsum");
+}
+
+
+Oid
+BsonCommandCountAggregateFunctionOid(void)
+{
+	return GetAggregateFunctionByName(
+		&Cache.ApiCatalogBsonCommandCountAggregateFunctionOid,
+		ApiInternalSchemaNameV2, "bsoncommandcount");
+}
+
+
+Oid
+BsonCountAggregateFunctionOid(void)
+{
+	return GetAggregateFunctionByName(&Cache.ApiCatalogBsonCountAggregateFunctionOid,
+									  ApiInternalSchemaNameV2, "bsoncount");
 }
 
 

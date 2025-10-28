@@ -81,6 +81,7 @@ extern bool EnableIndexOrderbyPushdown;
 extern bool EnableIndexHintSupport;
 extern bool EnableConversionStreamableToSingleBatch;
 extern bool EnableFindProjectionAfterOffset;
+extern bool EnableNewCountAggregates;
 
 /* GUC to config tdigest compression */
 extern int TdigestCompressionAccuracy;
@@ -177,6 +178,9 @@ static Query * HandleBucket(const bson_value_t *existingValue, Query *query,
 							AggregationPipelineBuildContext *context);
 static Query * HandleCount(const bson_value_t *existingValue, Query *query,
 						   AggregationPipelineBuildContext *context);
+static Query * HandleCountCore(const bson_value_t *existingValue, Query *query,
+							   AggregationPipelineBuildContext *context, bool
+							   isCountCommand);
 static Query * HandleFill(const bson_value_t *existingValue, Query *query,
 						  AggregationPipelineBuildContext *context);
 static Query * HandleLimit(const bson_value_t *existingValue, Query *query,
@@ -1945,6 +1949,16 @@ default_find_case:
 }
 
 
+inline static bool
+CanUseNewCountAggregates()
+{
+	return EnableNewCountAggregates &&
+		   (IsClusterVersionAtLeastPatch(DocDB_V0, 106, 2) ||
+			IsClusterVersionAtLeastPatch(DocDB_V0, 107, 1) ||
+			IsClusterVersionAtleast(DocDB_V0, 108, 0));
+}
+
+
 /*
  * Generates a query that is akin to $count command protocol.
  */
@@ -1964,6 +1978,7 @@ GenerateCountQuery(text *databaseDatum, pgbson *countSpec, bool setStatementTime
 	bson_value_t indexHint = { 0 };
 	pg_uuid_t *collectionUuid = NULL;
 
+	bool appendOkResult = false;
 	bool hasQueryModifier = false;
 	context.allowShardBaseTable = true;
 	while (bson_iter_next(&countIterator))
@@ -2052,6 +2067,7 @@ GenerateCountQuery(text *databaseDatum, pgbson *countSpec, bool setStatementTime
 		pgbson *projectSpec = PgbsonWriterGetPgbson(&projectWriter);
 		bson_value_t projectSpecValue = ConvertPgbsonToBsonValue(projectSpec);
 		query = HandleProject(&projectSpecValue, query, &context);
+		appendOkResult = true;
 	}
 	else
 	{
@@ -2126,17 +2142,24 @@ GenerateCountQuery(text *databaseDatum, pgbson *countSpec, bool setStatementTime
 		countValue.value_type = BSON_TYPE_UTF8;
 		countValue.value.v_utf8.len = 1;
 		countValue.value.v_utf8.str = "n";
-		query = HandleCount(&countValue, query, &context);
+
+		bool isCountCommand = true;
+		query = HandleCountCore(&countValue, query, &context, isCountCommand);
 	}
 
-	/* Now add the "ok": 1 as an add fields stage. */
-	pgbson_writer addFieldsWriter;
-	PgbsonWriterInit(&addFieldsWriter);
-	PgbsonWriterAppendDouble(&addFieldsWriter, "ok", 2, 1);
-	pgbson *addFieldsSpec = PgbsonWriterGetPgbson(&addFieldsWriter);
-	bson_value_t addFieldsValue = ConvertPgbsonToBsonValue(addFieldsSpec);
-	query = HandleSimpleProjectionStage(&addFieldsValue, query, &context, "$addFields",
-										BsonDollaMergeDocumentsFunctionOid(), NULL, NULL);
+	if (appendOkResult || !CanUseNewCountAggregates())
+	{
+		/* Now add the "ok": 1 as an add fields stage. */
+		pgbson_writer addFieldsWriter;
+		PgbsonWriterInit(&addFieldsWriter);
+		PgbsonWriterAppendDouble(&addFieldsWriter, "ok", 2, 1);
+		pgbson *addFieldsSpec = PgbsonWriterGetPgbson(&addFieldsWriter);
+		bson_value_t addFieldsValue = ConvertPgbsonToBsonValue(addFieldsSpec);
+		query = HandleSimpleProjectionStage(&addFieldsValue, query, &context,
+											"$addFields",
+											BsonDollaMergeDocumentsFunctionOid(), NULL,
+											NULL);
+	}
 
 	return query;
 }
@@ -4559,15 +4582,15 @@ CreateMultiArgAggregate(Oid aggregateFunctionId, List *args, List *argTypes,
 
 /*
  * Handles the $count stage. Injects an aggregate of
- * bsonsum('{ "": 1 }');
+ * bsoncommandcount(*) or bsoncount(*) in the case it needs to repath the count field.
  * First moves existing query to a subquery.
  * Then injects the aggregate projector.
  * We request a new subquery for subsequent stages, but it
  * may not be needed.
  */
 static Query *
-HandleCount(const bson_value_t *existingValue, Query *query,
-			AggregationPipelineBuildContext *context)
+HandleCountCore(const bson_value_t *existingValue, Query *query,
+				AggregationPipelineBuildContext *context, bool isCountCommand)
 {
 	ReportFeatureUsage(FEATURE_STAGE_COUNT);
 	StringView countField = { 0 };
@@ -4598,6 +4621,11 @@ HandleCount(const bson_value_t *existingValue, Query *query,
 							"The count field is not allowed to contain '.'.")));
 	}
 
+	bool useNewCountAggregates = CanUseNewCountAggregates();
+
+	/* if it is command count query we can just use BSONCOMMANDCOUNT and avoid the bson repath and build. */
+	bool useCommandCount = useNewCountAggregates && isCountCommand;
+
 	/* Count requires the existing query to move to subquery */
 	query = MigrateQueryToSubQuery(query, context);
 
@@ -4609,28 +4637,56 @@ HandleCount(const bson_value_t *existingValue, Query *query,
 	parseState->p_expr_kind = EXPR_KIND_SELECT_TARGET;
 	parseState->p_next_resno = firstEntry->resno + 1;
 
-	pgbson_writer writer;
-	PgbsonWriterInit(&writer);
-	PgbsonWriterAppendInt32(&writer, "", 0, 1);
-	Expr *constValue = (Expr *) MakeBsonConst(PgbsonWriterGetPgbson(&writer));
-	Aggref *aggref = CreateSingleArgAggregate(BsonSumAggregateFunctionOid(), constValue,
-											  parseState);
-	pfree(parseState);
+	Aggref *aggref = NULL;
+	if (useNewCountAggregates)
+	{
+		Oid aggFuncId = useCommandCount ? BsonCommandCountAggregateFunctionOid()
+						: BsonCountAggregateFunctionOid();
 
-	query->hasAggs = true;
+		Expr *constValue = (Expr *) makeConst(INT4OID, -1, InvalidOid, 4, Int32GetDatum(
+												  1), false, true);
+		aggref = CreateSingleArgAggregate(aggFuncId,
+										  constValue,
+										  parseState);
+		firstEntry->expr = (Expr *) aggref;
+	}
+	else
+	{
+		pgbson_writer writer;
+		PgbsonWriterInit(&writer);
+		PgbsonWriterAppendInt32(&writer, "", 0, 1);
+		Expr *constValue = (Expr *) MakeBsonConst(PgbsonWriterGetPgbson(&writer));
+		aggref = CreateSingleArgAggregate(BsonSumAggregateFunctionOid(), constValue,
+										  parseState);
+	}
 
 	/* We wrap the count in a bson_repath_and_build */
-	Const *countFieldText = MakeTextConst(countField.string, countField.length);
+	if (!useCommandCount)
+	{
+		Const *countFieldText = MakeTextConst(countField.string, countField.length);
 
-	List *args = list_make2(countFieldText, aggref);
-	FuncExpr *expression = makeFuncExpr(BsonRepathAndBuildFunctionOid(), BsonTypeId(),
-										args, InvalidOid, InvalidOid,
-										COERCE_EXPLICIT_CALL);
-	firstEntry->expr = (Expr *) expression;
+		List *args = list_make2(countFieldText, aggref);
+		FuncExpr *expression = makeFuncExpr(BsonRepathAndBuildFunctionOid(), BsonTypeId(),
+											args, InvalidOid, InvalidOid,
+											COERCE_EXPLICIT_CALL);
+		firstEntry->expr = (Expr *) expression;
+	}
+
+	pfree(parseState);
+	query->hasAggs = true;
 
 	/* Having count means the next stage must be a new outer query */
 	context->requiresSubQuery = true;
 	return query;
+}
+
+
+static Query *
+HandleCount(const bson_value_t *existingValue, Query *query,
+			AggregationPipelineBuildContext *context)
+{
+	bool isCountCommand = false;
+	return HandleCountCore(existingValue, query, context, isCountCommand);
 }
 
 
@@ -5139,6 +5195,53 @@ AddSimpleGroupAccumulator(Query *query, const bson_value_t *accumulatorValue,
 														parseState, identifiers,
 														query, BsonTypeId(),
 														NULL));
+	return repathArgs;
+}
+
+
+inline static List *
+AddSumGroupAccumulator(Query *query, const bson_value_t *accumulatorValue,
+					   List *repathArgs, Const *accumulatorText,
+					   ParseState *parseState, char *identifiers,
+					   Expr *documentExpr, Expr *variableSpec, Expr *groupIdExpr)
+{
+	bool canUseBsonCountAggregate = CanUseNewCountAggregates() &&
+									IsA(groupIdExpr, Const);
+
+	bool useNewCountAggregate = false;
+	if (canUseBsonCountAggregate &&
+		BsonValueIsNumber(accumulatorValue))
+	{
+		int64_t countValue = BsonValueAsInt64(accumulatorValue);
+		useNewCountAggregate = countValue == 1;
+	}
+	else if (canUseBsonCountAggregate &&
+			 IsBsonValueEmptyDocument(accumulatorValue))
+	{
+		useNewCountAggregate = true;
+	}
+
+	if (!useNewCountAggregate)
+	{
+		return AddSimpleGroupAccumulator(query, accumulatorValue, repathArgs,
+										 accumulatorText, parseState,
+										 identifiers, documentExpr,
+										 BsonSumAggregateFunctionOid(),
+										 variableSpec);
+	}
+
+	Expr *constValue = (Expr *) makeConst(INT4OID, -1, InvalidOid, 4, Int32GetDatum(1),
+										  false, true);
+	Aggref *aggref = CreateSingleArgAggregate(BsonCountAggregateFunctionOid(),
+											  constValue, parseState);
+	repathArgs = lappend(repathArgs, AddGroupExpression((Expr *) accumulatorText,
+														parseState, identifiers,
+														query, TEXTOID, NULL));
+	repathArgs = lappend(repathArgs, AddGroupExpression((Expr *) aggref,
+														parseState, identifiers,
+														query, BsonTypeId(),
+														NULL));
+
 	return repathArgs;
 }
 
@@ -5795,13 +5898,13 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$sum"))
 		{
-			repathArgs = AddSimpleGroupAccumulator(query, &accumulatorElement.bsonValue,
-												   repathArgs,
-												   accumulatorText, parseState,
-												   identifiers,
-												   origEntry->expr,
-												   BsonSumAggregateFunctionOid(),
-												   context->variableSpec);
+			repathArgs = AddSumGroupAccumulator(query, &accumulatorElement.bsonValue,
+												repathArgs,
+												accumulatorText, parseState,
+												identifiers,
+												origEntry->expr,
+												context->variableSpec,
+												groupIdDocumentExpr);
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$max"))
 		{
@@ -5825,16 +5928,40 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$count"))
 		{
-			bson_value_t countValue = { 0 };
-			countValue.value_type = BSON_TYPE_INT32;
-			countValue.value.v_int32 = 1;
+			if (CanUseNewCountAggregates())
+			{
+				/* Use the new BSONCOUNT aggregate. */
+				Expr *constValue = (Expr *) makeConst(INT4OID, -1, InvalidOid, 4,
+													  Int32GetDatum(1), false, true);
+				Aggref *aggref = CreateSingleArgAggregate(
+					BsonCountAggregateFunctionOid(),
+					constValue, parseState);
 
-			repathArgs = AddSimpleGroupAccumulator(query, &countValue, repathArgs,
-												   accumulatorText, parseState,
-												   identifiers,
-												   origEntry->expr,
-												   BsonSumAggregateFunctionOid(),
-												   context->variableSpec);
+				repathArgs = lappend(repathArgs, AddGroupExpression(
+										 (Expr *) accumulatorText,
+										 parseState,
+										 identifiers,
+										 query, TEXTOID,
+										 NULL));
+				repathArgs = lappend(repathArgs, AddGroupExpression((Expr *) aggref,
+																	parseState,
+																	identifiers,
+																	query, BsonTypeId(),
+																	NULL));
+			}
+			else
+			{
+				bson_value_t countValue = { 0 };
+				countValue.value_type = BSON_TYPE_INT32;
+				countValue.value.v_int32 = 1;
+
+				repathArgs = AddSimpleGroupAccumulator(query, &countValue, repathArgs,
+													   accumulatorText, parseState,
+													   identifiers,
+													   origEntry->expr,
+													   BsonSumAggregateFunctionOid(),
+													   context->variableSpec);
+			}
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$first"))
 		{

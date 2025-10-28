@@ -549,9 +549,9 @@ EXPlAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_pipeline('
                ->  CTE Scan on facet_base_0_0 facetsub_stage_1
                      Output: facetsub_stage_1.document
          ->  Aggregate
-               Output: COALESCE(bson_array_agg((bson_repath_and_build('d'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))), 'b'::text), '{ "b" : [  ] }'::bson)
+               Output: COALESCE(bson_array_agg((bson_repath_and_build('d'::text, documentdb_api_internal.bsoncount(1))), 'b'::text), '{ "b" : [  ] }'::bson)
                ->  Aggregate
-                     Output: bson_repath_and_build('d'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+                     Output: bson_repath_and_build('d'::text, documentdb_api_internal.bsoncount(1))
                      ->  CTE Scan on facet_base_0_0 facetsub_stage_2
          ->  Aggregate
                Output: COALESCE(bson_array_agg((bson_dollar_unwind(facetsub_stage_3.document, '$a.b'::text)), 'c'::text), '{ "c" : [  ] }'::bson)
@@ -1096,8 +1096,8 @@ SELECT document FROM bson_aggregation_pipeline('db',
 
 EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_pipeline('db', 
     '{ "aggregate": "agg_pipeline_movie_screenings", "pipeline": [ { "$lookup": { "from": "agg_pipeline_movie_catalog", "as": "matched_docs", "pipeline": [ { "$count": "efe" } ] } }, { "$sample": { "size": 3 } } ], "cursor": {} }');
-                                                                                                                                       QUERY PLAN                                                                                                                                        
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                                 QUERY PLAN                                                                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit
    Output: agg_stage_1.document, (random())
    ->  Sort
@@ -1106,11 +1106,11 @@ EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_pipeline('
          ->  Subquery Scan on agg_stage_1
                Output: agg_stage_1.document, random()
                ->  Nested Loop
-                     Output: documentdb_api_internal.bson_dollar_merge_documents(collection.document, (COALESCE(bson_array_agg((bson_repath_and_build('efe'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))), 'matched_docs'::text), '{ "matched_docs" : [  ] }'::bson)), true)
+                     Output: documentdb_api_internal.bson_dollar_merge_documents(collection.document, (COALESCE(bson_array_agg((bson_repath_and_build('efe'::text, documentdb_api_internal.bsoncount(1))), 'matched_docs'::text), '{ "matched_docs" : [  ] }'::bson)), true)
                      ->  Aggregate
-                           Output: COALESCE(bson_array_agg((bson_repath_and_build('efe'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))), 'matched_docs'::text), '{ "matched_docs" : [  ] }'::bson)
+                           Output: COALESCE(bson_array_agg((bson_repath_and_build('efe'::text, documentdb_api_internal.bsoncount(1))), 'matched_docs'::text), '{ "matched_docs" : [  ] }'::bson)
                            ->  Aggregate
-                                 Output: bson_repath_and_build('efe'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+                                 Output: bson_repath_and_build('efe'::text, documentdb_api_internal.bsoncount(1))
                                  ->  Bitmap Heap Scan on documentdb_data.documents_3503 collection_0_1
                                        Recheck Cond: (collection_0_1.shard_key_value = '3503'::bigint)
                                        ->  Bitmap Index Scan on _id_
@@ -1145,9 +1145,9 @@ EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_pipeline('
                            Index Cond: (collection_0_1.shard_key_value = '3503'::bigint)
    SubPlan 1
      ->  Aggregate
-           Output: COALESCE(bson_array_agg((bson_repath_and_build('efe'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))), 'matched_docs'::text), '{ "matched_docs" : [  ] }'::bson)
+           Output: COALESCE(bson_array_agg((bson_repath_and_build('efe'::text, documentdb_api_internal.bsoncount(1))), 'matched_docs'::text), '{ "matched_docs" : [  ] }'::bson)
            ->  Aggregate
-                 Output: bson_repath_and_build('efe'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+                 Output: bson_repath_and_build('efe'::text, documentdb_api_internal.bsoncount(1))
                  ->  Function Scan on documentdb_api_catalog.bson_lookup_unwind lookup_subpipeline_substage_0
                        Output: lookup_subpipeline_substage_0.lookup_unwind
                        Function Call: bson_lookup_unwind(lookup_non_inlined_stage_1."right", 'matched_docs'::text)

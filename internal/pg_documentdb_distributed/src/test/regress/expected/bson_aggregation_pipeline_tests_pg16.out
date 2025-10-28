@@ -1948,11 +1948,10 @@ EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, BUFFERS OFF, TIMING OFF, SUMMARY OFF
          ->  Subquery Scan on agg_stage_0 (actual rows=1 loops=1)
                Output: documentdb_core.bson_repath_and_build(agg_stage_0.c1, agg_stage_0.c2, agg_stage_0.c3, agg_stage_0.c4)
                ->  GroupAggregate (actual rows=1 loops=1)
-                     Output: '_id'::text, ('{ "" : null }'::documentdb_core.bson), 'count'::text, documentdb_api_catalog.bsonsum('{ "" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-                     Group Key: '{ "" : null }'::documentdb_core.bson
+                     Output: '_id'::text, '{ "" : null }'::documentdb_core.bson, 'count'::text, documentdb_api_catalog.bsonsum('{ "" : { "$numberInt" : "1" } }'::documentdb_core.bson)
                      ->  Seq Scan on documentdb_data.documents_4110_411001 collection (actual rows=5 loops=1)
-                           Output: '{ "" : null }'::documentdb_core.bson
-(16 rows)
+                           Output: collection.shard_key_value, collection.object_id, collection.document
+(15 rows)
 
 EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "aggregation_pipeline", "pipeline": [ { "$group": {"_id": null, "count": { "$sum": {} } } }], "cursor": {} }');
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        QUERY PLAN                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
@@ -1969,11 +1968,10 @@ EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, BUFFERS OFF, TIMING OFF, SUMMARY OFF
          ->  Subquery Scan on agg_stage_0 (actual rows=1 loops=1)
                Output: documentdb_core.bson_repath_and_build(agg_stage_0.c1, agg_stage_0.c2, agg_stage_0.c3, agg_stage_0.c4)
                ->  GroupAggregate (actual rows=1 loops=1)
-                     Output: '_id'::text, ('{ "" : null }'::documentdb_core.bson), 'count'::text, documentdb_api_catalog.bsonsum('{ "" : {  } }'::documentdb_core.bson)
-                     Group Key: '{ "" : null }'::documentdb_core.bson
+                     Output: '_id'::text, '{ "" : null }'::documentdb_core.bson, 'count'::text, documentdb_api_catalog.bsonsum('{ "" : {  } }'::documentdb_core.bson)
                      ->  Seq Scan on documentdb_data.documents_4110_411001 collection (actual rows=5 loops=1)
-                           Output: '{ "" : null }'::documentdb_core.bson
-(16 rows)
+                           Output: collection.shard_key_value, collection.object_id, collection.document
+(15 rows)
 
 EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "aggregation_pipeline", "pipeline": [ { "$group": {"_id": "$a", "count": { "$sum": 1 } } }], "cursor": {} }');
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          QUERY PLAN                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          

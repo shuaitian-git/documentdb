@@ -139,7 +139,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
  Subquery Scan on agg_stage_1 (actual rows=1 loops=1)
    Output: bson_repath_and_build(agg_stage_1.c1, agg_stage_1.c2, agg_stage_1.c3, agg_stage_1.c4)
    ->  GroupAggregate (actual rows=1 loops=1)
-         Output: '_id'::text, ('{ "" : "1" }'::bson), 'n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)
+         Output: '_id'::text, ('{ "" : "1" }'::bson), 'n'::text, bsoncount(1)
          Group Key: '{ "" : "1" }'::bson
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=16 loops=1)
                Output: '{ "" : "1" }'::bson
@@ -166,7 +166,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
  Subquery Scan on agg_stage_1 (actual rows=1 loops=1)
    Output: bson_repath_and_build(agg_stage_1.c1, agg_stage_1.c2, agg_stage_1.c3, agg_stage_1.c4)
    ->  GroupAggregate (actual rows=1 loops=1)
-         Output: '_id'::text, ('{ "" : "1" }'::bson), 'n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)
+         Output: '_id'::text, ('{ "" : "1" }'::bson), 'n'::text, bsoncount(1)
          Group Key: '{ "" : "1" }'::bson
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=7 loops=1)
                Output: '{ "" : "1" }'::bson
@@ -188,10 +188,10 @@ SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate
 (1 row)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_only_scan_coll", "query": {"country": {"$eq": "USA"}}}');
-                                                                                    QUERY PLAN                                                                                    
+                                                        QUERY PLAN                                                        
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_dollar_merge_documents(bson_repath_and_build('n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)), '{ "ok" : { "$numberDouble" : "1.0" } }'::bson, false)
+   Output: bsoncommandcount(1)
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -214,10 +214,10 @@ SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_
 SELECT 'VACUUM documentdb_data.documents_' || :'coll_id' \gexec
 VACUUM documentdb_data.documents_69001
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_only_scan_coll", "query": {"country": {"$eq": "USA"}}}');
-                                                                                    QUERY PLAN                                                                                    
+                                                        QUERY PLAN                                                        
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_dollar_merge_documents(bson_repath_and_build('n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)), '{ "ok" : { "$numberDouble" : "1.0" } }'::bson, false)
+   Output: bsoncommandcount(1)
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -238,10 +238,10 @@ SELECT documentdb_api.update('idx_only_scan_db', '{"update": "decimal128", "upda
 (1 row)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_only_scan_coll", "query": {"country": {"$eq": "USA"}}}');
-                                                                                    QUERY PLAN                                                                                    
+                                                        QUERY PLAN                                                        
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_dollar_merge_documents(bson_repath_and_build('n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)), '{ "ok" : { "$numberDouble" : "1.0" } }'::bson, false)
+   Output: bsoncommandcount(1)
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -261,10 +261,10 @@ SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_
 (1 row)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_only_scan_coll", "query": {"country": {"$in": ["USA", "Italy"]}}}');
-                                                                                    QUERY PLAN                                                                                    
+                                                          QUERY PLAN                                                           
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_dollar_merge_documents(bson_repath_and_build('n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)), '{ "ok" : { "$numberDouble" : "1.0" } }'::bson, false)
+   Output: bsoncommandcount(1)
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -288,7 +288,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                         QUERY PLAN                                                        
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=7 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -312,7 +312,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                                      QUERY PLAN                                                                      
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -336,7 +336,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                    QUERY PLAN                                                   
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Index Only Scan using _id_ on documentdb_data.documents_69001_690002 collection (actual rows=16 loops=1)
          Output: collection.shard_key_value, collection.object_id
          Index Cond: (collection.shard_key_value = '69001'::bigint)
@@ -354,7 +354,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                                     QUERY PLAN                                                                     
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=3 loops=1)
          indexName: country_provider_1
          isMultiKey: false
@@ -377,7 +377,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                                     QUERY PLAN                                                                     
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
          indexName: country_provider_1
          isMultiKey: false
@@ -401,7 +401,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                 QUERY PLAN                                                
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Index Scan using _id_ on documentdb_data.documents_69001_690002 collection (actual rows=6 loops=1)
          Output: collection.shard_key_value, collection.object_id, collection.document
          Index Cond: (collection.shard_key_value = '69001'::bigint)
@@ -453,7 +453,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                       QUERY PLAN                                                      
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=12 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -469,7 +469,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                       QUERY PLAN                                                      
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=16 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -485,7 +485,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                      QUERY PLAN                                                      
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -502,7 +502,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                                                      QUERY PLAN                                                                                      
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -522,7 +522,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                      QUERY PLAN                                                      
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=7 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -546,7 +546,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                                                QUERY PLAN                                                                                
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
          indexName: country_provider_1
          isMultiKey: true
@@ -576,7 +576,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                      QUERY PLAN                                                      
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
-   Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          indexName: country_1
          isMultiKey: false
@@ -601,6 +601,25 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                                                         QUERY PLAN                                                        
 ---------------------------------------------------------------------
  Aggregate (actual rows=1 loops=1)
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
+         indexName: country_1
+         isMultiKey: false
+         indexBounds: ["country": ["Mexico", "Mexico"]]
+         innerScanLoops: 2 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: false, estimatedEntryCount: 5)]
+         ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=5 loops=1)
+               Index Cond: (collection.document @= '{ "country" : "Mexico" }'::bson)
+               Heap Fetches: 0
+(12 rows)
+
+-- count with legacy count aggregates
+set documentdb.enableNewCountAggregates to off;
+EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$eq": "Mexico"}} }, { "$count": "count" }]}');
+                                                        QUERY PLAN                                                        
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
    Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          indexName: country_1
@@ -614,6 +633,49 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                Heap Fetches: 0
 (12 rows)
 
+EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$gte": "Brazil"}} }, { "$group" : { "_id" : "1", "n" : { "$sum" : 1 } } }]}');
+                                                           QUERY PLAN                                                            
+---------------------------------------------------------------------
+ Subquery Scan on agg_stage_1 (actual rows=1 loops=1)
+   Output: bson_repath_and_build(agg_stage_1.c1, agg_stage_1.c2, agg_stage_1.c3, agg_stage_1.c4)
+   ->  GroupAggregate (actual rows=1 loops=1)
+         Output: '_id'::text, ('{ "" : "1" }'::bson), 'n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)
+         Group Key: '{ "" : "1" }'::bson
+         ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=17 loops=1)
+               Output: '{ "" : "1" }'::bson
+               indexName: country_1
+               isMultiKey: false
+               indexBounds: ["country": ["Brazil", { })]
+               innerScanLoops: 8 loops
+               scanType: ordered
+               scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 17)]
+               ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=17 loops=1)
+                     Index Cond: (collection.document @>= '{ "country" : "Brazil" }'::bson)
+                     Heap Fetches: 0
+(16 rows)
+
+EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$gte": "Brazil"}} }, { "$group" : { "_id" : null, "n" : { "$sum" : 1 } } }]}');
+                                                           QUERY PLAN                                                            
+---------------------------------------------------------------------
+ Subquery Scan on agg_stage_1 (actual rows=1 loops=1)
+   Output: bson_repath_and_build(agg_stage_1.c1, agg_stage_1.c2, agg_stage_1.c3, agg_stage_1.c4)
+   ->  GroupAggregate (actual rows=1 loops=1)
+         Output: '_id'::text, ('{ "" : null }'::bson), 'n'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson)
+         Group Key: '{ "" : null }'::bson
+         ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=17 loops=1)
+               Output: '{ "" : null }'::bson
+               indexName: country_1
+               isMultiKey: false
+               indexBounds: ["country": ["Brazil", { })]
+               innerScanLoops: 8 loops
+               scanType: ordered
+               scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 17)]
+               ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=17 loops=1)
+                     Index Cond: (collection.document @>= '{ "country" : "Brazil" }'::bson)
+                     Heap Fetches: 0
+(16 rows)
+
+set documentdb.enableNewCountAggregates to on;
 -- TODO support sharded collections, currently we don't because of the shard_key_value filter
 -- SELECT documentdb_api.shard_collection('idx_only_scan_db', 'idx_only_scan_coll', '{ "country": "hashed" }', FALSE);
 -- EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$gte": "Brazil"}} }, { "$group" : { "_id" : "1", "n" : { "$sum" : 1 } } }]}');

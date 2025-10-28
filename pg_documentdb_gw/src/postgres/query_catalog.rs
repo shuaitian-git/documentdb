@@ -43,6 +43,8 @@ pub struct QueryCatalog {
     pub single_index_condition_regex: String,
     pub api_catalog_name_regex: String,
     pub output_count_regex: String,
+    pub output_bson_count_aggregate: String,
+    pub output_bson_command_count_aggregate: String,
 
     // client.rs
     pub set_search_path_and_timeout: String,
@@ -200,6 +202,14 @@ impl QueryCatalog {
 
     pub fn output_count_regex(&self) -> &str {
         &self.output_count_regex
+    }
+
+    pub fn output_bson_count_aggregate(&self) -> &str {
+        &self.output_bson_count_aggregate
+    }
+
+    pub fn output_bson_command_count_aggregate(&self) -> &str {
+        &self.output_bson_command_count_aggregate
     }
 
     // Client getters
@@ -412,6 +422,8 @@ pub fn create_query_catalog() -> QueryCatalog {
             single_index_condition_regex: "(OPERATOR\\()?(documentdb_api_catalog\\.)?(?<operator>@[^\\)\\s]+)\\)?\\s+'BSONHEX(?<queryBson>\\S+)'".to_string(),
             api_catalog_name_regex: "documentdb_api_catalog.".to_string(),
             output_count_regex: "BSONSUM('{ \"\" : { \"$numberInt\" : \"1\" } }'::documentdb_core.bson)".to_string(),
+            output_bson_count_aggregate: "bsoncount(1)".to_string(),
+            output_bson_command_count_aggregate: "bsoncommandcount(1)".to_string(),
 
             // cursor.rs
             cursor_get_more: "SELECT cursorPage, continuation FROM documentdb_api.cursor_get_more($1, $2, $3)".to_string(),

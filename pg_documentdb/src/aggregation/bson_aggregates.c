@@ -11,6 +11,7 @@
 #include <postgres.h>
 #include <fmgr.h>
 #include <catalog/pg_type.h>
+#include <common/int.h>
 
 #include "io/bson_core.h"
 #include "query/bson_compare.h"
@@ -140,6 +141,10 @@ PG_FUNCTION_INFO_V1(bson_maxn_transition);
 PG_FUNCTION_INFO_V1(bson_maxminn_final);
 PG_FUNCTION_INFO_V1(bson_minn_transition);
 PG_FUNCTION_INFO_V1(bson_maxminn_combine);
+PG_FUNCTION_INFO_V1(bson_count_transition);
+PG_FUNCTION_INFO_V1(bson_count_combine);
+PG_FUNCTION_INFO_V1(bson_count_final);
+PG_FUNCTION_INFO_V1(bson_command_count_final);
 
 Datum
 bson_out_transition(PG_FUNCTION_ARGS)
@@ -1858,4 +1863,84 @@ bson_maxminn_combine(PG_FUNCTION_ARGS)
 	bytesRight = SerializeBinaryHeapState(aggregateContext, currentRightState,
 										  bytesRight);
 	PG_RETURN_POINTER(bytesRight);
+}
+
+
+Datum
+bson_count_transition(PG_FUNCTION_ARGS)
+{
+	int64_t currentCount = PG_GETARG_INT64(0);
+	int64_t result = 0;
+
+	if (unlikely(pg_add_s64_overflow(currentCount, 1, &result)))
+	{
+		ereport(ERROR, errcode(ERRCODE_DOCUMENTDB_OVERFLOW),
+				errmsg("Count overflowed"));
+	}
+
+	PG_RETURN_INT64(result);
+}
+
+
+Datum
+bson_count_combine(PG_FUNCTION_ARGS)
+{
+	int64_t leftCount = PG_GETARG_INT64(0);
+	int64_t rightCount = PG_GETARG_INT64(1);
+	int64_t result = 0;
+
+	if (unlikely(pg_add_s64_overflow(leftCount, rightCount, &result)))
+	{
+		ereport(ERROR, errcode(ERRCODE_DOCUMENTDB_OVERFLOW),
+				errmsg("Count overflowed when combining the result"));
+	}
+
+	PG_RETURN_INT64(result);
+}
+
+
+static inline pgbson *
+CreateCountBson(int64_t count, bool isCommandCount)
+{
+	pgbson_writer writer;
+	PgbsonWriterInit(&writer);
+
+	const char *path = isCommandCount ? "n" : "";
+	const int pathLength = isCommandCount ? 1 : 0;
+
+	if (count <= INT32_MAX)
+	{
+		PgbsonWriterAppendInt32(&writer, path, pathLength, (int32_t) count);
+	}
+	else
+	{
+		PgbsonWriterAppendInt64(&writer, path, pathLength, count);
+	}
+
+	if (isCommandCount)
+	{
+		PgbsonWriterAppendDouble(&writer, "ok", 2, 1.0);
+	}
+
+	return PgbsonWriterGetPgbson(&writer);
+}
+
+
+Datum
+bson_count_final(PG_FUNCTION_ARGS)
+{
+	int64_t finalCount = PG_GETARG_INT64(0);
+	bool isCommandCount = false;
+
+	PG_RETURN_POINTER(CreateCountBson(finalCount, isCommandCount));
+}
+
+
+Datum
+bson_command_count_final(PG_FUNCTION_ARGS)
+{
+	int64_t finalCount = PG_GETARG_INT64(0);
+	bool isCommandCount = true;
+
+	PG_RETURN_POINTER(CreateCountBson(finalCount, isCommandCount));
 }

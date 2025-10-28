@@ -141,6 +141,9 @@ bool EnableUnifyPfeOnIndexInfo = DEFAULT_ENABLE_UNIFY_PFE_ON_INDEXINFO;
 #define DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT true
 bool EnableUpdateBsonDocument = DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT;
 
+#define DEFAULT_ENABLE_NEW_COUNT_AGGREGATES true
+bool EnableNewCountAggregates = DEFAULT_ENABLE_NEW_COUNT_AGGREGATES;
+
 
 /*
  * SECTION: Aggregation & Query feature flags
@@ -648,5 +651,12 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable unique for coll mod."),
 		NULL, &EnableCollModUnique, DEFAULT_ENABLE_COLLMOD_UNIQUE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableNewCountAggregates", newGucPrefix),
+		gettext_noop(
+			"Whether to enable new count aggregate optimizations."),
+		NULL, &EnableNewCountAggregates, DEFAULT_ENABLE_NEW_COUNT_AGGREGATES,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }

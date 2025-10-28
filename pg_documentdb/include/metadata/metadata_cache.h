@@ -352,6 +352,8 @@ Oid BsonDollarReplaceRootFunctionOid(void);
 Oid BsonDollarReplaceRootWithLetFunctionOid(void);
 Oid BsonDollarReplaceRootWithLetAndCollationFunctionOid(void);
 Oid BsonSumAggregateFunctionOid(void);
+Oid BsonCommandCountAggregateFunctionOid(void);
+Oid BsonCountAggregateFunctionOid(void);
 Oid BsonIntegralAggregateFunctionOid(void);
 Oid BsonDerivativeAggregateFunctionOid(void);
 Oid BsonAvgAggregateFunctionOid(void);
