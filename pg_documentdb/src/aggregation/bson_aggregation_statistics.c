@@ -547,7 +547,7 @@ bson_covariance_samp_final(PG_FUNCTION_ARGS)
  * Transition function for the BSON_STD_DEV_POP and BSON_STD_DEV_SAMP aggregate.
  * Implementation refer to https://github.com/postgres/postgres/blob/master/src/backend/utils/adt/float.c#L2950
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_std_dev_pop_samp_transition(PG_FUNCTION_ARGS)
 {
 	bytea *bytes;
@@ -696,7 +696,7 @@ bson_std_dev_pop_samp_combine(PG_FUNCTION_ARGS)
  * This takes the final value created and outputs a bson "std_dev_pop"
  * with the appropriate type.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_std_dev_pop_final(PG_FUNCTION_ARGS)
 {
 	bytea *stdDevIntermediateState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -757,7 +757,7 @@ bson_std_dev_pop_final(PG_FUNCTION_ARGS)
  * This takes the final value created and outputs a bson "std_dev_samp"
  * with the appropriate type.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_std_dev_samp_final(PG_FUNCTION_ARGS)
 {
 	bytea *stdDevIntermediateState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -1654,7 +1654,7 @@ CalculateCombineFuncForCovarianceOrVarianceWithYCAlgr(const
  * Sxy = Sxy + (N - 1) / N * (X - Sx / N) * (Y - Sy / N)
  *
  */
-static void
+pg_attribute_no_sanitize_alignment() static void
 CalculateSFuncForCovarianceOrVarianceWithYCAlgr(const bson_value_t *newXValue,
 												const bson_value_t *newYValue,
 												BsonCovarianceAndVarianceAggState *

@@ -94,7 +94,7 @@ BsonValueIsNumber(const bson_value_t *value)
 }
 
 
-static inline bool
+static pg_attribute_no_sanitize_alignment() inline bool
 BsonValueIsNumberOrBool(const bson_value_t *value)
 {
 	return BsonTypeIsNumberOrBool(value->value_type);

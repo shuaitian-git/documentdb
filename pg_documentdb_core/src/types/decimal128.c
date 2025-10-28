@@ -1087,7 +1087,7 @@ RoundOrTruncateDecimal128Number(const bson_value_t *number, int64_t precision,
 /*
  * Performs the specified mathematical operation on x and y and sets it to result.
  */
-static Decimal128Result
+pg_attribute_no_sanitize_alignment() static Decimal128Result
 Decimal128MathematicalOperation2Operands(const bson_value_t *x, const bson_value_t *y,
 										 bson_value_t *result, Decimal128MathOperation
 										 operation)
@@ -1399,7 +1399,7 @@ GetBsonDecimal128FromBIDUINT128(const BID_UINT128 *bid)
 /**
  * Checks if value is decimal128 otherwise throws generic error
  */
-static inline void
+pg_attribute_no_sanitize_alignment() static inline void
 CheckDecimal128Type(const bson_value_t *value)
 {
 	if (value->value_type != BSON_TYPE_DECIMAL128)

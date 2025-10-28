@@ -2795,8 +2795,9 @@ CompareBsonValueAgainstQueryCore(const pgbsonelement *element,
 		}
 
 		filterElement->pathLength = 0;
-		TraverseBson(&documentIterator, filterElement->path, state,
-					 executionFuncs);
+		StringView pathView = CreateStringViewFromString(filterElement->path);
+		TraverseBsonPathStringView(&documentIterator, &pathView, state,
+								   executionFuncs);
 		return ProcessQueryResultAndGetMatch(isQueryFilterNull, state);
 	}
 }

@@ -1226,7 +1226,7 @@ GetIndexTermMetadata(void *indexOptions)
  * a wildcard, and/or suffix of the given path.
  * The method assumes that the options provided is a BsonGinWildcardProjectionPathOptions
  */
-IndexTraverseOption
+pg_attribute_no_sanitize_alignment() IndexTraverseOption
 GetWildcardProjectionPathIndexTraverseOption(void *contextOptions, const
 											 char *currentPath, uint32_t
 											 currentPathLength,
@@ -1473,7 +1473,7 @@ ValidateWildcardProjectPathSpec(const char *prefix)
  * Here we parse the jsonified path options to build a serialized path
  * structure that is more efficiently parsed during term generation.
  */
-static Size
+pg_attribute_no_sanitize_alignment() static Size
 FillWildcardProjectPathSpec(const char *prefix, void *buffer)
 {
 	if (prefix == NULL)

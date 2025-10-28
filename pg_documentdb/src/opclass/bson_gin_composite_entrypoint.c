@@ -1787,7 +1787,7 @@ ValidateCompositePathSpec(const char *prefix)
  * Here we parse the jsonified path options to build a serialized path
  * structure that is more efficiently parsed during term generation.
  */
-static Size
+pg_attribute_no_sanitize_alignment() static Size
 FillCompositePathSpec(const char *prefix, void *buffer)
 {
 	if (prefix == NULL)
@@ -2192,7 +2192,7 @@ GenerateCompositeExtractQueryUniqueEqual(pgbson *bson,
 }
 
 
-static int32_t
+pg_attribute_no_sanitize_alignment() static int32_t
 GetIndexPathsFromOptions(BsonGinCompositePathOptions *options,
 						 const char **indexPaths,
 						 int8_t *sortOrders)
@@ -2216,7 +2216,7 @@ GetIndexPathsFromOptions(BsonGinCompositePathOptions *options,
 }
 
 
-static int32_t
+pg_attribute_no_sanitize_alignment() static int32_t
 GetIndexPathsFromOptionsWithLength(BsonGinCompositePathOptions *options,
 								   const char **indexPaths,
 								   uint32_t *indexPathLengths,

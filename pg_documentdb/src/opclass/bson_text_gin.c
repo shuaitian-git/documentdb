@@ -1058,7 +1058,7 @@ FillDefaultLanguageSpec(const char *defaultLanguage, void *buffer)
  * This includes the path and associated weights encoded as follows
  * <numPaths><Datum[4] of weights>[<pathLength><path><weightIndex>]+
  */
-static Size
+pg_attribute_no_sanitize_alignment() static Size
 FillWeightsSpec(const char *weightsSpec, void *buffer)
 {
 	/* Weights count + Weight array (for rank) */

@@ -157,7 +157,7 @@ bson_out_final(PG_FUNCTION_ARGS)
 }
 
 
-inline static Datum
+pg_attribute_no_sanitize_alignment() inline static Datum
 BsonArrayAggTransitionCore(PG_FUNCTION_ARGS, bool handleSingleValueElement,
 						   const char *path)
 {
@@ -338,7 +338,7 @@ bson_distinct_array_agg_transition(PG_FUNCTION_ARGS)
 }
 
 
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_array_agg_final(PG_FUNCTION_ARGS)
 {
 	bytea *currentArrayAgg = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -415,7 +415,7 @@ bson_array_agg_final(PG_FUNCTION_ARGS)
  * Similar to array_agg but also writes "ok": 1
  * Also returns an empty array with "ok": 1 if never initialized.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_distinct_array_agg_final(PG_FUNCTION_ARGS)
 {
 	bytea *currentArrayAgg = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -452,7 +452,7 @@ bson_distinct_array_agg_final(PG_FUNCTION_ARGS)
  * Core implementation of the object aggregation stage. This is used by both object_agg and merge_objects.
  * Both have the same implementation but differ in validations made inside the caller method.
  */
-inline static Datum
+pg_attribute_no_sanitize_alignment() inline static Datum
 AggregateObjectsCore(PG_FUNCTION_ARGS)
 {
 	BsonObjectAggState *currentState;
@@ -635,7 +635,7 @@ bson_object_agg_final(PG_FUNCTION_ARGS)
  * It ignores non-numeric values, and manages type upgrades and coercion
  * to the right types as documents are encountered.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_sum_avg_transition(PG_FUNCTION_ARGS)
 {
 	bytea *bytes;
@@ -753,7 +753,7 @@ bson_sum_avg_minvtransition(PG_FUNCTION_ARGS)
  * This takes the final value created and outputs a bson "sum"
  * with the appropriate type.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_sum_final(PG_FUNCTION_ARGS)
 {
 	bytea *currentSum = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -782,7 +782,7 @@ bson_sum_final(PG_FUNCTION_ARGS)
  * Applies the "final calculation" (FINALFUNC) for average.
  * This takes the final value created and outputs a bson "average"
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_avg_final(PG_FUNCTION_ARGS)
 {
 	bytea *avgIntermediateState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -1146,7 +1146,7 @@ bson_build_distinct_response(PG_FUNCTION_ARGS)
 /*
  * Transition function for the BSON_ADD_TO_SET aggregate.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_add_to_set_transition(PG_FUNCTION_ARGS)
 {
 	BsonAddToSetState *currentState = { 0 };
@@ -1229,7 +1229,7 @@ bson_add_to_set_transition(PG_FUNCTION_ARGS)
 /*
  * Final function for the BSON_ADD_TO_SET aggregate.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_add_to_set_final(PG_FUNCTION_ARGS)
 {
 	bytea *currentState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -1323,7 +1323,7 @@ CheckAggregateIntermediateResultSize(uint32_t size)
  * Helper method that iterates a pgbson writing its values to a bson tree. If a key already
  * exists in the tree, then it's overwritten.
  */
-static void
+pg_attribute_no_sanitize_alignment() static void
 CreateObjectAggTreeNodes(BsonObjectAggState *currentState, pgbson *currentValue)
 {
 	bson_iter_t docIter;
@@ -1412,7 +1412,7 @@ ValidateMergeObjectsInput(pgbson *input)
 /*
  * Function used to parse and return a mergeObjects tree.
  */
-static Datum
+pg_attribute_no_sanitize_alignment() static Datum
 ParseAndReturnMergeObjectsTree(BsonObjectAggState *state)
 {
 	if (state != NULL)

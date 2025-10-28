@@ -4512,8 +4512,8 @@ reverseScan(IndexScanDesc scan)
 bool
 rumgettuple(IndexScanDesc scan, ScanDirection direction)
 {
-	bool recheck;
-	bool recheckOrderby;
+	bool recheck = false;
+	bool recheckOrderby = false;
 	RumScanOpaque so = (RumScanOpaque) scan->opaque;
 	RumSortItem *item;
 	bool should_free;
