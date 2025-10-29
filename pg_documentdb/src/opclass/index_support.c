@@ -32,6 +32,7 @@
 
 #include "metadata/index.h"
 #include "query/query_operator.h"
+#include "opclass/bson_gin_index_types_core.h"
 #include "geospatial/bson_geospatial_geonear.h"
 #include "planner/mongo_query_operator.h"
 #include "opclass/bson_index_support.h"
@@ -218,6 +219,9 @@ static bool PushTextQueryToRuntime(PlannerInfo *root, RelOptInfo *rel,
 static void ThrowNoTextIndexFound(void);
 static void ThrowNoVectorIndexFound(void);
 
+static IndexPath * TrimIndexRestrictInfoForBtreePath(PlannerInfo *root,
+													 IndexPath *indexPath,
+													 bool *hasNonIdClauses);
 static bool MatchIndexPathEquals(IndexPath *path, void *matchContext);
 static bool EnableGeoNearForceIndexPushdown(PlannerInfo *root,
 											ReplaceExtensionFunctionContext *context);
@@ -313,6 +317,7 @@ extern bool EnableIndexOrderByReverse;
 extern bool SetSelectivityForFullScan;
 extern bool EnableExprLookupIndexPushdown;
 extern bool EnableUnifyPfeOnIndexInfo;
+extern bool EnableIdIndexPushdown;
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -1565,36 +1570,75 @@ ConsiderIndexOnlyScan(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 			continue;
 		}
 
-		/* TODO: support primary key index (btree). */
+		bool isBtreeIndex = false;
 		IndexPath *indexPath = (IndexPath *) path;
-		if (indexPath->indexinfo->nkeycolumns < 1 ||
-			!IsOrderBySupportedOnOpClass(indexPath->indexinfo->relam,
-										 indexPath->indexinfo->opfamily[0]))
+		if (IsBtreePrimaryKeyIndex(indexPath->indexinfo) &&
+			EnableIdIndexPushdown)
 		{
-			continue;
+			isBtreeIndex = true;
+			bool hasOtherQuals = false;
+			IndexPath *modified = TrimIndexRestrictInfoForBtreePath(root, indexPath,
+																	&hasOtherQuals);
+			if (hasOtherQuals)
+			{
+				/* Not modified or has non _id quals - skip */
+				continue;
+			}
+
+			if (modified == indexPath)
+			{
+				indexPath = palloc(sizeof(IndexPath));
+				memcpy(indexPath, modified, sizeof(IndexPath));
+			}
+			else
+			{
+				indexPath = modified;
+			}
+		}
+		else
+		{
+			if (indexPath->indexinfo->nkeycolumns < 1 ||
+				!IsOrderBySupportedOnOpClass(indexPath->indexinfo->relam,
+											 indexPath->indexinfo->opfamily[0]))
+			{
+				continue;
+			}
+
+			if (!CompositeIndexSupportsIndexOnlyScan(indexPath))
+			{
+				continue;
+			}
+
+			if (!IndexClausesValidForIndexOnlyScan(indexPath, rel, context))
+			{
+				continue;
+			}
 		}
 
-		if (!CompositeIndexSupportsIndexOnlyScan(indexPath))
+		/* we need to copy the index path and set it as index only scan.
+		 * Also we need to set canreturn to true so that postgres allows the index only scan path. */
+		IndexPath *indexPathCopy;
+		if (!isBtreeIndex)
 		{
-			continue;
+			indexPathCopy = makeNode(IndexPath);
+			memcpy(indexPathCopy, indexPath, sizeof(IndexPath));
+
+			indexPathCopy->indexinfo = palloc(sizeof(IndexOptInfo));
+			memcpy(indexPathCopy->indexinfo, indexPath->indexinfo,
+				   sizeof(IndexOptInfo));
+
+			indexPathCopy->indexinfo->canreturn = palloc0(sizeof(bool) *
+														  indexPathCopy->indexinfo->
+														  ncolumns);
+			indexPathCopy->indexinfo->canreturn[0] = true;
+		}
+		else
+		{
+			/* This is pre-copied by TrimIndexRestrictInfoForBtreePath */
+			indexPathCopy = indexPath;
 		}
 
-		if (!IndexClausesValidForIndexOnlyScan(indexPath, rel, context))
-		{
-			continue;
-		}
-
-		/* we need to copy the index path and set it as index only scan. Also we need to set canreturn to true so that postgres allows the index only scan path. */
-		IndexPath *indexPathCopy = makeNode(IndexPath);
-		memcpy(indexPathCopy, indexPath, sizeof(IndexPath));
-
-		indexPathCopy->indexinfo = palloc(sizeof(IndexOptInfo));
-		memcpy(indexPathCopy->indexinfo, indexPath->indexinfo,
-			   sizeof(IndexOptInfo));
 		indexPathCopy->path.pathtype = T_IndexOnlyScan;
-		indexPathCopy->indexinfo->canreturn = palloc0(sizeof(bool) *
-													  indexPathCopy->indexinfo->ncolumns);
-		indexPathCopy->indexinfo->canreturn[0] = true;
 
 		bool partialPath = false;
 		double loopCount = 1.0;
@@ -2719,6 +2763,190 @@ OptimizeIndexExpressionsForRange(List *indexClauses)
 }
 
 
+static IndexPath *
+TrimIndexRestrictInfoForBtreePath(PlannerInfo *root, IndexPath *indexPath,
+								  bool *hasNonIdClauses)
+{
+	List *clauseRestrictInfos = NIL;
+	List *objectIdClauses = NIL;
+	ListCell *cell;
+	bool hasOtherClauses = false;
+	foreach(cell, indexPath->indexclauses)
+	{
+		IndexClause *clause = lfirst(cell);
+		clauseRestrictInfos = lappend(clauseRestrictInfos, clause->rinfo);
+		if (clause->indexcol == 1)
+		{
+			objectIdClauses = lappend(objectIdClauses, clause->rinfo->clause);
+		}
+	}
+
+	/* Now walk the btree index restrict info for a match */
+	List *restrictInfosToRemove = NIL;
+	List *additionalIndexClauses = NIL;
+	foreach(cell, indexPath->indexinfo->indrestrictinfo)
+	{
+		RestrictInfo *rinfo = lfirst(cell);
+		if (list_member(clauseRestrictInfos, rinfo))
+		{
+			continue;
+		}
+
+		if (!IsA(rinfo->clause, OpExpr))
+		{
+			hasOtherClauses = true;
+			continue;
+		}
+
+		OpExpr *clauseExpr = (OpExpr *) rinfo->clause;
+		if (list_length(clauseExpr->args) != 2)
+		{
+			hasOtherClauses = true;
+			continue;
+		}
+
+		if (!IsA(linitial(clauseExpr->args), Var) ||
+			(castNode(Var, linitial(clauseExpr->args))->varattno !=
+			 DOCUMENT_DATA_TABLE_DOCUMENT_VAR_ATTR_NUMBER) ||
+			!IsA(lsecond(clauseExpr->args), Const))
+		{
+			hasOtherClauses = true;
+			continue;
+		}
+
+		Var *firstVar = linitial(clauseExpr->args);
+		Const *secondConst = lsecond(clauseExpr->args);
+		pgbson *qual = DatumGetPgBson(secondConst->constvalue);
+
+		pgbsonelement qualElement;
+		const char *collation = PgbsonToSinglePgbsonElementWithCollation(qual,
+																		 &qualElement);
+		if (collation != NULL)
+		{
+			hasOtherClauses = true;
+			continue;
+		}
+
+		if (qualElement.pathLength != 3 || strcmp(qualElement.path, "_id") != 0)
+		{
+			hasOtherClauses = true;
+			continue;
+		}
+
+		const MongoIndexOperatorInfo *indexOp = GetMongoIndexOperatorByPostgresOperatorId(
+			clauseExpr->opno);
+
+		Expr *primaryKeyExpr = NULL;
+		Expr *secondaryKeyExpr = NULL;
+		switch (indexOp->indexStrategy)
+		{
+			case BSON_INDEX_STRATEGY_DOLLAR_GREATER:
+			{
+				primaryKeyExpr = MakeSimpleIdExpr(&qualElement.bsonValue, firstVar->varno,
+												  BsonGreaterThanOperatorId());
+				secondaryKeyExpr = MakeUpperBoundIdExpr(&qualElement.bsonValue,
+														firstVar->varno);
+				break;
+			}
+
+			case BSON_INDEX_STRATEGY_DOLLAR_GREATER_EQUAL:
+			{
+				primaryKeyExpr = MakeSimpleIdExpr(&qualElement.bsonValue, firstVar->varno,
+												  BsonGreaterThanEqualOperatorId());
+				secondaryKeyExpr = MakeUpperBoundIdExpr(&qualElement.bsonValue,
+														firstVar->varno);
+				break;
+			}
+
+			case BSON_INDEX_STRATEGY_DOLLAR_LESS:
+			{
+				primaryKeyExpr = MakeSimpleIdExpr(&qualElement.bsonValue, firstVar->varno,
+												  BsonLessThanOperatorId());
+				secondaryKeyExpr = MakeLowerBoundIdExpr(&qualElement.bsonValue,
+														firstVar->varno);
+				break;
+			}
+
+			case BSON_INDEX_STRATEGY_DOLLAR_LESS_EQUAL:
+			{
+				primaryKeyExpr = MakeSimpleIdExpr(&qualElement.bsonValue, firstVar->varno,
+												  BsonLessThanEqualOperatorId());
+				secondaryKeyExpr = MakeLowerBoundIdExpr(&qualElement.bsonValue,
+														firstVar->varno);
+				break;
+			}
+
+			case BSON_INDEX_STRATEGY_DOLLAR_EQUAL:
+			{
+				primaryKeyExpr = MakeSimpleIdExpr(&qualElement.bsonValue, firstVar->varno,
+												  BsonLessThanOperatorId());
+				break;
+			}
+
+			default:
+			{
+				hasOtherClauses = true;
+				continue;
+			}
+		}
+
+		additionalIndexClauses = lappend(additionalIndexClauses, primaryKeyExpr);
+		if (secondaryKeyExpr != NULL)
+		{
+			additionalIndexClauses = lappend(additionalIndexClauses, secondaryKeyExpr);
+		}
+
+		restrictInfosToRemove = lappend(restrictInfosToRemove, rinfo);
+	}
+
+	list_free(clauseRestrictInfos);
+	if (list_length(additionalIndexClauses) == 0)
+	{
+		*hasNonIdClauses = hasOtherClauses;
+		return indexPath;
+	}
+
+	IndexPath *indexPathCopy = palloc(sizeof(IndexPath));
+	memcpy(indexPathCopy, indexPath, sizeof(IndexPath));
+
+	IndexOptInfo *indexInfoCopy = palloc(sizeof(IndexOptInfo));
+	memcpy(indexInfoCopy, indexPath->indexinfo, sizeof(IndexOptInfo));
+	indexInfoCopy->indrestrictinfo = list_difference_ptr(indexInfoCopy->indrestrictinfo,
+														 restrictInfosToRemove);
+	indexPathCopy->indexinfo = indexInfoCopy;
+
+	List *origList = indexPathCopy->indexclauses;
+	foreach(cell, additionalIndexClauses)
+	{
+		Expr *clause = lfirst(cell);
+		if (list_member(objectIdClauses, clause))
+		{
+			continue;
+		}
+
+		RestrictInfo *additionalRestrictInfo =
+			make_simple_restrictinfo(root, clause);
+		IndexClause *singleIndexClause = makeNode(IndexClause);
+		singleIndexClause->rinfo = additionalRestrictInfo;
+		singleIndexClause->indexquals = list_make1(additionalRestrictInfo);
+		singleIndexClause->lossy = false;
+		singleIndexClause->indexcol = 1;
+		singleIndexClause->indexcols = NIL;
+
+		if (origList == indexPathCopy->indexclauses)
+		{
+			origList = list_copy(indexPathCopy->indexclauses);
+		}
+
+		origList = lappend(origList, singleIndexClause);
+	}
+
+	indexPathCopy->indexclauses = origList;
+	*hasNonIdClauses = hasOtherClauses;
+	return indexPathCopy;
+}
+
+
 /*
  * This function walks all the necessary qualifiers in a query Plan "Path"
  * Note that this currently replaces all the bson_dollar_<op> function calls
@@ -2765,11 +2993,13 @@ ReplaceFunctionOperatorsInPlanPath(PlannerInfo *root, RelOptInfo *rel, Path *pat
 		 * This can happen because a RUM index lookup can produce a 0 cost query as well
 		 * and Postgres picks both and does a BitmapAnd - instead rely on a top level index path.
 		 */
+		bool isPrimaryKeyIndexPath = false;
 		if (IsBtreePrimaryKeyIndex(indexPath->indexinfo) &&
 			list_length(indexPath->indexclauses) > 1 &&
 			parentType != PARENTTYPE_INVALID)
 		{
 			context->primaryKeyLookupPath = indexPath;
+			isPrimaryKeyIndexPath = true;
 		}
 
 		const VectorIndexDefinition *vectorDefinition = NULL;
@@ -2841,6 +3071,16 @@ ReplaceFunctionOperatorsInPlanPath(PlannerInfo *root, RelOptInfo *rel, Path *pat
 		}
 
 		indexPath = OptimizeIndexPathForFilters(indexPath, context);
+
+		/* For btree indexscans ensure that we trim alternate quals */
+		if (isPrimaryKeyIndexPath &&
+			EnableIdIndexPushdown &&
+			indexPath->path.pathtype != T_IndexOnlyScan)
+		{
+			bool hasOtherQualsIgnore = false;
+			path = (Path *) TrimIndexRestrictInfoForBtreePath(root, indexPath,
+															  &hasOtherQualsIgnore);
+		}
 	}
 
 	return path;

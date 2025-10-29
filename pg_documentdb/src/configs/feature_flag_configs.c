@@ -176,6 +176,10 @@ bool EnableDelayedHoldPortal = DEFAULT_ENABLE_DELAYED_HOLD_PORTAL;
 #define DEFAULT_FORCE_COLL_STATS_DATA_COLLECTION false
 bool ForceCollStatsDataCollection = DEFAULT_FORCE_COLL_STATS_DATA_COLLECTION;
 
+/* Remove after 110 */
+#define DEFAULT_ENABLE_ID_INDEX_PUSHDOWN true
+bool EnableIdIndexPushdown = DEFAULT_ENABLE_ID_INDEX_PUSHDOWN;
+
 
 /*
  * SECTION: Let support feature flags
@@ -597,6 +601,12 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		NULL, &ForceCollStatsDataCollection, DEFAULT_FORCE_COLL_STATS_DATA_COLLECTION,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		psprintf("%s.enableIdIndexPushdown", newGucPrefix),
+		gettext_noop(
+			"Whether to enable extended id index pushdown optimizations."),
+		NULL, &EnableIdIndexPushdown, DEFAULT_ENABLE_ID_INDEX_PUSHDOWN,
+		PGC_USERSET, 0, NULL, NULL, NULL);
 	DefineCustomBoolVariable(
 		psprintf("%s.enableExprLookupIndexPushdown", newGucPrefix),
 		gettext_noop(

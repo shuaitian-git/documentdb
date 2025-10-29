@@ -614,6 +614,47 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                Heap Fetches: 0
 (12 rows)
 
+-- test _id index only scans
+EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"_id": {"$gt": 5 }} }, { "$count": "count" }]}');
+                                                                                                        QUERY PLAN                                                                                                         
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
+   ->  Index Only Scan using _id_ on documentdb_data.documents_69001_690002 collection (actual rows=12 loops=1)
+         Output: collection.shard_key_value, collection.object_id
+         Index Cond: ((collection.shard_key_value = '69001'::bigint) AND (collection.object_id > '{ "" : { "$numberInt" : "5" } }'::bson) AND (collection.object_id <= '{ "" : { "$numberDouble" : "Infinity" } }'::bson))
+         Heap Fetches: 0
+(6 rows)
+
+EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"_id": {"$gt": 5, "$lt": 8 }} }, { "$count": "count" }]}');
+                                                                                                                                                                                   QUERY PLAN                                                                                                                                                                                    
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
+   ->  Index Only Scan using _id_ on documentdb_data.documents_69001_690002 collection (actual rows=2 loops=1)
+         Output: collection.shard_key_value, collection.object_id
+         Index Cond: ((collection.shard_key_value = '69001'::bigint) AND (collection.object_id > '{ "" : { "$numberInt" : "5" } }'::bson) AND (collection.object_id <= '{ "" : { "$numberDouble" : "Infinity" } }'::bson) AND (collection.object_id < '{ "" : { "$numberInt" : "8" } }'::bson) AND (collection.object_id >= '{ "" : { "$numberDouble" : "-Infinity" } }'::bson))
+         Heap Fetches: 0
+(6 rows)
+
+EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"_id": {"$gt": 5, "$lt": 8 }, "country": { "$lt": { "$maxKey": 1 }}} }, { "$count": "count" }]}');
+                                                                                                                                                                                                                                   QUERY PLAN                                                                                                                                                                                                                                   
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   Output: bson_repath_and_build('count'::text, bsoncount(1))
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
+         indexName: country_1
+         isMultiKey: false
+         indexBounds: ["country": [MinKey, MaxKey]]
+         innerScanLoops: 8 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 17)]
+         ->  Index Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=2 loops=1)
+               Index Cond: (collection.document @< '{ "country" : { "$maxKey" : 1 } }'::bson)
+               Filter: ((collection.document @> '{ "_id" : { "$numberInt" : "5" } }'::bson) AND (collection.document @< '{ "_id" : { "$numberInt" : "8" } }'::bson) AND (collection.object_id > '{ "" : { "$numberInt" : "5" } }'::bson) AND (collection.object_id <= '{ "" : { "$numberDouble" : "Infinity" } }'::bson) AND (collection.object_id < '{ "" : { "$numberInt" : "8" } }'::bson) AND (collection.object_id >= '{ "" : { "$numberDouble" : "-Infinity" } }'::bson))
+               Rows Removed by Filter: 15
+(13 rows)
+
 -- count with legacy count aggregates
 set documentdb.enableNewCountAggregates to off;
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$eq": "Mexico"}} }, { "$count": "count" }]}');
