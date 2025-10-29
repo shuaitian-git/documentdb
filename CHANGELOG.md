@@ -1,6 +1,7 @@
 ### documentdb v0.109-0 (Unreleased) ###
 * Support collation with find positional queries *[Feature]*
 * Support for `killOp` administrative command *[Feature]*
+* Removed feature flags `documentdb.enableCompact`, `documentdb.enableBucketAutoStage` and `documentdb.enableIndexHintSupport`
 
 ### documentdb v0.108-0 (Unreleased) ###
 * Top-level `let` variables and `$$NOW` supported by default.

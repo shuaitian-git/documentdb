@@ -310,7 +310,6 @@ extern bool UseNewElemMatchIndexOperatorOnPushdown;
 extern bool DisableDollarSupportFuncSelectivity;
 extern bool EnableNewOperatorSelectivityMode;
 extern bool EnableCompositeIndexPlanner;
-extern bool EnableIndexHintSupport;
 extern bool LowSelectivityForLookup;
 extern bool EnableIndexOrderbyPushdown;
 extern bool EnableIndexOrderByReverse;
@@ -4031,8 +4030,7 @@ static bool
 EnableIndexHintForceIndexPushdown(PlannerInfo *root,
 								  ReplaceExtensionFunctionContext *context)
 {
-	return EnableIndexHintSupport &&
-		   IsClusterVersionAtleast(DocDB_V0, 106, 0);
+	return IsClusterVersionAtleast(DocDB_V0, 106, 0);
 }
 
 

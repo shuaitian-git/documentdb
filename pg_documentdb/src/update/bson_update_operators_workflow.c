@@ -244,12 +244,6 @@ typedef struct UpdateOperatorWriter
 	UpdateArrayWriter updateArrayWriter;
 } UpdateOperatorWriter;
 
-/* --------------------------------------------------------- */
-/* Global hooks */
-/* --------------------------------------------------------- */
-NotifyUpdatedField_HookType notify_updated_field_hook = NULL;
-NotifyUpdatedFieldPathView_HookType notify_updated_field_path_view_hook = NULL;
-NotifyRemovedField_HookType notify_remove_field_hook = NULL;
 
 /* --------------------------------------------------------- */
 /* Forward declaration */
@@ -736,11 +730,6 @@ UpdateWriterWriteModifiedValue(UpdateOperatorWriter *writer, const bson_value_t 
 {
 	PgbsonElementWriterWriteValue(writer->writer, value);
 	writer->modified = true;
-
-	if (notify_updated_field_hook != NULL)
-	{
-		notify_updated_field_hook(writer->updateTracker, writer->relativePath, value);
-	}
 }
 
 
@@ -752,10 +741,6 @@ void
 UpdateWriterSkipValue(UpdateOperatorWriter *writer)
 {
 	writer->modified = true;
-	if (notify_remove_field_hook != NULL)
-	{
-		notify_remove_field_hook(writer->updateTracker, writer->relativePath);
-	}
 }
 
 
@@ -818,19 +803,6 @@ void
 UpdateArrayWriterFinalize(UpdateOperatorWriter *writer, UpdateArrayWriter *arrayWriter)
 {
 	PgbsonElementWriterEndArray(writer->writer, &arrayWriter->writer);
-
-	if (writer->updateTracker != NULL &&
-		arrayWriter->modified)
-	{
-		bson_value_t value = PgbsonElementWriterGetValue(writer->writer);
-
-		if (notify_updated_field_hook != NULL)
-		{
-			notify_updated_field_hook(writer->updateTracker, writer->relativePath,
-									  &value);
-		}
-	}
-
 	writer->updateArrayWriter.isValid = false;
 	writer->modified = writer->modified || arrayWriter->modified;
 }
@@ -1627,11 +1599,9 @@ TraverseArrayAndApplyUpdate(bson_iter_t *sourceDocIterator,
 	 * See use of trackArrayValue.
 	 */
 	BsonUpdateTracker *trackerInner = tracker;
-	bool trackArrayValue = false;
 	if (tree->hasPositionalChildren)
 	{
 		trackerInner = NULL;
-		trackArrayValue = true;
 	}
 
 	int32_t index = 0;
@@ -1659,16 +1629,6 @@ TraverseArrayAndApplyUpdate(bson_iter_t *sourceDocIterator,
 	if (fieldHandledBitmapSet != NULL)
 	{
 		bms_free(fieldHandledBitmapSet);
-	}
-
-	if (modified && trackArrayValue && notify_updated_field_hook != NULL)
-	{
-		bson_value_t value = PgbsonArrayWriterGetValue(writer);
-
-		/* The relative path reported here is the relative path until the array */
-		StringView relativePathToNode = GetRelativePathUntilField((const
-																   BsonPathNode *) tree);
-		notify_updated_field_path_view_hook(tracker, &relativePathToNode, &value);
 	}
 
 	return modified;

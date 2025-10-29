@@ -157,10 +157,6 @@ bool EnablePrimaryKeyCursorScan = DEFAULT_ENABLE_PRIMARY_KEY_CURSOR_SCAN;
 #define DEFAULT_USE_FILE_BASED_PERSISTED_CURSORS false
 bool UseFileBasedPersistedCursors = DEFAULT_USE_FILE_BASED_PERSISTED_CURSORS;
 
-/* Remove after v108 */
-#define DEFAULT_ENABLE_INDEX_HINT_SUPPORT true
-bool EnableIndexHintSupport = DEFAULT_ENABLE_INDEX_HINT_SUPPORT;
-
 #define DEFAULT_ENABLE_CONVERSION_STREAMABLE_SINGLE_BATCH true
 bool EnableConversionStreamableToSingleBatch =
 	DEFAULT_ENABLE_CONVERSION_STREAMABLE_SINGLE_BATCH;
@@ -221,13 +217,6 @@ bool RecreateRetryTableOnSharding = DEFAULT_RECREATE_RETRY_TABLE_ON_SHARDING;
 #define DEFAULT_ENABLE_DATA_TABLES_WITHOUT_CREATION_TIME true
 bool EnableDataTableWithoutCreationTime =
 	DEFAULT_ENABLE_DATA_TABLES_WITHOUT_CREATION_TIME;
-
-#define DEFAULT_ENABLE_BUCKET_AUTO_STAGE true
-bool EnableBucketAutoStage = DEFAULT_ENABLE_BUCKET_AUTO_STAGE;
-
-/* Remove after v108 */
-#define DEFAULT_ENABLE_COMPACT_COMMAND true
-bool EnableCompact = DEFAULT_ENABLE_COMPACT_COMMAND;
 
 #define DEFAULT_ENABLE_SCHEMA_ENFORCEMENT_FOR_CSFLE true
 bool EnableSchemaEnforcementForCSFLE = DEFAULT_ENABLE_SCHEMA_ENFORCEMENT_FOR_CSFLE;
@@ -413,14 +402,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.enableCompact", newGucPrefix),
-		gettext_noop(
-			"Whether or not to enable compact command."),
-		NULL, &EnableCompact,
-		DEFAULT_ENABLE_COMPACT_COMMAND,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		psprintf("%s.enableUsersInfoPrivileges", newGucPrefix),
 		gettext_noop(
 			"Determines whether the usersInfo command returns privileges."),
@@ -484,14 +465,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.enableBucketAutoStage", newGucPrefix),
-		gettext_noop(
-			"Whether to enable the $bucketAuto stage."),
-		NULL, &EnableBucketAutoStage,
-		DEFAULT_ENABLE_BUCKET_AUTO_STAGE,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		psprintf("%s.defaultUseCompositeOpClass", newGucPrefix),
 		gettext_noop(
 			"Whether to enable the new ordered index opclass for default index creates"),
@@ -517,13 +490,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop("Whether or not to enable order by reverse index pushdown"),
 		NULL, &EnableIndexOrderByReverse,
 		DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enableIndexHintSupport", newGucPrefix),
-		gettext_noop(
-			"Whether to enable index hint support for index pushdown."),
-		NULL, &EnableIndexHintSupport, DEFAULT_ENABLE_INDEX_HINT_SUPPORT,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

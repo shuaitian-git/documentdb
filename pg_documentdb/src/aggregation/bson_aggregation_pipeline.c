@@ -78,7 +78,6 @@ extern bool EnableCollation;
 extern bool DefaultInlineWriteOperations;
 extern int MaxAggregationStagesAllowed;
 extern bool EnableIndexOrderbyPushdown;
-extern bool EnableIndexHintSupport;
 extern bool EnableConversionStreamableToSingleBatch;
 extern bool EnableFindProjectionAfterOffset;
 extern bool EnableNewCountAggregates;
@@ -1054,20 +1053,17 @@ static void
 ProcessIndexHint(bson_iter_t *iterator, bson_value_t *targetHintValue)
 {
 	ReportFeatureUsage(FEATURE_INDEX_HINT);
-	if (EnableIndexHintSupport)
+	const bson_value_t *value = bson_iter_value(iterator);
+	if (value->value_type == BSON_TYPE_UTF8 ||
+		value->value_type == BSON_TYPE_DOCUMENT)
 	{
-		const bson_value_t *value = bson_iter_value(iterator);
-		if (value->value_type == BSON_TYPE_UTF8 ||
-			value->value_type == BSON_TYPE_DOCUMENT)
-		{
-			/* The mongo index is specified as a utf8 string index name */
-			*targetHintValue = *value;
-		}
-		else
-		{
-			EnsureTopLevelFieldType("hint", iterator,
-									BSON_TYPE_UTF8);
-		}
+		/* The mongo index is specified as a utf8 string index name */
+		*targetHintValue = *value;
+	}
+	else
+	{
+		EnsureTopLevelFieldType("hint", iterator,
+								BSON_TYPE_UTF8);
 	}
 }
 

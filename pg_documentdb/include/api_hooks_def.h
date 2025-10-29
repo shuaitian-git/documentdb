@@ -181,21 +181,6 @@ extern CreateBsonUpdateTracker_HookType create_update_tracker_hook;
 typedef pgbson *(*BuildUpdateDescription_HookType)(BsonUpdateTracker *);
 extern BuildUpdateDescription_HookType build_update_description_hook;
 
-/* Update tracker method hooks */
-typedef void (*NotifyRemovedField_HookType)(BsonUpdateTracker *tracker, const
-											char *relativePath);
-extern NotifyRemovedField_HookType notify_remove_field_hook;
-
-typedef void (*NotifyUpdatedField_HookType)(BsonUpdateTracker *tracker, const
-											char *relativePath,
-											const bson_value_t *value);
-extern NotifyUpdatedField_HookType notify_updated_field_hook;
-
-typedef void (*NotifyUpdatedFieldPathView_HookType)(BsonUpdateTracker *tracker, const
-													StringView *relativePath,
-													const bson_value_t *value);
-extern NotifyUpdatedFieldPathView_HookType notify_updated_field_path_view_hook;
-
 typedef const char *(*GetDistributedApplicationName_HookType)(void);
 extern GetDistributedApplicationName_HookType get_distributed_application_name_hook;
 
