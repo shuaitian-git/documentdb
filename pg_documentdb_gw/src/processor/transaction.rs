@@ -10,7 +10,7 @@ use crate::{
     context::{ConnectionContext, RequestContext},
     error::{DocumentDBError, ErrorCode, Result},
     postgres::PgDataClient,
-    requests::RequestType,
+    requests::{read_concern::ReadConcern, RequestType},
     responses::Response,
 };
 
@@ -101,6 +101,44 @@ pub async fn handle(
                     std::backtrace::Backtrace::capture(),
                 ));
             }
+        }
+
+        if !request_transaction_info.start_transaction
+            && *request_info.read_concern() != ReadConcern::Unspecified
+        {
+            return Err(DocumentDBError::documentdb_error(
+                ErrorCode::InvalidOptions,
+                "Read concern cannot be defined after transaction has started".to_string(),
+            ));
+        }
+
+        if request_info.read_concern() == &ReadConcern::Snapshot
+            && !(connection_context
+                .service_context
+                .dynamic_configuration()
+                .allow_transaction_snapshot()
+                .await)
+        {
+            return Err(DocumentDBError::documentdb_error(
+                ErrorCode::CommandNotSupported,
+                format!(
+                    "'{:?}' read concern is not supported",
+                    &ReadConcern::Snapshot
+                ),
+            ));
+        }
+
+        if matches!(
+            request_info.read_concern(),
+            ReadConcern::Available | ReadConcern::Linearizable
+        ) {
+            return Err(DocumentDBError::documentdb_error(
+                ErrorCode::CommandNotSupported,
+                format!(
+                    "'{:?}' read concern is not supported",
+                    request_info.read_concern()
+                ),
+            ));
         }
 
         let session_id = request_info

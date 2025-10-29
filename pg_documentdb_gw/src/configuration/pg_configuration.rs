@@ -261,6 +261,10 @@ impl DynamicConfiguration for PgConfiguration {
         }
     }
 
+    async fn allow_transaction_snapshot(&self) -> bool {
+        self.get_bool("mongoAllowTransactionSnapshot", false).await
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
