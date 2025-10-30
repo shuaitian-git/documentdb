@@ -197,11 +197,17 @@ jobs:
             echo "Warning: Version v${VERSION_DASH} not found in CHANGELOG.md"
             CHANGELOG_TEXT="Release ${VERSION_DASH}"
           else
-            # Extract from this version header to the next version header or end of file
-            CHANGELOG_TEXT=$(awk "/^### documentdb v${VERSION_DASH}/,/^### documentdb v[0-9]/" "$CHANGELOG_FILE" | sed '$d')
+            # Extract from this version header to the next version header (or end of file)
+            CHANGELOG_TEXT=$(awk "/^### documentdb v${VERSION_DASH}/,/^### documentdb v[0-9]/ {
+              if (/^### documentdb v[0-9]/ && !/^### documentdb v${VERSION_DASH}/) {
+                exit
+              }
+              print
+            }" "$CHANGELOG_FILE")
+            
+            # If extraction failed, just get the header
             if [ -z "$CHANGELOG_TEXT" ]; then
-              # If no next version found, get to end of file
-              CHANGELOG_TEXT=$(awk "/^### documentdb v${VERSION_DASH}/,EOF" "$CHANGELOG_FILE")
+              CHANGELOG_TEXT="### documentdb v${VERSION_DASH}"
             fi
           fi
           
