@@ -217,7 +217,7 @@ typedef struct UpdateArrayWriter
 	bool isValid;
 
 	/* Whether or not the array writer modified something */
-	bool modified;
+	ModifyType modifyType;
 } UpdateArrayWriter;
 
 
@@ -238,7 +238,7 @@ typedef struct UpdateOperatorWriter
 	const char *relativePath;
 
 	/* whether or not the value was modified */
-	bool modified;
+	ModifyType modifyType;
 
 	/* the underlying array writer if one is requested */
 	UpdateArrayWriter updateArrayWriter;
@@ -469,14 +469,16 @@ WriteCurrentNode(const BsonUpdateLeafNode *leaf, const bson_value_t *currentValu
 	/* If the update operator did not modify the document
 	 * and there is a value to be written,
 	 * write out the original value.
+	 * Exclude MODIFY_TYPE_ORIGINAL_REWRITE since that means the existing
+	 * value is already written on the new document.
 	 */
-	if (!updateWriter.modified &&
+	if (updateWriter.modifyType == MODIFY_TYPE_NOCHANGE &&
 		currentValue->value_type != BSON_TYPE_EOD)
 	{
 		PgbsonElementWriterWriteValue(writer, currentValue);
 	}
 
-	return updateWriter.modified;
+	return updateWriter.modifyType == MODIFY_TYPE_CHANGED;
 }
 
 
@@ -729,7 +731,7 @@ void
 UpdateWriterWriteModifiedValue(UpdateOperatorWriter *writer, const bson_value_t *value)
 {
 	PgbsonElementWriterWriteValue(writer->writer, value);
-	writer->modified = true;
+	writer->modifyType = MODIFY_TYPE_CHANGED;
 }
 
 
@@ -740,7 +742,7 @@ UpdateWriterWriteModifiedValue(UpdateOperatorWriter *writer, const bson_value_t 
 void
 UpdateWriterSkipValue(UpdateOperatorWriter *writer)
 {
-	writer->modified = true;
+	writer->modifyType = MODIFY_TYPE_CHANGED;
 }
 
 
@@ -754,7 +756,7 @@ UpdateWriterGetArrayWriter(UpdateOperatorWriter *writer)
 	{
 		PgbsonElementWriterStartArray(writer->writer, &writer->updateArrayWriter.writer);
 		writer->updateArrayWriter.isValid = true;
-		writer->updateArrayWriter.modified = false;
+		writer->updateArrayWriter.modifyType = MODIFY_TYPE_NOCHANGE;
 	}
 
 	return &writer->updateArrayWriter;
@@ -779,8 +781,20 @@ UpdateArrayWriterWriteOriginalValue(UpdateArrayWriter *writer, const bson_value_
 void
 UpdateArrayWriterWriteModifiedValue(UpdateArrayWriter *writer, const bson_value_t *value)
 {
+	UpdateArrayWriterWriteValueWithModifyType(writer, value, MODIFY_TYPE_CHANGED);
+}
+
+
+/*
+ * Writes a value to the arrayWriter with the specified modify type.
+ */
+void
+UpdateArrayWriterWriteValueWithModifyType(UpdateArrayWriter *writer,
+										  const bson_value_t *value,
+										  ModifyType modifyType)
+{
 	PgbsonArrayWriterWriteValue(&writer->writer, value);
-	writer->modified = true;
+	writer->modifyType = modifyType;
 }
 
 
@@ -791,7 +805,7 @@ UpdateArrayWriterWriteModifiedValue(UpdateArrayWriter *writer, const bson_value_
 void
 UpdateArrayWriterSkipValue(UpdateArrayWriter *writer)
 {
-	writer->modified = true;
+	writer->modifyType = MODIFY_TYPE_CHANGED;
 }
 
 
@@ -804,7 +818,7 @@ UpdateArrayWriterFinalize(UpdateOperatorWriter *writer, UpdateArrayWriter *array
 {
 	PgbsonElementWriterEndArray(writer->writer, &arrayWriter->writer);
 	writer->updateArrayWriter.isValid = false;
-	writer->modified = writer->modified || arrayWriter->modified;
+	writer->modifyType = Max(writer->modifyType, arrayWriter->modifyType);
 }
 
 

@@ -1,6 +1,8 @@
 ### documentdb v0.109-0 (Unreleased) ###
 * Support collation with find positional queries *[Feature]*
 * Support for `killOp` administrative command *[Feature]*
+* Fix `$addToSet` behavior and skip the top-level field rewrite because it's already done in the operator *[Bugfix]*
+* Performance improvements for $addToSet update operator up to ~70x for large existing and update arrays. *[Perf]*
 * Removed feature flags `documentdb.enableCompact`, `documentdb.enableBucketAutoStage` and `documentdb.enableIndexHintSupport`
 
 ### documentdb v0.108-0 (Unreleased) ###
