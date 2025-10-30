@@ -1370,7 +1370,7 @@ Decimal128MathematicalOperation1Operand(const bson_value_t *value, bson_value_t 
 /**
  * This method returns the Intel Math Library representation from bson decimal128 representation
  */
-static inline BID_UINT128
+static pg_attribute_no_sanitize_alignment() inline BID_UINT128
 GetBIDUINT128FromBsonValue(const bson_value_t *decimal)
 {
 	CheckDecimal128Type(decimal);
@@ -1608,7 +1608,7 @@ GetDecimal128FromInt64(int64_t value)
  *
  * Quantize(X, Y) => Returns a quantized decimal128 which has same numerical value as X and exponent as Y
  */
-static bson_decimal128_t
+static pg_attribute_no_sanitize_alignment() bson_decimal128_t
 GetBsonValueAsDecimal128Core(const bson_value_t *value, bool shouldQuantizeDouble)
 {
 	if (!BsonValueIsNumberOrBool(value) && value->value_type != BSON_TYPE_DATE_TIME)
