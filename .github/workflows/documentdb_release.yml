@@ -14,10 +14,6 @@ on:
         required: true
         type: boolean
         default: false
-      version:
-        description: 'Version to release (e.g., 0.107.0)'
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -26,15 +22,48 @@ permissions:
   id-token: write
 
 jobs:
+  extract-version:
+    name: Extract Version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      version_dash: ${{ steps.extract.outputs.version_dash }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Version from Control File
+        id: extract
+        run: |
+          # Extract version from control file (format: X.Y-Z)
+          VERSION=$(grep -E "^default_version" pg_documentdb_core/documentdb_core.control | sed -E "s/.*'([0-9]+\.[0-9]+-[0-9]+)'.*/\1/")
+          
+          if [ -z "$VERSION" ]; then
+            echo "::error::Unable to extract version from control file."
+            exit 1
+          fi
+          
+          # VERSION is in format X.Y-Z (e.g., 0.109-0)
+          # Convert to dots format for package building: X.Y.Z (e.g., 0.109.0)
+          VERSION_DOTS=$(echo $VERSION | sed "s/-/./g")
+          
+          echo "Extracted Version (dash format): $VERSION"
+          echo "Converted to dots format: $VERSION_DOTS"
+          echo "version=$VERSION_DOTS" >> $GITHUB_OUTPUT
+          echo "version_dash=$VERSION" >> $GITHUB_OUTPUT
+
   build-deb-packages:
     name: Build DEB for ${{ matrix.os }}-${{ matrix.arch }}-PG${{ matrix.pg_version }}
     runs-on: ${{ matrix.runner }}
+    needs: extract-version
     strategy:
       fail-fast: false
       matrix:
         os: [deb11, deb12, ubuntu22.04, ubuntu24.04]
         arch: [amd64, arm64]
-        pg_version: [15, 16, 17]
+        pg_version: [16, 17]
         include:
           - arch: amd64
             runner: ubuntu-24.04
@@ -52,27 +81,14 @@ jobs:
           git fetch --tags --force
           git status
 
-      - name: Extract Version
-        id: extract_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
-            DOCUMENTDB_VERSION="${{ inputs.version }}"
-          else
-            DOCUMENTDB_VERSION=$(grep -E "^default_version" pg_documentdb_core/documentdb_core.control | sed -E "s/.*'([0-9]+\.[0-9]+-[0-9]+)'.*/\1/")
-            DOCUMENTDB_VERSION=$(echo $DOCUMENTDB_VERSION | sed "s/-/./g")
-          fi
-          echo "Extracted Version: $DOCUMENTDB_VERSION"
-          echo "DOCUMENTDB_VERSION=$DOCUMENTDB_VERSION" >> $GITHUB_ENV
-          echo "version=$DOCUMENTDB_VERSION" >> $GITHUB_OUTPUT
-
       - name: Build Package
         run: |
-          ./packaging/build_packages.sh --os ${{ matrix.os }} --pg ${{ matrix.pg_version }} --version ${{ env.DOCUMENTDB_VERSION }}
+          ./packaging/build_packages.sh --os ${{ matrix.os }} --pg ${{ matrix.pg_version }} --version ${{ needs.extract-version.outputs.version }}
 
       - name: Upload Package as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: deb-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ env.DOCUMENTDB_VERSION }}
+          name: deb-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ needs.extract-version.outputs.version }}
           path: |
             packaging/*.deb
           retention-days: 90
@@ -82,12 +98,13 @@ jobs:
   build-rpm-packages:
     name: Build RPM for ${{ matrix.os }}-${{ matrix.arch }}-PG${{ matrix.pg_version }}
     runs-on: ${{ matrix.runner }}
+    needs: extract-version
     strategy:
       fail-fast: false
       matrix:
         os: [rhel8, rhel9]
         arch: [amd64, arm64]
-        pg_version: [15, 16, 17]
+        pg_version: [16, 17]
         include:
           - arch: amd64
             runner: ubuntu-24.04
@@ -105,27 +122,14 @@ jobs:
           git fetch --tags --force
           git status
 
-      - name: Extract Version
-        id: extract_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
-            DOCUMENTDB_VERSION="${{ inputs.version }}"
-          else
-            DOCUMENTDB_VERSION=$(grep -E "^default_version" pg_documentdb_core/documentdb_core.control | sed -E "s/.*'([0-9]+\.[0-9]+-[0-9]+)'.*/\1/")
-            DOCUMENTDB_VERSION=$(echo $DOCUMENTDB_VERSION | sed "s/-/./g")
-          fi
-          echo "Extracted Version: $DOCUMENTDB_VERSION"
-          echo "DOCUMENTDB_VERSION=$DOCUMENTDB_VERSION" >> $GITHUB_ENV
-          echo "version=$DOCUMENTDB_VERSION" >> $GITHUB_OUTPUT
-
       - name: Build Package
         run: |
-          ./packaging/build_packages.sh --os ${{ matrix.os }} --pg ${{ matrix.pg_version }} --version ${{ env.DOCUMENTDB_VERSION }}
+          ./packaging/build_packages.sh --os ${{ matrix.os }} --pg ${{ matrix.pg_version }} --version ${{ needs.extract-version.outputs.version }}
 
       - name: Upload Package as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rpm-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ env.DOCUMENTDB_VERSION }}
+          name: rpm-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ needs.extract-version.outputs.version }}
           path: |
             packaging/*.rpm
           retention-days: 90
@@ -134,7 +138,7 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [build-deb-packages, build-rpm-packages]
+    needs: [extract-version, build-deb-packages, build-rpm-packages]
     runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.create_release)
     
@@ -144,48 +148,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract Version
-        id: extract_version
+      - name: Prepare Release Variables
+        id: prepare
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            if [ "${{ inputs.create_release }}" != "true" ]; then
-              echo "::error::Release creation requested via workflow_dispatch but create_release input is not true."
-              exit 1
-            fi
-            if [ -z "${{ inputs.version }}" ]; then
-              echo "::error::version input is required when create_release is true."
-              exit 1
-            fi
-            VERSION="${{ inputs.version }}"
-          else
-            REF="${GITHUB_REF#refs/tags/}"
-            VERSION="${REF#v}"
-          fi
-
-          if [ -z "$VERSION" ]; then
-            echo "::error::Unable to determine release version."
-            exit 1
-          fi
-
-          if [[ "$VERSION" == *-* ]]; then
-            VERSION_DASH="$VERSION"
-          elif [[ "$VERSION" == *.* ]]; then
-            VERSION_PREFIX="${VERSION%.*}"
-            VERSION_SUFFIX="${VERSION##*.}"
-            VERSION_DASH="${VERSION_PREFIX}-${VERSION_SUFFIX}"
-          else
-            echo "::error::Version '$VERSION' is not in a recognized format."
-            exit 1
-          fi
-
+          VERSION_DASH="${{ needs.extract-version.outputs.version_dash }}"
           RELEASE_DATE=$(date '+%B %d, %Y' | sed 's/ 0/ /')
           RELEASE_NAME="v${VERSION_DASH} (${RELEASE_DATE})"
 
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "VERSION_DASH=$VERSION_DASH" >> $GITHUB_ENV
           echo "RELEASE_DATE=$RELEASE_DATE" >> $GITHUB_ENV
           echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
 
       - name: Download all artifacts
@@ -223,7 +195,7 @@ jobs:
           
           if ! grep -q "### documentdb v${VERSION_DASH}" "$CHANGELOG_FILE"; then
             echo "Warning: Version v${VERSION_DASH} not found in CHANGELOG.md"
-            CHANGELOG_TEXT="Release ${{ env.VERSION }}"
+            CHANGELOG_TEXT="Release ${VERSION_DASH}"
           else
             # Extract from this version header to the next version header or end of file
             CHANGELOG_TEXT=$(awk "/^### documentdb v${VERSION_DASH}/,/^### documentdb v[0-9]/" "$CHANGELOG_FILE" | sed '$d')
@@ -240,7 +212,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION }}
+          tag_name: v${{ env.VERSION_DASH }}
           name: ${{ env.RELEASE_NAME }}
           body_path: changelog_excerpt.md
           draft: true
