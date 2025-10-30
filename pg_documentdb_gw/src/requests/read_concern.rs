@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 /*-------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation.  All rights reserved.
  *
@@ -7,6 +5,8 @@ use std::str::FromStr;
  *
  *-------------------------------------------------------------------------
  */
+
+use std::str::FromStr;
 
 #[derive(Debug, Default, PartialEq)]
 pub enum ReadConcern {

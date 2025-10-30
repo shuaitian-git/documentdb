@@ -7,6 +7,7 @@
  */
 
 pub mod read_concern;
+pub mod read_preference;
 pub mod request_tracker;
 
 use std::{
@@ -16,6 +17,7 @@ use std::{
 
 use bson::{spec::ElementType, Document, RawBsonRef, RawDocument, RawDocumentBuf};
 use read_concern::ReadConcern;
+use read_preference::ReadPreference;
 use tokio_postgres::IsolationLevel;
 
 use crate::{
@@ -400,6 +402,7 @@ impl<'a> Request<'a> {
                         isolation_level = Some(IsolationLevel::RepeatableRead)
                     }
                 }
+                "$readPreference" => ReadPreference::parse(v.as_document())?,
                 key if collection_field.contains(&key) => {
                     // Aggregate needs special handling because having '1' as a collection is valid
                     collection = if collection_field[0] == "aggregate" {
