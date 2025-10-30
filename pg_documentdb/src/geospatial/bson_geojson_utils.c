@@ -1205,7 +1205,7 @@ GetPolygonInvalidityReason(Datum polygon, PolygonValidationState *state)
 
 
 /* Check if the current ring is a straight line by checking slopes of all consecutive points */
-static bool
+static pg_attribute_no_sanitize_alignment() bool
 IsRingStraightLine(char *pointsStart, int32 numPoints)
 {
 	float8 *point = (float8 *) pointsStart;
@@ -1333,7 +1333,7 @@ IsHoleFullyCoveredByOuterRing(char *currPtr, int32 numPoints,
 
 
 /* Write points of current loop to buffer to be used in error msg*/
-static char *
+static pg_attribute_no_sanitize_alignment() char *
 GetRingPointsStringForError(char *currPtr, int32 numPoints)
 {
 	StringInfo loop = makeStringInfo();

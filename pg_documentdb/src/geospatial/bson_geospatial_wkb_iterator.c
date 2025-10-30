@@ -48,7 +48,7 @@ TraverseWKBBytea(const bytea *wkbBytea, const WKBVisitorFunctions *visitorFuncs,
 }
 
 
-static void
+static pg_attribute_no_sanitize_alignment() void
 TraverseWKBBufferCore(WKBBufferIterator *iter, const WKBVisitorFunctions *visitorFuncs,
 					  void *state, bool isCollectionGeometry)
 {

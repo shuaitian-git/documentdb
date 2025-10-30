@@ -139,7 +139,7 @@ PgbsonDecomposeFields(const pgbson *document)
  * @number: The addend
  * @overflowedFromInt64: Used for AddInt64ToValue(); set if overflow from Int64 occurs, unset otherwise.
  */
-bool
+pg_attribute_no_sanitize_alignment() bool
 AddNumberToBsonValue(bson_value_t *state, const bson_value_t *number,
 					 bool *overflowedFromInt64)
 {

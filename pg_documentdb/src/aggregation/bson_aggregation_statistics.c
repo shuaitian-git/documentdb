@@ -185,7 +185,7 @@ PG_FUNCTION_INFO_V1(bson_std_dev_samp_winfunc_final);
  * transition values.
  * If calculating variance, we use X and Y as the same value.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_covariance_pop_samp_transition(PG_FUNCTION_ARGS)
 {
 	bytea *bytes;
@@ -257,7 +257,7 @@ bson_covariance_pop_samp_transition(PG_FUNCTION_ARGS)
  * and combines them to form a new BsonCovarianceAndVarianceAggState that has the combined
  * sum and count.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_covariance_pop_samp_combine(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -328,7 +328,7 @@ bson_covariance_pop_samp_combine(PG_FUNCTION_ARGS)
  * takes one aggregate state structures (BsonCovarianceAndVarianceAggState)
  * and single data point. Remove the single data from BsonCovarianceAndVarianceAggState
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_covariance_pop_samp_invtransition(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -397,7 +397,7 @@ bson_covariance_pop_samp_invtransition(PG_FUNCTION_ARGS)
  * This takes the final value created and outputs a bson covariance pop
  * with the appropriate type.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_covariance_pop_final(PG_FUNCTION_ARGS)
 {
 	bytea *covarianceIntermediateState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -477,7 +477,7 @@ bson_covariance_pop_final(PG_FUNCTION_ARGS)
  * This takes the final value created and outputs a bson covariance samp
  * with the appropriate type.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_covariance_samp_final(PG_FUNCTION_ARGS)
 {
 	bytea *covarianceIntermediateState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -613,7 +613,7 @@ bson_std_dev_pop_samp_transition(PG_FUNCTION_ARGS)
  * and combines them to form a new bson_std_dev_agg_state that has the combined
  * sum and count.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_std_dev_pop_samp_combine(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -924,7 +924,7 @@ bson_exp_moving_avg(PG_FUNCTION_ARGS)
 /* transition function for the BSON_INTEGRAL aggregate
  * use the trapzoidal rule to calculate the integral
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_integral_transition(PG_FUNCTION_ARGS)
 {
 	bytea *bytes;
@@ -1001,7 +1001,7 @@ bson_integral_transition(PG_FUNCTION_ARGS)
 /* transition function for the BSON_DERIVATIVE aggregate
  * use dy/dx to calculate the derivative
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_derivative_transition(PG_FUNCTION_ARGS)
 {
 	pgbson *xValue = PG_GETARG_MAYBE_NULL_PGBSON(1);
@@ -1085,7 +1085,7 @@ bson_derivative_transition(PG_FUNCTION_ARGS)
  * This takes the final value created and outputs a bson "integral" or "derivative"
  * with the appropriate type.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_integral_derivative_final(PG_FUNCTION_ARGS)
 {
 	bytea *currentState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -1120,7 +1120,7 @@ bson_integral_derivative_final(PG_FUNCTION_ARGS)
  * This takes the final value created and outputs a bson stddev pop
  * with the appropriate type.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_std_dev_pop_winfunc_final(PG_FUNCTION_ARGS)
 {
 	bytea *stdDevIntermediateState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -1185,7 +1185,7 @@ bson_std_dev_pop_winfunc_final(PG_FUNCTION_ARGS)
  * This takes the final value created and outputs a bson stddev samp
  * with the appropriate type.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_std_dev_samp_winfunc_final(PG_FUNCTION_ARGS)
 {
 	bytea *stdDevIntermediateState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -1243,7 +1243,7 @@ bson_std_dev_samp_winfunc_final(PG_FUNCTION_ARGS)
  * takes one aggregate state structures (BsonCovarianceAndVarianceAggState)
  * and single data point. Remove the single data from BsonCovarianceAndVarianceAggState
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_std_dev_pop_samp_winfunc_invtransition(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -1339,7 +1339,7 @@ AllocateBsonIntegralAndDerivativeAggState()
  *  Sxy^ = Sxy - N^/N * (Sx^/N^ - X) * (Sy^/N^ - Y)
  *  ```
  */
-static void
+pg_attribute_no_sanitize_alignment() static void
 CalculateInvFuncForCovarianceOrVarianceWithYCAlgr(const bson_value_t *newXValue,
 												  const bson_value_t *newYValue,
 												  BsonCovarianceAndVarianceAggState *
@@ -1450,7 +1450,7 @@ CalculateInvFuncForCovarianceOrVarianceWithYCAlgr(const bson_value_t *newXValue,
  *	Sy = Sy1 + Sy2
  *	Sxy = Sxy1 + Sxy2 + N1 * N2 * (Sx1/N1 - Sx2/N2) * (Sy1/N1 - Sy2/N2) / N;
  */
-static void
+static pg_attribute_no_sanitize_alignment() void
 CalculateCombineFuncForCovarianceOrVarianceWithYCAlgr(const
 													  BsonCovarianceAndVarianceAggState *
 													  leftState, const
@@ -2220,7 +2220,7 @@ RunTimeCheckForIntegralAndDerivative(bson_value_t *xBsonValue, bson_value_t *yBs
  * of current state and current document in window by Trapezoidal Rule.
  * The result will be promoted to decimal if one of the input is decimal.
  */
-bool
+pg_attribute_no_sanitize_alignment() bool
 IntegralOfTwoPointsByTrapezoidalRule(bson_value_t *xValue,
 									 bson_value_t *yValue,
 									 BsonIntegralAndDerivativeAggState *currentState,
@@ -2259,7 +2259,7 @@ IntegralOfTwoPointsByTrapezoidalRule(bson_value_t *xValue,
  * of current state and current document in window by derivative rule.
  * The result will be promoted to decimal if one of the input is decimal.
  */
-bool
+pg_attribute_no_sanitize_alignment() bool
 DerivativeOfTwoPoints(bson_value_t *xValue, bson_value_t *yValue,
 					  BsonIntegralAndDerivativeAggState *currentState,
 					  bson_value_t *timeUnitInMs)

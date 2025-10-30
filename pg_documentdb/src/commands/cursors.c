@@ -766,7 +766,7 @@ BsonStoreDestReceiverShutdown(DestReceiver *destReceiver)
 	if (tupleDestReceiver->cursorFileState != NULL)
 	{
 		tupleDestReceiver->continuationState = CursorFileStateClose(
-			tupleDestReceiver->cursorFileState);
+			tupleDestReceiver->cursorFileState, tupleDestReceiver->writerContext);
 	}
 }
 

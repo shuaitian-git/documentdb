@@ -1031,7 +1031,7 @@ ValidateDefaultLanguageSpec(const char *defaultLanguage)
 /*
  * Populates the language spec provided to a CREATE INDEX text search options.
  */
-static Size
+static pg_attribute_no_sanitize_alignment() Size
 FillDefaultLanguageSpec(const char *defaultLanguage, void *buffer)
 {
 	uint32_t length = defaultLanguage == NULL ? 0 : sizeof(Oid);

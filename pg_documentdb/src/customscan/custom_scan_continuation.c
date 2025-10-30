@@ -1423,7 +1423,7 @@ ExtensionScanNextRecheck(ScanState *state, TupleTableSlot *slot)
  * Parses the incoming continuation to build the continuation state
  * For the current query.
  */
-static void
+static pg_attribute_no_sanitize_alignment() void
 ParseContinuationState(ExtensionScanState *extensionScanState,
 					   InputContinuation *continuation)
 {

@@ -214,7 +214,7 @@ EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
                                                                                                                                                                                                                  QUERY PLAN                                                                                                                                                                                                                 
 ---------------------------------------------------------------------
  Aggregate
-   Output: coord_combine_agg('20576'::oid, remote_scan.document, NULL::bson)
+   Output: coord_combine_agg('xxxx'::oid, remote_scan.document, NULL::bson)
    ->  Custom Scan (Citus Adaptive)
          Output: remote_scan.document
          Task Count: 8
@@ -223,7 +223,7 @@ EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
                Query: SELECT worker_partial_agg('documentdb_api_internal.bsoncommandcount(integer)'::regprocedure, 1) AS document FROM documentdb_data.documents_58001_58000004 collection WHERE ((document OPERATOR(documentdb_api_catalog.#>) '{ "value" : { "$numberInt" : "20" } }'::documentdb_core.bsonquery) AND (document OPERATOR(documentdb_api_catalog.#<) '{ "value" : { "$numberInt" : "150" } }'::documentdb_core.bsonquery))
                Node: host=localhost port=58070 dbname=regression
                ->  Aggregate
-                     Output: worker_partial_agg('20576'::oid, 1)
+                     Output: coord_combine_agg('xxxx'::oid, 1)
                      ->  Seq Scan on documentdb_data.documents_58001_58000004 collection
                            Output: shard_key_value, object_id, document
                            Filter: ((collection.document OPERATOR(documentdb_api_catalog.@>) '{ "value" : { "$numberInt" : "20" } }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@<) '{ "value" : { "$numberInt" : "150" } }'::documentdb_core.bson))
@@ -233,7 +233,7 @@ EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
                                                                                                                                                                                                              QUERY PLAN                                                                                                                                                                                                              
 ---------------------------------------------------------------------
  Aggregate
-   Output: bson_repath_and_build('c'::text, coord_combine_agg('20575'::oid, remote_scan.document, NULL::bson))
+   Output: bson_repath_and_build('c'::text, coord_combine_agg('xxxx'::oid, remote_scan.document, NULL::bson))
    ->  Custom Scan (Citus Adaptive)
          Output: remote_scan.document
          Task Count: 8
@@ -242,7 +242,7 @@ EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
                Query: SELECT worker_partial_agg('documentdb_api_internal.bsoncount(integer)'::regprocedure, 1) AS document FROM documentdb_data.documents_58001_58000004 collection WHERE ((document OPERATOR(documentdb_api_catalog.#>) '{ "value" : { "$numberInt" : "20" } }'::documentdb_core.bsonquery) AND (document OPERATOR(documentdb_api_catalog.#<) '{ "value" : { "$numberInt" : "150" } }'::documentdb_core.bsonquery))
                Node: host=localhost port=58070 dbname=regression
                ->  Aggregate
-                     Output: worker_partial_agg('20575'::oid, 1)
+                     Output: coord_combine_agg('xxxx'::oid, 1)
                      ->  Seq Scan on documentdb_data.documents_58001_58000004 collection
                            Output: shard_key_value, object_id, document
                            Filter: ((collection.document OPERATOR(documentdb_api_catalog.@>) '{ "value" : { "$numberInt" : "20" } }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@<) '{ "value" : { "$numberInt" : "150" } }'::documentdb_core.bson))
@@ -255,7 +255,7 @@ EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
    Output: remote_scan.document
    ->  Distributed Subplan 51_1
          ->  HashAggregate
-               Output: remote_scan.c1, remote_scan.c2, remote_scan.c3, coord_combine_agg('20575'::oid, remote_scan.c4, NULL::bson)
+               Output: remote_scan.c1, remote_scan.c2, remote_scan.c3, coord_combine_agg('xxxx'::oid, remote_scan.c4, NULL::bson)
                Group Key: remote_scan.c2
                ->  Custom Scan (Citus Adaptive)
                      Output: remote_scan.c1, remote_scan.c2, remote_scan.c3, remote_scan.c4
@@ -265,7 +265,7 @@ EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
                            Query: SELECT '_id'::text AS c1, '{ "" : null }'::documentdb_core.bson AS c2, 'count'::text AS c3, worker_partial_agg('documentdb_api_internal.bsoncount(integer)'::regprocedure, 1) AS c4 FROM documentdb_data.documents_58001_58000004 collection WHERE ((document OPERATOR(documentdb_api_catalog.#>) '{ "value" : { "$numberInt" : "20" } }'::documentdb_core.bsonquery) AND (document OPERATOR(documentdb_api_catalog.#<) '{ "value" : { "$numberInt" : "150" } }'::documentdb_core.bsonquery)) GROUP BY '{ "" : null }'::documentdb_core.bson
                            Node: host=localhost port=58070 dbname=regression
                            ->  GroupAggregate
-                                 Output: '_id'::text, ('{ "" : null }'::documentdb_core.bson), 'count'::text, worker_partial_agg('20575'::oid, 1)
+                                 Output: '_id'::text, ('{ "" : null }'::documentdb_core.bson), 'count'::text, coord_combine_agg('xxxx'::oid, 1)
                                  Group Key: '{ "" : null }'::documentdb_core.bson
                                  ->  Seq Scan on documentdb_data.documents_58001_58000004 collection
                                        Output: '{ "" : null }'::documentdb_core.bson

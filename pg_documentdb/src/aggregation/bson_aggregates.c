@@ -279,7 +279,7 @@ bson_array_agg_transition(PG_FUNCTION_ARGS)
 }
 
 
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_array_agg_minvtransition(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -706,7 +706,7 @@ bson_sum_avg_transition(PG_FUNCTION_ARGS)
  * It ignores non-numeric values, and manages type upgrades and coercion
  * to the right types as documents are encountered.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_sum_avg_minvtransition(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -925,7 +925,7 @@ bson_min_transition(PG_FUNCTION_ARGS)
  * and combines them to form a new bson_numeric_agg_state that has the combined
  * sum and count.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_sum_avg_combine(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -1608,10 +1608,10 @@ bson_maxminn_transition(PG_FUNCTION_ARGS, bool isMaxN)
  * Resulting bytes look like:
  * | Varlena Header | isMaxN | heapSize | heapSpace | heapNode * heapSpace |
  */
-bytea *
+pg_attribute_no_sanitize_alignment() bytea *
 SerializeBinaryHeapState(MemoryContext aggregateContext,
-						 BinaryHeapState *state,
-						 bytea *byteArray)
+						 BinaryHeapState * state,
+						 bytea * byteArray)
 {
 	int heapNodesSize = 0;
 	pgbson **heapNodeList = NULL;
@@ -1680,7 +1680,7 @@ SerializeBinaryHeapState(MemoryContext aggregateContext,
  * Incoming bytes look like:
  * | Varlena Header | isMaxN | heapSize | heapSpace | heapNode * heapSpace |
  */
-void
+pg_attribute_no_sanitize_alignment() void
 DeserializeBinaryHeapState(bytea *byteArray,
 						   BinaryHeapState *state)
 {
