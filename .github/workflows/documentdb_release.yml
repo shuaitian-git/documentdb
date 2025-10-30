@@ -6,7 +6,7 @@ concurrency:
 on:
   push:
     tags:
-      - '*'
+      - 'v*'
   workflow_dispatch:
     inputs:
       create_release:
@@ -18,16 +18,6 @@ on:
         description: 'Version to release (e.g., 0.107.0)'
         required: false
         type: string
-      target_repo:
-        description: 'Target repository for packages (e.g., documentdb/packages or same for current repo)'
-        required: false
-        type: string
-        default: 'documentdb/packages'
-      target_branch:
-        description: 'Target branch for packages (default: main)'
-        required: false
-        type: string
-        default: 'main'
 
 permissions:
   contents: write
@@ -44,7 +34,7 @@ jobs:
       matrix:
         os: [deb11, deb12, ubuntu22.04, ubuntu24.04]
         arch: [amd64, arm64]
-        pg_version: [16, 17]
+        pg_version: [15, 16, 17]
         include:
           - arch: amd64
             runner: ubuntu-24.04
@@ -97,7 +87,7 @@ jobs:
       matrix:
         os: [rhel8, rhel9]
         arch: [amd64, arm64]
-        pg_version: [16, 17]
+        pg_version: [15, 16, 17]
         include:
           - arch: amd64
             runner: ubuntu-24.04
@@ -158,14 +148,45 @@ jobs:
         id: extract_version
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            if [ "${{ inputs.create_release }}" != "true" ]; then
+              echo "::error::Release creation requested via workflow_dispatch but create_release input is not true."
+              exit 1
+            fi
+            if [ -z "${{ inputs.version }}" ]; then
+              echo "::error::version input is required when create_release is true."
+              exit 1
+            fi
             VERSION="${{ inputs.version }}"
           else
-            VERSION="${GITHUB_REF#refs/tags/v}"
+            REF="${GITHUB_REF#refs/tags/}"
+            VERSION="${REF#v}"
           fi
-          VERSION_DASH=$(echo $VERSION | sed 's/\./-/')
+
+          if [ -z "$VERSION" ]; then
+            echo "::error::Unable to determine release version."
+            exit 1
+          fi
+
+          if [[ "$VERSION" == *-* ]]; then
+            VERSION_DASH="$VERSION"
+          elif [[ "$VERSION" == *.* ]]; then
+            VERSION_PREFIX="${VERSION%.*}"
+            VERSION_SUFFIX="${VERSION##*.}"
+            VERSION_DASH="${VERSION_PREFIX}-${VERSION_SUFFIX}"
+          else
+            echo "::error::Version '$VERSION' is not in a recognized format."
+            exit 1
+          fi
+
+          RELEASE_DATE=$(date '+%B %d, %Y' | sed 's/ 0/ /')
+          RELEASE_NAME="v${VERSION_DASH} (${RELEASE_DATE})"
+
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "VERSION_DASH=$VERSION_DASH" >> $GITHUB_ENV
+          echo "RELEASE_DATE=$RELEASE_DATE" >> $GITHUB_ENV
+          echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -220,188 +241,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
-          name: DocumentDB v${{ env.VERSION }}
+          name: ${{ env.RELEASE_NAME }}
           body_path: changelog_excerpt.md
           draft: true
           prerelease: true
           files: |
             ./packages/*
-
-  publish-to-pages:
-    name: Publish Packages to GitHub Pages
-    needs: [build-deb-packages, build-rpm-packages]
-    runs-on: ubuntu-24.04
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    
-    steps:
-      - name: Determine target repository
-        id: target
-        run: |
-          TARGET_REPO="${{ inputs.target_repo }}"
-          TARGET_BRANCH="${{ inputs.target_branch }}"
-          
-          # If workflow_dispatch not used or target_repo is 'same', use current repo
-          if [ -z "$TARGET_REPO" ] || [ "$TARGET_REPO" == "same" ]; then
-            TARGET_REPO="${{ github.repository }}"
-          fi
-          
-          # Default to gh-pages if not specified
-          if [ -z "$TARGET_BRANCH" ]; then
-            TARGET_BRANCH="gh-pages"
-          fi
-          
-          echo "repo=$TARGET_REPO" >> $GITHUB_OUTPUT
-          echo "branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
-          echo "📦 Target: $TARGET_REPO @ $TARGET_BRANCH"
-
-      - name: Checkout target repository
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ steps.target.outputs.repo }}
-          ref: ${{ steps.target.outputs.branch }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Extract Version
-        id: extract_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-
-      - name: Extract artifacts
-        run: |
-          # Extract all zip files
-          cd ./artifacts
-          for dir in */; do
-            if [ -d "$dir" ]; then
-              cd "$dir"
-              for zipfile in *.zip; do
-                [ -f "$zipfile" ] && unzip -o "$zipfile"
-              done
-              cd ..
-            fi
-          done
-          cd ..
-          echo "Extracted artifacts:"
-          find ./artifacts -type f \( -name "*.deb" -o -name "*.rpm" \)
-
-      - name: Setup repository structure
-        run: |
-          # Create directory structure for APT repository
-          mkdir -p apt/pool/main
-          mkdir -p apt/dists/{bullseye,bookworm,jammy,noble}/main/binary-{amd64,arm64}
-          
-          # Create directory structure for YUM repository
-          mkdir -p yum/{el8,el9}/{x86_64,aarch64}
-          
-          # Copy DEB packages
-          find ./artifacts -name "*.deb" ! -name "*dbgsym*" -exec cp {} apt/pool/main/ \;
-          echo "Copied $(ls -1 apt/pool/main/*.deb 2>/dev/null | wc -l) DEB packages"
-          
-          # Copy RPM packages
-          find ./artifacts -name "*rhel8*.rpm" -name "*x86_64.rpm" -exec cp {} yum/el8/x86_64/ \;
-          find ./artifacts -name "*rhel8*.rpm" -name "*aarch64.rpm" -exec cp {} yum/el8/aarch64/ \;
-          find ./artifacts -name "*rhel9*.rpm" -name "*x86_64.rpm" -exec cp {} yum/el9/x86_64/ \;
-          find ./artifacts -name "*rhel9*.rpm" -name "*aarch64.rpm" -exec cp {} yum/el9/aarch64/ \;
-          echo "Copied RPM packages:"
-          find yum -name "*.rpm" | wc -l
-
-      - name: Generate APT repository metadata
-        run: |
-          # Install required tools
-          sudo apt-get update
-          sudo apt-get install -y dpkg-dev
-          
-          cd apt
-          
-          # Generate Packages files for each distribution and architecture
-          for dist in bullseye bookworm jammy noble; do
-            for arch in amd64 arm64; do
-              dpkg-scanpackages --arch $arch pool/main > dists/$dist/main/binary-$arch/Packages
-              gzip -k -f dists/$dist/main/binary-$arch/Packages
-            done
-            
-            # Generate Release file
-            cat > dists/$dist/Release << EOF
-          Origin: DocumentDB
-          Label: DocumentDB
-          Suite: $dist
-          Codename: $dist
-          Architectures: amd64 arm64
-          Components: main
-          Description: DocumentDB APT Repository
-          Date: $(date -Ru)
-          EOF
-          done
-
-      - name: Generate YUM repository metadata
-        run: |
-          # Install createrepo
-          sudo apt-get install -y createrepo-c
-          
-          # Generate metadata for each EL version and architecture
-          for el in el8 el9; do
-            for arch in x86_64 aarch64; do
-              if [ -d "yum/$el/$arch" ] && [ "$(ls -A yum/$el/$arch/*.rpm 2>/dev/null)" ]; then
-                createrepo_c yum/$el/$arch
-              fi
-            done
-          done
-
-      - name: Create installation documentation
-        run: |
-          # Determine the base URL for packages
-          TARGET_REPO="${{ steps.target.outputs.repo }}"
-          REPO_OWNER=$(echo $TARGET_REPO | cut -d'/' -f1)
-          REPO_NAME=$(echo $TARGET_REPO | cut -d'/' -f2)
-          
-          # For org.github.io repos, URL is org.github.io/repo
-          # For user repos, URL is user.github.io/repo
-          BASE_URL="https://${REPO_OWNER}.github.io/${REPO_NAME}"
-          
-          # Copy the template README from source repo
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/.github/workflows/PACKAGES_REPO_README.md -o README.md
-          
-          # Replace placeholder URL with actual URL
-          sed -i "s|https://documentdb.github.io/packages/|${BASE_URL}/|g" README.md
-          
-          # Add version information
-          cat >> README.md << EOF
-          
-          ---
-          
-          ## 📦 Latest Release
-          
-          **Version**: ${{ env.VERSION }}  
-          **Release Date**: $(date -u +"%B %d, %Y")  
-          **Source**: [github.com/${{ github.repository }}](https://github.com/${{ github.repository }})
-          
-          EOF
-
-      - name: Commit and push to target repository
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add .
-          git commit -m "Release ${{ env.VERSION }} - Update package repositories" || echo "No changes to commit"
-          git push origin ${{ steps.target.outputs.branch }}
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
-          publish_branch: ${{ steps.target.outputs.branch }}
-          external_repository: ${{ steps.target.outputs.repo != github.repository && steps.target.outputs.repo || '' }}
-          force_orphan: false
