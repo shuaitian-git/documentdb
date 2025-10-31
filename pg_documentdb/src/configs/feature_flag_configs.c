@@ -90,7 +90,8 @@ bool EnableIndexOrderbyPushdown = DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN;
 #define DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE true
 bool EnableIndexOrderByReverse = DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE;
 
-#define DEFAULT_ENABLE_INDEX_ONLY_SCAN true
+/* We can enable by default once we stabilize by moving it's creation to the cost estimate. */
+#define DEFAULT_ENABLE_INDEX_ONLY_SCAN false
 bool EnableIndexOnlyScan = DEFAULT_ENABLE_INDEX_ONLY_SCAN;
 
 /* Note: this is a long term feature flag since we need to validate compatiblity
