@@ -1912,7 +1912,8 @@ ParseAggregationExpressionData(AggregationExpressionData *expressionData,
 	if (context != NULL &&
 		context->validateParsedExpressionFunc != NULL)
 	{
-		context->validateParsedExpressionFunc(expressionData);
+		context->validateParsedExpressionFunc(expressionData,
+											  context->operatorVariables);
 	}
 }
 
@@ -2541,7 +2542,7 @@ ParseDocumentAggregationExpressionData(const bson_value_t *value,
 	BsonValueInitIterator(value, &docIter);
 
 	BuildBsonPathTreeContext context = { 0 };
-	context.parseAggregationContext.collationString = parseContext->collationString;
+	context.parseAggregationContext = *parseContext;
 	context.buildPathTreeFuncs = &DefaultPathTreeFuncs;
 	BsonIntermediatePathNode *treeNode = BuildBsonPathTree(&docIter, &context,
 														   forceLeafExpression,
@@ -2941,7 +2942,8 @@ ParseVariableArgumentsForExpression(const bson_value_t *value, bool *isConstant,
 
 /* Call back function for top level command let parsing to disallow path expressions, CURRENT and ROOT for a top level variable spec. */
 static void
-DisallowExpressionsForTopLevelLet(AggregationExpressionData *parsedExpression)
+DisallowExpressionsForTopLevelLet(AggregationExpressionData *parsedExpression,
+								  HTAB *operatorVariables)
 {
 	/* Path expressions, CURRENT and ROOT are not allowed in command level let. */
 	if (parsedExpression->kind == AggregationExpressionKind_Path ||

@@ -189,6 +189,9 @@ bool EnableLetAndCollationForQueryMatch =
 bool EnableVariablesSupportForWriteCommands =
 	DEFAULT_ENABLE_VARIABLES_SUPPORT_FOR_WRITE_COMMANDS;
 
+#define DEFAULT_ENABLE_OPERATOR_VARIABLES_IN_LOOKUP false
+bool EnableOperatorVariablesInLookup =
+	DEFAULT_ENABLE_OPERATOR_VARIABLES_IN_LOOKUP;
 
 /*
  * SECTION: Collation feature flags
@@ -368,6 +371,14 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether or not to enable let variables and $$NOW support for write (update, delete, findAndModify) commands. Only support for delete is available now."),
 		NULL, &EnableVariablesSupportForWriteCommands,
 		DEFAULT_ENABLE_VARIABLES_SUPPORT_FOR_WRITE_COMMANDS,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.EnableOperatorVariablesInLookup", newGucPrefix),
+		gettext_noop(
+			"Whether or not to enable operator variables($map.as alias) support in let variables spec."),
+		NULL, &EnableOperatorVariablesInLookup,
+		DEFAULT_ENABLE_OPERATOR_VARIABLES_IN_LOOKUP,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

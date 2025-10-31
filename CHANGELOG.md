@@ -1,5 +1,6 @@
 ### documentdb v0.109-0 (Unreleased) ###
 * Support collation with find positional queries *[Feature]*
+* Support operator variables(eg: $map.as alias) in let variable spec *[Bugfix]*
 * Support for `killOp` administrative command *[Feature]*
 * Fix `$addToSet` behavior and skip the top-level field rewrite because it's already done in the operator *[Bugfix]*
 * Performance improvements for $addToSet update operator up to ~70x for large existing and update arrays. *[Perf]*

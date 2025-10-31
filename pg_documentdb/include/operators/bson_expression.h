@@ -207,9 +207,9 @@ typedef struct TimeSystemVariables
 	bson_value_t nowValue;
 } TimeSystemVariables;
 
-
 /* Func that is called after every aggregation expression is parsed to check if it is valid on the current context, i.e let in top level commands like find can't have path expressions ($a) nor use $$CURRENT/$$ROOT system variables. */
-typedef void (*ValidateParsedAggregationExpression)(AggregationExpressionData *data);
+typedef void (*ValidateParsedAggregationExpression)(AggregationExpressionData *data,
+													HTAB *operatorVariables);
 
 /* Struct to pass down at parse time of the aggregation expressions that sets the information of what kind of expressions were found on the expression tree.*/
 typedef struct ParseAggregationExpressionContext
@@ -225,6 +225,9 @@ typedef struct ParseAggregationExpressionContext
 
 	/* collationString to be used by comparison operators */
 	const char *collationString;
+
+	/* A cummulative list of variables defined by a current operator or preceding operators. */
+	HTAB *operatorVariables;
 } ParseAggregationExpressionContext;
 
 

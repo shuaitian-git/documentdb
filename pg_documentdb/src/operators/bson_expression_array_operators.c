@@ -37,6 +37,7 @@
  */
 #define SIZE_OF_PARENT_OF_ARRAY_FOR_BSON 7
 
+extern bool EnableOperatorVariablesInLookup;
 
 /* --------------------------------------------------------- */
 /* Type declaration */
@@ -279,6 +280,9 @@ static void SetResultArrayForDollarZip(int rowNum, ZipParseInputsResult parsedIn
 static void ProcessDollarSortArray(bson_value_t *inputValue, SortContext *sortContext,
 								   bson_value_t *result);
 
+static void RegisterOperatorVariables(ParseAggregationExpressionContext *parentContext,
+									  ParseAggregationExpressionContext *currentContext,
+									  List *operatorVariablesList);
 
 /* --------------------------------------------------------- */
 /* Parse and Handle Pre-parse functions */
@@ -806,8 +810,21 @@ ParseDollarFilter(const bson_value_t *argument, AggregationExpressionData *data,
 
 	/* TODO: optimize, if input, limit and cond are constants, we can calculate the result at this phase. */
 	ParseAggregationExpressionData(&arguments->input, &input, context);
-	ParseAggregationExpressionData(&arguments->limit, &limit, context);
-	ParseAggregationExpressionData(&arguments->cond, &cond, context);
+
+	/* Track alias variables for use during validation*/
+	List *filterVariables = list_make1(aliasValue.value.v_utf8.str);
+	ParseAggregationExpressionContext *filterContext = palloc0(
+		sizeof(ParseAggregationExpressionContext));
+	*filterContext = *context;
+	RegisterOperatorVariables(context, filterContext, filterVariables);
+
+	ParseAggregationExpressionData(&arguments->limit, &limit, filterContext);
+	ParseAggregationExpressionData(&arguments->cond, &cond, filterContext);
+
+	list_free(filterVariables);
+	hash_destroy(filterContext->operatorVariables);
+	pfree(filterContext);
+
 	data->operator.arguments = arguments;
 	data->operator.argumentsKind = AggregationExpressionArgumentsKind_Palloc;
 }
@@ -1706,7 +1723,21 @@ ParseDollarMap(const bson_value_t *argument, AggregationExpressionData *data,
 	arguments->as.value = aliasValue;
 
 	ParseAggregationExpressionData(&arguments->input, &input, context);
-	ParseAggregationExpressionData(&arguments->in, &in, context);
+
+	/* Track 'as' variables to prevent error-ing in top-level let validation for $lookup */
+	List *mapVariables = list_make1(aliasValue.value.v_utf8.str);
+
+	ParseAggregationExpressionContext *mapContext = palloc0(
+		sizeof(ParseAggregationExpressionContext));
+	*mapContext = *context;
+	RegisterOperatorVariables(context, mapContext, mapVariables);
+
+	ParseAggregationExpressionData(&arguments->in, &in, mapContext);
+
+	list_free(mapVariables);
+	hash_destroy(mapContext->operatorVariables);
+	pfree(mapContext);
+
 	data->operator.arguments = arguments;
 	data->operator.argumentsKind = AggregationExpressionArgumentsKind_Palloc;
 }
@@ -1857,10 +1888,25 @@ ParseDollarReduce(const bson_value_t *argument, AggregationExpressionData *data,
 	}
 
 	DollarReduceArguments *arguments = palloc0(sizeof(DollarReduceArguments));
-
 	ParseAggregationExpressionData(&arguments->input, &input, context);
-	ParseAggregationExpressionData(&arguments->in, &in, context);
-	ParseAggregationExpressionData(&arguments->initialValue, &initialValue, context);
+
+	/* $$this and $$value variables are available for use in $reduce.in expressions */
+	/* $$this refers to the current document */
+	/* $$value refers to the accumulated value so far */
+	List *reduceVariables = list_make2("this", "value");
+	ParseAggregationExpressionContext *reduceContext = palloc0(
+		sizeof(ParseAggregationExpressionContext));
+	*reduceContext = *context;
+	RegisterOperatorVariables(context, reduceContext, reduceVariables);
+
+	ParseAggregationExpressionData(&arguments->in, &in, reduceContext);
+	ParseAggregationExpressionData(&arguments->initialValue, &initialValue,
+								   reduceContext);
+
+	list_free(reduceVariables);
+	hash_destroy(reduceContext->operatorVariables);
+	pfree(reduceContext);
+
 	data->operator.arguments = arguments;
 	data->operator.argumentsKind = AggregationExpressionArgumentsKind_Palloc;
 }
@@ -4357,5 +4403,45 @@ SetResultValueForDollarSumAvg(const bson_value_t *inputArgument, bson_value_t *r
 		{
 			*result = currentSum;
 		}
+	}
+}
+
+
+/*
+ * Register operator variables (like $$this and 'as' aliases) for the current operator context.
+ * These variables will be used during validation of a let variableSpec
+ */
+static void
+RegisterOperatorVariables(ParseAggregationExpressionContext *parentContext,
+						  ParseAggregationExpressionContext *currentContext,
+						  List *operatorVariablesList)
+{
+	if (!EnableOperatorVariablesInLookup)
+	{
+		return;
+	}
+
+	/* We need to override the shallow copy of the parent's variables */
+	currentContext->operatorVariables = CreateStringViewHashSet();
+	if (parentContext->operatorVariables)
+	{
+		HASH_SEQ_STATUS hashSeq;
+		StringView *key;
+		hash_seq_init(&hashSeq, parentContext->operatorVariables);
+		while ((key = (StringView *) hash_seq_search(&hashSeq)) != NULL)
+		{
+			StringView *keyCopy = palloc0(sizeof(StringView));
+			*keyCopy = *key;
+			hash_search(currentContext->operatorVariables, keyCopy, HASH_ENTER, NULL);
+		}
+	}
+
+	/* Add the entries in the current operator's variables list */
+	ListCell *lc;
+	foreach(lc, operatorVariablesList)
+	{
+		char *varName = (char *) lfirst(lc);
+		StringView varNameView = CreateStringViewFromString(varName);
+		hash_search(currentContext->operatorVariables, &varNameView, HASH_ENTER, NULL);
 	}
 }
