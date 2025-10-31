@@ -23,6 +23,10 @@
 
 #include "pg_documentdb_rum.h"
 
+extern PGDLLEXPORT void try_explain_documentdb_rum_index(IndexScanDesc scan,
+														 struct ExplainState *es);
+extern PGDLLEXPORT bool can_documentdb_rum_index_scan_ordered(IndexScanDesc scan);
+
 IndexScanDesc
 rumbeginscan(Relation rel, int nkeys, int norderbys)
 {

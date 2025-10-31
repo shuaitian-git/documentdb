@@ -402,12 +402,6 @@ typedef signed char RumNullCategory;
 	  MAXALIGN(sizeof(RumPageOpaqueData))) \
 	 / sizeof(ItemPointerData))
 
-/*
- * List pages
- */
-#define RumListPageSize \
-	(BLCKSZ - SizeOfPageHeaderData - MAXALIGN(sizeof(RumPageOpaqueData)))
-
 typedef struct
 {
 	ItemPointerData iptr;
@@ -532,7 +526,6 @@ extern PGDLLIMPORT bytea * documentdb_rumoptions(Datum reloptions, bool validate
 extern bool rumproperty(Oid index_oid, int attno,
 						IndexAMProperty prop, const char *propname,
 						bool *res, bool *isnull);
-extern PGDLLEXPORT Datum documentdb_rumhandler(PG_FUNCTION_ARGS);
 extern void initRumState(RumState *state, Relation index);
 extern Buffer RumNewBuffer(Relation index);
 extern void RumInitBuffer(GenericXLogState *state, Buffer buffer, uint32 flags,
@@ -1063,28 +1056,8 @@ extern RumItem * rumGetBAEntry(BuildAccumulator *accum,
 /* NProcs changes for documentdb from 10 to 12 */
 #define RUMNProcs 12
 
-
-#define RUM_DEFAULT_THROW_ERROR_ON_INVALID_DATA_PAGE false
-#define RUM_DEFAULT_DISABLE_FAST_SCAN false
-#define RUM_DEFAULT_ENABLE_PARALLEL_INDEX_BUILD true
-#define RUM_DEFAULT_PARALLEL_INDEX_WORKERS_OVERRIDE -1
-#define RUM_DEFAULT_SKIP_RETRY_ON_DELETE_PAGE true
-#define DEFAULT_FORCE_RUM_ORDERED_INDEX_SCAN false
-#define RUM_DEFAULT_PREFER_ORDERED_INDEX_SCAN true
-#define RUM_DEFAULT_ENABLE_SKIP_INTERMEDIATE_ENTRY true
-#define RUM_DEFAULT_VACUUM_ENTRY_ITEMS true
-#define RUM_DEFAULT_USE_NEW_ITEM_PTR_DECODING true
-#define RUM_DEFAULT_PRUNE_EMPTY_PAGES false
 #define RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT true
 #define RUM_DEFAULT_FIX_INCOMPLETE_SPLIT true
-#define RUM_DEFAULT_ENABLE_INJECT_PAGE_SPLIT_INCOMPLETE false
-#define RUM_ENABLE_PARALLEL_VACUUM_FLAGS true
-#define RUM_DEFAULT_ENABLE_CUSTOM_COST_ESTIMATE true
-#define RUM_DEFAULT_ENABLE_NEW_BULK_DELETE false
-#define RUM_DEFAULT_ENABLE_NEW_BULK_DELETE_INLINE_DATA_PAGES true
-#define RUM_DEFAULT_SKIP_PRUNE_POSTING_TREE_PAGES false
-#define RUM_DEFAULT_ENABLE_SUPPORT_DEAD_INDEX_ITEMS false
-#define RUM_DEFAULT_SKIP_RESET_ON_DEAD_ENTRY_PAGE false
 
 /* GUC parameters */
 extern PGDLLIMPORT int RumFuzzySearchLimit;
@@ -1629,10 +1602,6 @@ extern Datum FunctionCall10Coll(FmgrInfo *flinfo, Oid collation,
 #define PROGRESS_RUM_PHASE_MERGE_2 6
 #define PROGRESS_RUM_PHASE_WRITE_WAL 7
 
-struct ExplainState;
-extern PGDLLIMPORT void try_explain_documentdb_rum_index(IndexScanDesc scan,
-														 struct ExplainState *es);
-extern PGDLLIMPORT bool can_documentdb_rum_index_scan_ordered(IndexScanDesc scan);
 
 #define UNREDACTED_RUM_LOG_CODE MAKE_SQLSTATE('R', 'Z', 'Z', 'Z', 'Z')
 typedef int (*rum_format_log_hook)(const char *fmt, ...) pg_attribute_printf (1, 2);

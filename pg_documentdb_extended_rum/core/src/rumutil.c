@@ -37,7 +37,7 @@ PG_MODULE_MAGIC;
 void _PG_init(void);
 
 PG_FUNCTION_INFO_V1(documentdb_rumhandler);
-extern PGDLLEXPORT void InitializeCommonDocumentDBGUCs(const char *rumGucPrefix, const
+extern PGDLLIMPORT void InitializeCommonDocumentDBGUCs(const char *rumGucPrefix, const
 													   char *documentDBRumGucPrefix);
 
 static char * rumbuildphasename(int64 phasenum);
@@ -58,7 +58,7 @@ _PG_init(void)
 #define RUM_GUC_PREFIX "documentdb_rum"
 #define DOCUMENTDB_RUM_GUC_PREFIX "documentdb_rum"
 
-
+	/* Assert things about the storage format */
 	StaticAssertExpr(offsetof(RumPageOpaqueData, dataPageMaxoff) == sizeof(uint64_t),
 					 "maxoff must be the 3rd field with a specific offset");
 	StaticAssertExpr(offsetof(RumPageOpaqueData, entryPageUnused) == sizeof(uint64_t),
@@ -76,6 +76,9 @@ _PG_init(void)
 	StaticAssertExpr(sizeof(RumPageOpaqueData) == sizeof(uint64_t) + sizeof(uint64_t),
 					 "RumPageOpaqueData must be the 2 bigint fields worth");
 
+	StaticAssertExpr(sizeof(RumItem) == 16 && MAXALIGN(sizeof(RumItem)) == 16,
+					 "rum item aligned should be 16 bytes");
+	StaticAssertExpr(sizeof(RumDataLeafItemIndex) == 24, "LeafItemIndex is 24 bytes");
 
 	if (!process_shared_preload_libraries_in_progress)
 	{

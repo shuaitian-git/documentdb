@@ -45,6 +45,10 @@ static Oid DocumentDBExtendedRumCompositePathOpFamilyOid(void);
 static const char * GetDocumentDBCatalogSchema(void);
 static void LoadBaseIndexAmRoutine(void);
 
+extern PGDLLIMPORT void try_explain_documentdb_rum_index(IndexScanDesc scan, struct
+														 ExplainState *es);
+extern PGDLLIMPORT bool can_documentdb_rum_index_scan_ordered(IndexScanDesc scan);
+extern PGDLLIMPORT Datum documentdb_rumhandler(PG_FUNCTION_ARGS);
 extern PGDLLEXPORT bool documentdb_rum_get_multi_key_status(Relation indexRelation);
 extern PGDLLEXPORT void documentdb_rum_update_multi_key_status(Relation indexRelation);
 
