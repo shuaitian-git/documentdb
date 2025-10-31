@@ -1520,11 +1520,14 @@ ExpressionResultSetValue(ExpressionResult *expressionResult, const
 		expressionResult->value = *value;
 	}
 
-	if (!expressionResult->expressionResultPrivate.variableContext.hasSingleVariable)
+	ExpressionVariableContext variableContext =
+		expressionResult->expressionResultPrivate.variableContext;
+	bool destroyTable = !variableContext.preserveVariableTable &&
+						!variableContext.hasSingleVariable;
+	if (destroyTable)
 	{
-		hash_destroy(
-			expressionResult->expressionResultPrivate.variableContext.context.table);
-		expressionResult->expressionResultPrivate.variableContext.context.table = NULL;
+		hash_destroy(variableContext.context.table);
+		variableContext.context.table = NULL;
 	}
 }
 
@@ -2869,9 +2872,14 @@ HandlePreParsedDollarLet(pgbson *doc, void *arguments,
 	 * instead do it inline. */
 	ExpressionResult childExpressionResult = ExpressionResultCreateWithTracker(
 		expressionResult->expressionResultPrivate.tracker);
-	childExpressionResult.expressionResultPrivate.variableContext = *inputVariableContext;
-	childExpressionResult.expressionResultPrivate.variableContext.parent =
-		&expressionResult->expressionResultPrivate.variableContext;
+	ExpressionVariableContext *childContext =
+		&childExpressionResult.expressionResultPrivate.variableContext;
+
+	/* We need to set the preserveVariableTable flag for the child context */
+	/* so we do not free the variables table after successful evaluation for this doc */
+	*childContext = *inputVariableContext;
+	childContext->preserveVariableTable = true;
+	childContext->parent = &expressionResult->expressionResultPrivate.variableContext;
 
 	bool isNullOnEmpty = false;
 	EvaluateAggregationExpressionData(inExpression, doc, &childExpressionResult,

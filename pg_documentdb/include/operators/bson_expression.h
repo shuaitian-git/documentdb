@@ -58,6 +58,10 @@ typedef struct ExpressionVariableContext
 
 	/* the expression's parent to be  able to traverse if the variable is not found in the current context. */
 	const struct ExpressionVariableContext *parent;
+
+	/* A flag to indicate if we should not destroy the context's hash table evaluation in ExpressionResultSetValue */
+	/* Currently set in only $let */
+	bool preserveVariableTable;
 } ExpressionVariableContext;
 
 /* Func that will handle evaluating a given operator on a document. */

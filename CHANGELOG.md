@@ -4,6 +4,7 @@
 * Fix `$addToSet` behavior and skip the top-level field rewrite because it's already done in the operator *[Bugfix]*
 * Performance improvements for $addToSet update operator up to ~70x for large existing and update arrays. *[Perf]*
 * Removed feature flags `documentdb.enableCompact`, `documentdb.enableBucketAutoStage` and `documentdb.enableIndexHintSupport`
+* Fix use-after-free segmentation fault in `$let` *[Bugfix]* 
 
 ### documentdb v0.108-0 (Unreleased) ###
 * Top-level `let` variables and `$$NOW` supported by default.
