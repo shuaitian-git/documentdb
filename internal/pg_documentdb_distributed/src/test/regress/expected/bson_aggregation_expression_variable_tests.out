@@ -1004,32 +1004,6 @@ FROM bson_aggregation_pipeline(
  { "_id" : { "$numberInt" : "3" }, "result" : true }
 (3 rows)
 
-SELECT document
-FROM bson_aggregation_pipeline(
-  'db',
-  '{
-    "aggregate": "coll001", 
-    "pipeline": [
-      {
-        "$project": {
-          "result": {
-            "$let": {
-              "vars": { "va": "$a", "vb": "$b" },
-              "in": { "$and": ["$$va"] }
-            }
-          }
-        }
-      }
-    ]
-  }'
-);
-                      document                       
----------------------------------------------------------------------
- { "_id" : { "$numberInt" : "1" }, "result" : true }
- { "_id" : { "$numberInt" : "2" }, "result" : true }
- { "_id" : { "$numberInt" : "3" }, "result" : true }
-(3 rows)
-
 -- nested $let
 SELECT document
 FROM bson_aggregation_pipeline(

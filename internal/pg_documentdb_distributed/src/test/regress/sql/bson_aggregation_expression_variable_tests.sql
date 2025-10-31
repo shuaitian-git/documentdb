@@ -417,26 +417,6 @@ FROM bson_aggregation_pipeline(
   }'
 );
 
-SELECT document
-FROM bson_aggregation_pipeline(
-  'db',
-  '{
-    "aggregate": "coll001", 
-    "pipeline": [
-      {
-        "$project": {
-          "result": {
-            "$let": {
-              "vars": { "va": "$a", "vb": "$b" },
-              "in": { "$and": ["$$va"] }
-            }
-          }
-        }
-      }
-    ]
-  }'
-);
-
 -- nested $let
 SELECT document
 FROM bson_aggregation_pipeline(

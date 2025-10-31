@@ -1520,6 +1520,8 @@ ExpressionResultSetValue(ExpressionResult *expressionResult, const
 		expressionResult->value = *value;
 	}
 
+	/* Some variable context tables (eg: from $let) need to be preserved until */
+	/* every document is processed. */
 	ExpressionVariableContext variableContext =
 		expressionResult->expressionResultPrivate.variableContext;
 	bool destroyTable = !variableContext.preserveVariableTable &&
@@ -2840,6 +2842,9 @@ ParseDollarLet(const bson_value_t *argument, AggregationExpressionData *data,
 
 	ParseVariableSpec(&vars, inputVariableContext, context);
 
+	/* do not destroy the variables table after runtime evaluation on a document */
+	inputVariableContext->preserveVariableTable = true;
+
 	if (isInConstant)
 	{
 		data->kind = AggregationExpressionKind_Constant;
@@ -2876,10 +2881,7 @@ HandlePreParsedDollarLet(pgbson *doc, void *arguments,
 	ExpressionVariableContext *childContext =
 		&childExpressionResult.expressionResultPrivate.variableContext;
 
-	/* We need to set the preserveVariableTable flag for the child context */
-	/* so we do not free the variables table after successful evaluation for this doc */
 	*childContext = *inputVariableContext;
-	childContext->preserveVariableTable = true;
 	childContext->parent = &expressionResult->expressionResultPrivate.variableContext;
 
 	bool isNullOnEmpty = false;
