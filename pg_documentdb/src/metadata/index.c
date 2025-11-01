@@ -2446,6 +2446,9 @@ SerializeIndexSpec(const IndexSpec *indexSpec, bool isGetIndexes,
 				}
 				else if (IsOptionsKeyOrderedIndex(keyView.string))
 				{
+					/* TODO: We should just write this if the value is != ShouldUseCompositeOpClassByDefault
+					 * but we're leaving it here during the transition period of this being enabled by default in
+					 * some cases.*/
 					bool value = BsonValueAsBool(bson_iter_value(&optionsIter));
 					PgbsonWriterAppendBool(&storageEngineOptionsWriter,
 										   "enableOrderedIndex", 18,

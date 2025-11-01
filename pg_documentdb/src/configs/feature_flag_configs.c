@@ -77,7 +77,7 @@ bool EnableVectorCalculateDefaultSearchParameter =
  * SECTION: Indexing feature flags
  */
 
-#define DEFAULT_USE_NEW_COMPOSITE_INDEX_OPCLASS false
+#define DEFAULT_USE_NEW_COMPOSITE_INDEX_OPCLASS true
 bool DefaultUseCompositeOpClass = DEFAULT_USE_NEW_COMPOSITE_INDEX_OPCLASS;
 
 #define DEFAULT_ENABLE_COMPOSITE_INDEX_PLANNER false

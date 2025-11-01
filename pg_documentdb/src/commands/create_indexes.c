@@ -161,7 +161,6 @@ extern int MaxWildcardIndexKeySize;
 extern bool DefaultEnableLargeUniqueIndexKeys;
 extern bool SkipFailOnCollation;
 extern bool ForceWildcardReducedTerm;
-extern bool DefaultUseCompositeOpClass;
 
 extern char *AlternateIndexHandler;
 
@@ -2063,7 +2062,7 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 
 	if (indexDef->enableCompositeTerm == BoolIndexOption_True ||
 		(indexDef->enableCompositeTerm == BoolIndexOption_Undefined &&
-		 DefaultUseCompositeOpClass))
+		 ShouldUseCompositeOpClassByDefault()))
 	{
 		bool shouldError = indexDef->enableCompositeTerm == BoolIndexOption_True;
 
@@ -4843,10 +4842,14 @@ CreatePostgresIndexCreationCmd(uint64 collectionId, IndexDef *indexDef, int inde
 			enableLargeIndexKeys = true;
 		}
 
-		bool enableNewIndexOpClass = DefaultUseCompositeOpClass;
+		bool enableNewIndexOpClass = false;
 		if (indexDef->enableCompositeTerm != BoolIndexOption_Undefined)
 		{
 			enableNewIndexOpClass = indexDef->enableCompositeTerm == BoolIndexOption_True;
+		}
+		else
+		{
+			enableNewIndexOpClass = ShouldUseCompositeOpClassByDefault();
 		}
 
 		bool useReducedWildcardTermGeneration = false;
@@ -4986,10 +4989,14 @@ CreatePostgresIndexCreationCmd(uint64 collectionId, IndexDef *indexDef, int inde
 								   BoolIndexOption_False;
 		}
 
-		bool enableNewIndexOpClass = DefaultUseCompositeOpClass;
+		bool enableNewIndexOpClass = false;
 		if (indexDef->enableCompositeTerm != BoolIndexOption_Undefined)
 		{
 			enableNewIndexOpClass = indexDef->enableCompositeTerm == BoolIndexOption_True;
+		}
+		else
+		{
+			enableNewIndexOpClass = ShouldUseCompositeOpClassByDefault();
 		}
 
 		bool useReducedWildcardTermGeneration = ForceWildcardReducedTerm ||
@@ -5618,6 +5625,18 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 						 indexAmSuffix,
 						 quote_literal_cstr(BsonValueToJsonForLogging(&arrayValue)),
 						 indexTermSizeLimitArg);
+
+		if (indexExprStr->len >= MAX_INDEX_OPTIONS_LENGTH)
+		{
+			int lengthDelta = indexExprStr->len - MAX_INDEX_OPTIONS_LENGTH;
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
+							errmsg(
+								"The index path or expression is too long. Try a shorter path or reducing paths by %d characters.",
+								lengthDelta),
+							errdetail_log(
+								"The index path or expression is too long. Try a shorter path or reducing paths by %d characters.",
+								lengthDelta)));
+		}
 
 		if (unique)
 		{
