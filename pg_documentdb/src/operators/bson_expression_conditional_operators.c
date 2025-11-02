@@ -208,27 +208,37 @@ ParseDollarCond(const bson_value_t *argument, AggregationExpressionData *data,
 		elseData = list_nth(argumentsList, 2);
 	}
 
-	if (IsAggregationExpressionConstant(ifData) && IsAggregationExpressionConstant(
-			thenData) && IsAggregationExpressionConstant(elseData))
+	if (IsAggregationExpressionConstant(ifData))
 	{
-		bson_value_t result = { 0 };
-		result = BsonValueAsBool(&ifData->value) ? thenData->value :
-				 elseData->value;
-
-		/* If resulted is EOD because of field not found, should be a no-op. */
-		if (result.value_type != BSON_TYPE_EOD)
+		bool ifResult = BsonValueAsBool(&ifData->value);
+		if (ifResult && IsAggregationExpressionConstant(thenData))
 		{
-			data->value = result;
-		}
+			/* safety check but unlikely */
+			if (thenData->value.value_type != BSON_TYPE_EOD)
+			{
+				data->value = thenData->value;
+			}
 
-		data->kind = AggregationExpressionKind_Constant;
-		list_free_deep(argumentsList);
+			data->kind = AggregationExpressionKind_Constant;
+			list_free_deep(argumentsList);
+			return;
+		}
+		else if (!ifResult && IsAggregationExpressionConstant(elseData))
+		{
+			/* safety check but unlikely */
+			if (elseData->value.value_type != BSON_TYPE_EOD)
+			{
+				data->value = elseData->value;
+			}
+
+			data->kind = AggregationExpressionKind_Constant;
+			list_free_deep(argumentsList);
+			return;
+		}
 	}
-	else
-	{
-		data->operator.arguments = argumentsList;
-		data->operator.argumentsKind = AggregationExpressionArgumentsKind_List;
-	}
+
+	data->operator.arguments = argumentsList;
+	data->operator.argumentsKind = AggregationExpressionArgumentsKind_List;
 }
 
 
@@ -254,24 +264,30 @@ HandlePreParsedDollarCond(pgbson *doc, void *arguments,
 
 	ExpressionResultReset(&childResult);
 
-	AggregationExpressionData *thenData = list_nth(argumentList, 1);
-	EvaluateAggregationExpressionData(thenData, doc, &childResult, isNullOnEmpty);
-	bson_value_t thenValue = childResult.value;
+	if (BsonValueAsBool(&ifValue))
+	{
+		/* short-circuit */
+		AggregationExpressionData *thenData = list_nth(argumentList, 1);
+		EvaluateAggregationExpressionData(thenData, doc, &childResult, isNullOnEmpty);
+		bson_value_t thenValue = childResult.value;
 
-	ExpressionResultReset(&childResult);
+		/* If value is EOD because of field not found, should be a no-op. */
+		if (thenValue.value_type != BSON_TYPE_EOD)
+		{
+			ExpressionResultSetValue(expressionResult, &thenValue);
+		}
+
+		return;
+	}
 
 	AggregationExpressionData *elseData = list_nth(argumentList, 2);
 	EvaluateAggregationExpressionData(elseData, doc, &childResult, isNullOnEmpty);
 	bson_value_t elseValue = childResult.value;
 
-	bson_value_t result = { 0 };
-	result = BsonValueAsBool(&ifValue) ? thenValue :
-			 elseValue;
-
-	/* If resulted is EOD because of field not found, should be a no-op. */
-	if (result.value_type != BSON_TYPE_EOD)
+	/* If value is EOD because of field not found, should be a no-op. */
+	if (elseValue.value_type != BSON_TYPE_EOD)
 	{
-		ExpressionResultSetValue(expressionResult, &result);
+		ExpressionResultSetValue(expressionResult, &elseValue);
 	}
 }
 

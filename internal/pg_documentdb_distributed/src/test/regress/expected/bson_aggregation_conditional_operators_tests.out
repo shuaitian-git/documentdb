@@ -431,3 +431,105 @@ SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$switch": {"branches
  { "result" : "I am the default" }
 (1 row)
 
+-- short-circuit for non-constant expressions
+SELECT * FROM bson_dollar_project('{}', '{"result": {"$cond": {"if": true, "then": "then", "else": "$a"}}}');
+  bson_dollar_project  
+---------------------------------------------------------------------
+ { "result" : "then" }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": true, "then": "then", "else": {"$divide": [1, "$a"]}}}}');
+  bson_dollar_project  
+---------------------------------------------------------------------
+ { "result" : "then" }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": true, "then": "then", "else": {"$divide": ["$a", 0]}}}}');
+  bson_dollar_project  
+---------------------------------------------------------------------
+ { "result" : "then" }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": true, "then": {"$subtract": [1, "$a"]}, "else": {"$divide": [1, "$a"]}}}}');
+          bson_dollar_project          
+---------------------------------------------------------------------
+ { "result" : { "$numberInt" : "1" } }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{"b": []}', '{"result": {"$cond": {"if": true, "then": "then", "else": {"$range": [0, { "$arrayElemAt": [[], 0] } ]}   }}}');
+ERROR:  $range expression needs a numeric ending value, but a value of type missing was provided
+SELECT * FROM bson_dollar_project('{"b": []}', '{"result": {"$cond": {"if": true, "then": "then", "else": {"$range": [0, { "$arrayElemAt": ["$b", 0] } ]}   }}}');
+  bson_dollar_project  
+---------------------------------------------------------------------
+ { "result" : "then" }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{}', '{"result": {"$cond": {"if": false, "then": "$a", "else": "else"}}}');
+  bson_dollar_project  
+---------------------------------------------------------------------
+ { "result" : "else" }
+(1 row)
+
+-- error: in constant evaluation
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": true, "then": "then", "else": {"$divide": [1, 0]}}}}');
+ERROR:  $divide by zero is not allowed
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": false, "then": {"$divide": [1, 0]}, "else": "else" }}}');
+ERROR:  $divide by zero is not allowed
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": true, "then": {"$divide": [1, 0]}, "else": {"$divide": [1, 0]} }}}');
+ERROR:  $divide by zero is not allowed
+SELECT * FROM bson_dollar_project('{"b": []}', '{"result": {"$cond": {"if": false, "then": "then", "else": {"$range": [0, { "$arrayElemAt": [[], 0] } ]}   }}}');
+ERROR:  $range expression needs a numeric ending value, but a value of type missing was provided
+SELECT * FROM bson_dollar_project('{"b": []}', '{"result": {"$cond": {"if": false, "then": "then", "else": {"$range": [{ "$arrayElemAt": [[], 0] }, 10 ]}   }}}');
+ERROR:  $range expression requires a numeric start value but encountered a value of type: missing
+SELECT * FROM bson_dollar_project('{"b": []}', '{"result": {"$cond": {"if": false, "then": "then", "else": {"$range": [0, 2, { "$arrayElemAt": [[], 0] }]}   }}}');
+ERROR:  Expression $range needs a numeric step value, but received a value of type: missing
+-- no error: short-circuit
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": true, "then": "then", "else": {"$divide": [1, "$a"]}}}}');
+  bson_dollar_project  
+---------------------------------------------------------------------
+ { "result" : "then" }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": false, "then": {"$divide": [1, "$a"]}, "else": "else" }}}');
+  bson_dollar_project  
+---------------------------------------------------------------------
+ { "result" : "else" }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": true, "then": {"$divide": [1, 1]}, "else": {"$divide": [1, "$a"]} }}}');
+            bson_dollar_project             
+---------------------------------------------------------------------
+ { "result" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{"a": []}', '{"result": {"$cond": {"if": false, "then": {"$arrayElemAt": ["$a", 0]}, "else": {"$divide": [1, 1]} }}}');
+            bson_dollar_project             
+---------------------------------------------------------------------
+ { "result" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": true, "then": {"$subtract": [1, "$a"]}, "else": {"$divide": [1, "$a"]}}}}');
+          bson_dollar_project          
+---------------------------------------------------------------------
+ { "result" : { "$numberInt" : "1" } }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{"b": []}', '{"result": {"$cond": {"if": true, "then": "then", "else": {"$range": [0, { "$arrayElemAt": ["$b", 0] } ]}   }}}');
+  bson_dollar_project  
+---------------------------------------------------------------------
+ { "result" : "then" }
+(1 row)
+
+-- TODO: must fail for undefined variables
+SELECT * FROM bson_dollar_project('{"a": 0}', '{"result": {"$cond": {"if": true, "then": "then", "else": {"$divide": [1, "$$a"]}}}}');
+  bson_dollar_project  
+---------------------------------------------------------------------
+ { "result" : "then" }
+(1 row)
+
+SELECT * FROM bson_dollar_project('{"b": []}', '{"result": {"$cond": {"if": true, "then": "then", "else": {"$range": [0, { "$arrayElemAt": ["$$b", 0] } ]}   }}}');
+  bson_dollar_project  
+---------------------------------------------------------------------
+ { "result" : "then" }
+(1 row)
+

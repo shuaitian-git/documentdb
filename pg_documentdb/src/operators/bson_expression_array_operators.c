@@ -2882,14 +2882,10 @@ ProcessDollarIn(bson_value_t *targetValue, const bson_value_t *searchArray,
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_DOLLARINREQUIRESARRAY), errmsg(
 							"Expected 'array' type for $in operator but found '%s' type",
-							searchArray->value_type == BSON_TYPE_EOD ?
-							MISSING_TYPE_NAME :
-							BsonTypeName(searchArray->value_type)),
+							BsonTypeNameExtended(searchArray->value_type)),
 						errdetail_log(
 							"Expected 'array' type for $in operator but found '%s' type",
-							searchArray->value_type == BSON_TYPE_EOD ?
-							MISSING_TYPE_NAME :
-							BsonTypeName(searchArray->value_type))));
+							BsonTypeNameExtended(searchArray->value_type))));
 	}
 
 	bool found = false;
@@ -3054,19 +3050,14 @@ ProcessDollarArrayElemAt(void *state, bson_value_t *result)
 	}
 	if (elemAtState->isArrayElemAtOperator && !BsonTypeIsNumber(indexValue.value_type))
 	{
-		bool isUndefined = IsExpressionResultUndefined(&indexValue);
 		ereport(ERROR, (errcode(
 							ERRCODE_DOCUMENTDB_DOLLARARRAYELEMATSECONDARGARGMUSTBENUMERIC),
 						errmsg(
 							"The second argument of $arrayElemAt must be a numeric type value, but it is %s instead.",
-							isUndefined ?
-							MISSING_TYPE_NAME :
-							BsonTypeName(indexValue.value_type)),
+							BsonTypeNameExtended(indexValue.value_type)),
 						errdetail_log(
 							"The second argument of $arrayElemAt must be a numeric type value, but it is %s instead.",
-							isUndefined ?
-							MISSING_TYPE_NAME :
-							BsonTypeName(indexValue.value_type))));
+							BsonTypeNameExtended(indexValue.value_type))));
 	}
 
 	bool checkFixedInteger = true;
@@ -3153,17 +3144,12 @@ ProcessDollarSize(const bson_value_t *currentValue, bson_value_t *result)
 {
 	if (currentValue->value_type != BSON_TYPE_ARRAY)
 	{
-		bool isUndefined = IsExpressionResultUndefined(currentValue);
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_DOLLARSIZEREQUIRESARRAY), errmsg(
 							"$size requires an array argument, but received a value of type: %s",
-							isUndefined ?
-							MISSING_TYPE_NAME :
-							BsonTypeName(currentValue->value_type)),
+							BsonTypeNameExtended(currentValue->value_type)),
 						errdetail_log(
 							"$size requires an array argument, but received a value of type: %s",
-							isUndefined ?
-							MISSING_TYPE_NAME :
-							BsonTypeName(currentValue->value_type))));
+							BsonTypeNameExtended(currentValue->value_type))));
 	}
 
 	int size = 0;
@@ -3811,12 +3797,13 @@ GetStartValueForDollarRange(bson_value_t *startValue)
 	bool checkFixedInteger = true;
 	if (!BsonTypeIsNumber(startValue->value_type))
 	{
+		char *typeName = BsonTypeNameExtended(startValue->value_type);
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION34443), errmsg(
 							"$range expression requires a numeric start value but encountered a value of type: %s",
-							BsonTypeName(startValue->value_type)),
+							typeName),
 						errdetail_log(
 							"$range expression requires a numeric start value but encountered a value of type: %s",
-							BsonTypeName(startValue->value_type))));
+							typeName)));
 	}
 	else if (!IsBsonValue32BitInteger(startValue, checkFixedInteger))
 	{
@@ -3845,9 +3832,10 @@ GetEndValueForDollarRange(bson_value_t *endValue)
 	bool checkFixedInteger = true;
 	if (!BsonTypeIsNumber(endValue->value_type))
 	{
+		char *typeName = BsonTypeNameExtended(endValue->value_type);
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION34445), errmsg(
 							"$range expression needs a numeric ending value, but a value of type %s was provided",
-							BsonTypeName(endValue->value_type))));
+							typeName)));
 	}
 	else if (!IsBsonValue32BitInteger(endValue, checkFixedInteger))
 	{
@@ -3872,12 +3860,13 @@ GetStepValueForDollarRange(bson_value_t *stepValue)
 	int32_t stepValInt32;
 	if (!BsonTypeIsNumber(stepValue->value_type))
 	{
+		char *typeName = BsonTypeNameExtended(stepValue->value_type);
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION34447), errmsg(
 							"Expression $range needs a numeric step value, but received a value of type: %s",
-							BsonTypeName(stepValue->value_type)),
+							typeName),
 						errdetail_log(
 							"Expression $range needs a numeric step value, but received a value of type: %s",
-							BsonTypeName(stepValue->value_type))));
+							typeName)));
 	}
 	else if (!IsBsonValue32BitInteger(stepValue, checkFixedInteger))
 	{
