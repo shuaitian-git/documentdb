@@ -1277,19 +1277,20 @@ InsertOrReplaceDocument(uint64 collectionId, const char *shardTableName, int64
 		const int prefixLength = 10;
 		const char *shardSuffix = shardTableName + prefixLength;
 		appendStringInfo(&query, " ON CONFLICT ON CONSTRAINT collection_pk_%s"
-								 " DO UPDATE set document = ( %s.bson_update_document(%s.documents_%s.document, %s.bson_from_bytea($4), '{}'::%s.bson)).newDocument",
+								 " DO UPDATE set document = COALESCE( (%s.bson_update_document(%s.documents_%s.document, %s.bson_from_bytea($4), '{}'::%s.bson)).newDocument, %s.documents_%s.document)",
 						 shardSuffix, ApiInternalSchemaName, ApiDataSchemaName,
-						 shardSuffix, CoreSchemaName, CoreSchemaName);
+						 shardSuffix, CoreSchemaName, CoreSchemaName, ApiDataSchemaName,
+						 shardSuffix);
 	}
 	else
 	{
 		appendStringInfo(&query, " ON CONFLICT ON CONSTRAINT collection_pk_" UINT64_FORMAT
-						 " DO UPDATE set document = (%s.bson_update_document(%s.documents_"
+						 " DO UPDATE set document = COALESCE( (%s.bson_update_document(%s.documents_"
 						 UINT64_FORMAT
-						 ".document, %s.bson_from_bytea($4), '{}'::%s.bson)).newDocument",
+						 ".document, %s.bson_from_bytea($4), '{}'::%s.bson)).newDocument, %s.documents_%ld.document)",
 						 collectionId, ApiInternalSchemaName, ApiDataSchemaName,
 						 collectionId,
-						 CoreSchemaName, CoreSchemaName);
+						 CoreSchemaName, CoreSchemaName, ApiDataSchemaName, collectionId);
 	}
 
 	argTypes[0] = INT8OID;
