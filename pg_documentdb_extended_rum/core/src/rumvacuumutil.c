@@ -41,6 +41,7 @@ typedef struct RumSharedVacInfo
 } RumSharedVacInfo;
 
 PGDLLEXPORT RumSharedVacInfo *rumSharedVacInfo;
+extern int32_t RumVacuumCycleIdOverride;
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
@@ -148,6 +149,11 @@ rum_start_vacuum_cycle_id(Relation rel)
 	int i;
 	RumSingleVacInfo *vac;
 
+	if (RumVacuumCycleIdOverride > 0 && RumVacuumCycleIdOverride <= UINT16_MAX)
+	{
+		return (RumVacuumCycleId) RumVacuumCycleIdOverride;
+	}
+
 	LWLockAcquire(BtreeVacuumLock, LW_EXCLUSIVE);
 
 	/*
@@ -229,6 +235,11 @@ rum_vacuum_get_cycleId(Relation rel)
 {
 	RumVacuumCycleId result = 0;
 	int i;
+
+	if (RumVacuumCycleIdOverride > 0 && RumVacuumCycleIdOverride <= UINT16_MAX)
+	{
+		return (RumVacuumCycleId) RumVacuumCycleIdOverride;
+	}
 
 	/* Share lock is enough since this is a read-only operation */
 	LWLockAcquire(BtreeVacuumLock, LW_SHARED);
