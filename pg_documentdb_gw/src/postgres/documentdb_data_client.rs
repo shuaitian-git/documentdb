@@ -370,40 +370,49 @@ impl PgDataClient for DocumentDBDataClient {
             .query_catalog()
             .explain(analyze, query_base);
 
-        let explain_rows = if matches!(
-            verbosity,
-            Verbosity::AllShardsQueryPlan | Verbosity::AllShardsExecution
-        ) {
-            let mut inner_connection = self.pull_inner_connection().await?;
-            let transaction = inner_connection.transaction().await?;
-            let explain_config_query = connection_context
-                .service_context
-                .query_catalog()
-                .set_explain_all_tasks_true();
-            if !explain_config_query.is_empty() {
-                transaction.batch_execute(explain_config_query).await?;
+        let explain_rows = match verbosity {
+            Verbosity::AllShardsQueryPlan
+            | Verbosity::AllShardsExecution
+            | Verbosity::AllPlansExecution => {
+                let mut inner_connection = self.pull_inner_connection().await?;
+                let transaction = inner_connection.transaction().await?;
+                let explain_config_query = match verbosity {
+                    Verbosity::AllPlansExecution => connection_context
+                        .service_context
+                        .query_catalog()
+                        .set_explain_all_plans_true(),
+                    _ => connection_context
+                        .service_context
+                        .query_catalog()
+                        .set_explain_all_tasks_true(),
+                };
+                if !explain_config_query.is_empty() {
+                    transaction.batch_execute(explain_config_query).await?;
+                }
+                let explain_prepared_stmt = transaction
+                    .prepare_typed_cached(&explain_query, &[Type::TEXT, Type::BYTEA])
+                    .await?;
+                transaction
+                    .query(
+                        &explain_prepared_stmt,
+                        &[&request_info.db()?, &PgDocument(request.document())],
+                    )
+                    .await?
             }
-            let explain_prepared_stmt = transaction
-                .prepare_typed_cached(&explain_query, &[Type::TEXT, Type::BYTEA])
-                .await?;
-            transaction
-                .query(
-                    &explain_prepared_stmt,
-                    &[&request_info.db()?, &PgDocument(request.document())],
-                )
-                .await?
-        } else {
-            #[allow(clippy::unnecessary_to_owned)]
-            self.pull_connection(connection_context)
-                .await?
-                .query_db_bson(
-                    &explain_query,
-                    &request_info.db()?.to_string(),
-                    &PgDocument(request.document()),
-                    Timeout::transaction(request_info.max_time_ms),
-                    request_tracker,
-                )
-                .await?
+            _ =>
+            {
+                #[allow(clippy::unnecessary_to_owned)]
+                self.pull_connection(connection_context)
+                    .await?
+                    .query_db_bson(
+                        &explain_query,
+                        &request_info.db()?.to_string(),
+                        &PgDocument(request.document()),
+                        Timeout::transaction(request_info.max_time_ms),
+                        request_tracker,
+                    )
+                    .await?
+            }
         };
 
         let explain_response = match explain_rows.first() {
