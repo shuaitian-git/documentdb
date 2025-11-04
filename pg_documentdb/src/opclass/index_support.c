@@ -1504,6 +1504,14 @@ IndexClausesValidForIndexOnlyScan(IndexPath *indexPath,
 }
 
 
+static bool
+PlanHasAggregates(PlannerInfo *root)
+{
+	return list_length(root->agginfos) != 0 ||
+		   (root->parent_root != NULL && PlanHasAggregates(root->parent_root));
+}
+
+
 /*
  * Check whether we can handle index scans as index only scans.
  * This is possible if:
@@ -1519,7 +1527,7 @@ void
 ConsiderIndexOnlyScan(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 					  Index rti, ReplaceExtensionFunctionContext *context)
 {
-	if (list_length(root->agginfos) == 0 ||
+	if (!PlanHasAggregates(root) ||
 		rte->rtekind != RTE_RELATION ||
 		root->hasJoinRTEs)
 	{
