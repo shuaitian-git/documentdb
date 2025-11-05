@@ -86,6 +86,9 @@ typedef struct
 {
 	/* Equality on shardKey if available */
 	RestrictInfo *shardKeyEqualityExpr;
+
+	/* Whether this is an unsharded equality */
+	bool isShardKeyEqualityOnUnsharded;
 } PlannerQueryOrderByData;
 
 

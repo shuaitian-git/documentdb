@@ -317,6 +317,7 @@ extern bool SetSelectivityForFullScan;
 extern bool EnableExprLookupIndexPushdown;
 extern bool EnableUnifyPfeOnIndexInfo;
 extern bool EnableIdIndexPushdown;
+extern bool ForceIndexOnlyScanIfAvailable;
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -814,6 +815,10 @@ CheckRestrictionPathNodeForIndexOperation(Expr *currentExpr,
 					primaryKeyContext->shardKeyQualExpr = currentRestrictInfo;
 					context->plannerOrderByData.shardKeyEqualityExpr =
 						currentRestrictInfo;
+					context->plannerOrderByData.isShardKeyEqualityOnUnsharded =
+						IsOpExprShardKeyForUnshardedCollections(currentExpr,
+																context->inputData.
+																collectionId);
 				}
 			}
 		}
@@ -1456,6 +1461,7 @@ IndexClausesValidForIndexOnlyScan(IndexPath *indexPath,
 		if (!IsA(clause, OpExpr))
 		{
 			if (IsA(clause, BoolExpr) &&
+				replaceContext->plannerOrderByData.isShardKeyEqualityOnUnsharded &&
 				IsShardKeyFilterBoolExpr((BoolExpr *) clause,
 										 replaceContext->plannerOrderByData.
 										 shardKeyEqualityExpr))
@@ -1482,7 +1488,8 @@ IndexClausesValidForIndexOnlyScan(IndexPath *indexPath,
 		if (indexStrategy == BSON_INDEX_STRATEGY_INVALID)
 		{
 			/* if it is a shard key filter, we can safely do an index only scan. */
-			if (baseRestrictInfo ==
+			if (replaceContext->plannerOrderByData.isShardKeyEqualityOnUnsharded &&
+				baseRestrictInfo ==
 				replaceContext->plannerOrderByData.shardKeyEqualityExpr)
 			{
 				continue;
@@ -1654,12 +1661,22 @@ ConsiderIndexOnlyScan(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 		addedPaths = lappend(addedPaths, indexPathCopy);
 	}
 
-	ListCell *pathsToAddCell;
-	foreach(pathsToAddCell, addedPaths)
+	if (ForceIndexOnlyScanIfAvailable &&
+		list_length(addedPaths) > 0)
 	{
-		/* now add the new paths */
-		Path *newPath = lfirst(pathsToAddCell);
-		add_path(rel, newPath);
+		/* reset pathlist to only have these */
+		rel->pathlist = addedPaths;
+		rel->partial_pathlist = NIL;
+	}
+	else
+	{
+		ListCell *pathsToAddCell;
+		foreach(pathsToAddCell, addedPaths)
+		{
+			/* now add the new paths */
+			Path *newPath = lfirst(pathsToAddCell);
+			add_path(rel, newPath);
+		}
 	}
 }
 
