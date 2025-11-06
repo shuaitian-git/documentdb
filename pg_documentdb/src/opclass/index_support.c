@@ -2903,7 +2903,7 @@ TrimIndexRestrictInfoForBtreePath(PlannerInfo *root, IndexPath *indexPath,
 			case BSON_INDEX_STRATEGY_DOLLAR_EQUAL:
 			{
 				primaryKeyExpr = MakeSimpleIdExpr(&qualElement.bsonValue, firstVar->varno,
-												  BsonLessThanOperatorId());
+												  BsonEqualOperatorId());
 				break;
 			}
 
