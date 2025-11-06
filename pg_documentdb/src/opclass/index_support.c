@@ -3968,8 +3968,7 @@ TryUseAlternateIndexForIndexHint(PlannerInfo *root, RelOptInfo *rel,
 	if (IsBsonRegularIndexAm(matchedInfo->relam))
 	{
 		bytea *opClassOptions = matchedInfo->opclassoptions[0];
-		if (opClassOptions == NULL &&
-			IsUniqueCheckOpFamilyOid(matchedInfo->relam, matchedInfo->opfamily[0]))
+		if (IsUniqueCheckOpFamilyOid(matchedInfo->relam, matchedInfo->opfamily[0]))
 		{
 			/* For unique indexes, the first column is the shard key constraint */
 			opClassOptions = matchedInfo->opclassoptions[1];

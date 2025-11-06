@@ -161,6 +161,7 @@ extern int MaxWildcardIndexKeySize;
 extern bool DefaultEnableLargeUniqueIndexKeys;
 extern bool SkipFailOnCollation;
 extern bool ForceWildcardReducedTerm;
+extern bool EnableCompositeUniqueHash;
 
 extern char *AlternateIndexHandler;
 
@@ -5342,17 +5343,19 @@ inline static void
 AppendUniqueColumnExpr(StringInfo indexExprStr, IndexDefKey *indexDefKey,
 					   bool sparse, const char *indexAmSuffix, const
 					   char *indexAmOpClassInternalCatalogSchema,
-					   bool firstColumnWritten, bool buildAsUnique)
+					   bool firstColumnWritten, bool buildAsUnique,
+					   bool generateCompositeHash)
 {
 	appendStringInfo(indexExprStr,
-					 "%s%s.generate_unique_shard_document(document, shard_key_value, '%s'::%s.bson, %s) %s.bson_%s_unique_shard_path_ops",
+					 "%s%s.generate_unique_shard_document(document, shard_key_value, '%s'::%s.bson, %s) %s.bson_%s_unique_shard_path_ops%s",
 					 !firstColumnWritten ? "" : ",",
 					 DocumentDBApiInternalSchemaName,
 					 GenerateUniqueProjectionSpec(indexDefKey),
 					 CoreSchemaName,
 					 sparse ? "true" : "false",
 					 indexAmOpClassInternalCatalogSchema,
-					 indexAmSuffix);
+					 indexAmSuffix,
+					 generateCompositeHash ? "(cmp=true)" : "");
 
 	if (!buildAsUnique)
 	{
@@ -5422,9 +5425,10 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 	if (usingNewUniqueIndexOpClass && !isUsingCompositeOpClass)
 	{
 		bool buildAsUniqueOverride = false;
+		bool generateCompositeHash = false;
 		AppendUniqueColumnExpr(indexExprStr, indexDefKey, sparse, indexAmSuffix,
 							   indexAmOpClassInternalCatalogSchema, firstColumnWritten,
-							   buildAsUniqueOverride);
+							   buildAsUniqueOverride, generateCompositeHash);
 		firstColumnWritten = true;
 	}
 
@@ -5845,9 +5849,11 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 
 	if (usingNewUniqueIndexOpClass && isUsingCompositeOpClass)
 	{
+		bool generateCompositeHash = EnableCompositeUniqueHash && IsClusterVersionAtleast(
+			DocDB_V0, 109, 0);
 		AppendUniqueColumnExpr(indexExprStr, indexDefKey, sparse, indexAmSuffix,
 							   indexAmOpClassInternalCatalogSchema, firstColumnWritten,
-							   buildAsUnique);
+							   buildAsUnique, generateCompositeHash);
 	}
 
 	return indexExprStr->data;

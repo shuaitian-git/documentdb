@@ -840,6 +840,7 @@ GetFirstPathFromIndexOptionsIfApplicable(bytea *indexOptions, bool *isWildcardIn
 		case IndexOptionsType_Hashed:
 		case IndexOptionsType_Wildcard:
 		case IndexOptionsType_UniqueShardKey:
+		case IndexOptionsType_UniqueShardPath:
 		default:
 		{
 			return NULL;
@@ -1007,6 +1008,7 @@ ValidateIndexForQualifierElement(bytea *indexOptions, pgbsonelement *filterEleme
 		}
 
 		case IndexOptionsType_UniqueShardKey:
+		case IndexOptionsType_UniqueShardPath:
 		{
 			traverse = IndexTraverse_Invalid;
 			break;
@@ -1116,6 +1118,7 @@ ValidateIndexForQualifierPathForEquality(bytea *indexOptions, const StringView *
 		}
 
 		case IndexOptionsType_UniqueShardKey:
+		case IndexOptionsType_UniqueShardPath:
 		{
 			traverse = IndexTraverse_Invalid;
 			break;
