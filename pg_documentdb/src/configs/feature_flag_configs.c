@@ -129,10 +129,6 @@ bool UseNewElemMatchIndexPushdown = DEFAULT_USE_NEW_ELEMMATCH_INDEX_PUSHDOWN;
 bool UseNewElemMatchIndexOperatorOnPushdown =
 	DEFAULT_USE_NEW_ELEMMATCH_INDEX_OPERATOR_ON_PUSHDOWN;
 
-/* Can be removed in v110 (keep for a few releases for stability) */
-#define DEFAULT_ENABLE_INSERT_CUSTOM_PLAN true
-bool EnableInsertCustomPlan = DEFAULT_ENABLE_INSERT_CUSTOM_PLAN;
-
 #define DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING true
 bool EnableIndexPriorityOrdering = DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING;
 
@@ -144,6 +140,9 @@ bool EnableUnifyPfeOnIndexInfo = DEFAULT_ENABLE_UNIFY_PFE_ON_INDEXINFO;
 
 #define DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT true
 bool EnableUpdateBsonDocument = DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT;
+
+#define DEFAULT_ENABLE_NEW_COUNT_AGGREGATES true
+bool EnableNewCountAggregates = DEFAULT_ENABLE_NEW_COUNT_AGGREGATES;
 
 
 /*
@@ -158,9 +157,12 @@ bool EnablePrimaryKeyCursorScan = DEFAULT_ENABLE_PRIMARY_KEY_CURSOR_SCAN;
 #define DEFAULT_USE_FILE_BASED_PERSISTED_CURSORS false
 bool UseFileBasedPersistedCursors = DEFAULT_USE_FILE_BASED_PERSISTED_CURSORS;
 
-/* Remove after v108 */
-#define DEFAULT_ENABLE_INDEX_HINT_SUPPORT true
-bool EnableIndexHintSupport = DEFAULT_ENABLE_INDEX_HINT_SUPPORT;
+#define DEFAULT_ENABLE_CONVERSION_STREAMABLE_SINGLE_BATCH true
+bool EnableConversionStreamableToSingleBatch =
+	DEFAULT_ENABLE_CONVERSION_STREAMABLE_SINGLE_BATCH;
+
+#define DEFAULT_ENABLE_FIND_PROJECTION_AFTER_OFFSET true
+bool EnableFindProjectionAfterOffset = DEFAULT_ENABLE_FIND_PROJECTION_AFTER_OFFSET;
 
 /* Remove after v109 */
 #define DEFAULT_ENABLE_DELAYED_HOLD_PORTAL true
@@ -169,6 +171,10 @@ bool EnableDelayedHoldPortal = DEFAULT_ENABLE_DELAYED_HOLD_PORTAL;
 /* Remove after v109 */
 #define DEFAULT_FORCE_COLL_STATS_DATA_COLLECTION false
 bool ForceCollStatsDataCollection = DEFAULT_FORCE_COLL_STATS_DATA_COLLECTION;
+
+/* Remove after 110 */
+#define DEFAULT_ENABLE_ID_INDEX_PUSHDOWN true
+bool EnableIdIndexPushdown = DEFAULT_ENABLE_ID_INDEX_PUSHDOWN;
 
 
 /*
@@ -212,13 +218,6 @@ bool RecreateRetryTableOnSharding = DEFAULT_RECREATE_RETRY_TABLE_ON_SHARDING;
 bool EnableDataTableWithoutCreationTime =
 	DEFAULT_ENABLE_DATA_TABLES_WITHOUT_CREATION_TIME;
 
-#define DEFAULT_ENABLE_BUCKET_AUTO_STAGE true
-bool EnableBucketAutoStage = DEFAULT_ENABLE_BUCKET_AUTO_STAGE;
-
-/* Remove after v108 */
-#define DEFAULT_ENABLE_COMPACT_COMMAND true
-bool EnableCompact = DEFAULT_ENABLE_COMPACT_COMMAND;
-
 #define DEFAULT_ENABLE_SCHEMA_ENFORCEMENT_FOR_CSFLE true
 bool EnableSchemaEnforcementForCSFLE = DEFAULT_ENABLE_SCHEMA_ENFORCEMENT_FOR_CSFLE;
 
@@ -227,6 +226,9 @@ bool UsePgStatsLiveTuplesForCount = DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT;
 
 #define DEFAULT_ENABLE_PREPARE_UNIQUE false
 bool EnablePrepareUnique = DEFAULT_ENABLE_PREPARE_UNIQUE;
+
+#define DEFAULT_ENABLE_COLLMOD_UNIQUE false
+bool EnableCollModUnique = DEFAULT_ENABLE_COLLMOD_UNIQUE;
 
 /* FEATURE FLAGS END */
 
@@ -400,14 +402,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.enableCompact", newGucPrefix),
-		gettext_noop(
-			"Whether or not to enable compact command."),
-		NULL, &EnableCompact,
-		DEFAULT_ENABLE_COMPACT_COMMAND,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		psprintf("%s.enableUsersInfoPrivileges", newGucPrefix),
 		gettext_noop(
 			"Determines whether the usersInfo command returns privileges."),
@@ -471,22 +465,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.enableBucketAutoStage", newGucPrefix),
-		gettext_noop(
-			"Whether to enable the $bucketAuto stage."),
-		NULL, &EnableBucketAutoStage,
-		DEFAULT_ENABLE_BUCKET_AUTO_STAGE,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enableInsertCustomPlan", newGucPrefix),
-		gettext_noop(
-			"Whether to use custom insert plan for insert commands."),
-		NULL, &EnableInsertCustomPlan,
-		DEFAULT_ENABLE_INSERT_CUSTOM_PLAN,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		psprintf("%s.defaultUseCompositeOpClass", newGucPrefix),
 		gettext_noop(
 			"Whether to enable the new ordered index opclass for default index creates"),
@@ -515,10 +493,19 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.enableIndexHintSupport", newGucPrefix),
+		psprintf("%s.enableConversionStreamableToSingleBatch", newGucPrefix),
 		gettext_noop(
-			"Whether to enable index hint support for index pushdown."),
-		NULL, &EnableIndexHintSupport, DEFAULT_ENABLE_INDEX_HINT_SUPPORT,
+			"Whether to enable conversion streamable to single batch queries."),
+		NULL, &EnableConversionStreamableToSingleBatch,
+		DEFAULT_ENABLE_CONVERSION_STREAMABLE_SINGLE_BATCH,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableFindProjectionAfterOffset", newGucPrefix),
+		gettext_noop(
+			"Whether to enable pushing projection as a subquery after offset."),
+		NULL, &EnableFindProjectionAfterOffset,
+		DEFAULT_ENABLE_FIND_PROJECTION_AFTER_OFFSET,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -581,6 +568,12 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		psprintf("%s.enableIdIndexPushdown", newGucPrefix),
+		gettext_noop(
+			"Whether to enable extended id index pushdown optimizations."),
+		NULL, &EnableIdIndexPushdown, DEFAULT_ENABLE_ID_INDEX_PUSHDOWN,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+	DefineCustomBoolVariable(
 		psprintf("%s.enableExprLookupIndexPushdown", newGucPrefix),
 		gettext_noop(
 			"Whether to expr and lookup pushdown to the index."),
@@ -627,5 +620,19 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable prepareUnique for coll mod."),
 		NULL, &EnablePrepareUnique, DEFAULT_ENABLE_PREPARE_UNIQUE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableCollModUnique", newGucPrefix),
+		gettext_noop(
+			"Whether to enable unique for coll mod."),
+		NULL, &EnableCollModUnique, DEFAULT_ENABLE_COLLMOD_UNIQUE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableNewCountAggregates", newGucPrefix),
+		gettext_noop(
+			"Whether to enable new count aggregate optimizations."),
+		NULL, &EnableNewCountAggregates, DEFAULT_ENABLE_NEW_COUNT_AGGREGATES,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }

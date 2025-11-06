@@ -512,9 +512,17 @@ ExtractUniqueShardTermsFromInput(pgbson *input, int32_t *nentries, Pointer **ext
 	if (extraData != NULL)
 	{
 		pathMap = palloc0(sizeof(IndexBounds) * numPaths);
-		IndexBoundsWithLength *boundsWithLength = palloc0(sizeof(IndexBoundsWithLength));
-		boundsWithLength->length = numPaths;
-		boundsWithLength->indexBounds = pathMap;
+		IndexBoundsWithLength *boundsWithLength = palloc0(sizeof(IndexBoundsWithLength) *
+														  numTerms);
+
+		IndexBoundsWithLength singleBounds = { 0 };
+		singleBounds.length = numPaths;
+		singleBounds.indexBounds = pathMap;
+		for (int i = 0; i < numTerms; i++)
+		{
+			boundsWithLength[i] = singleBounds;
+		}
+
 		*extraData = (Pointer *) boundsWithLength;
 	}
 

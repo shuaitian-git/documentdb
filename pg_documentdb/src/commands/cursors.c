@@ -766,7 +766,7 @@ BsonStoreDestReceiverShutdown(DestReceiver *destReceiver)
 	if (tupleDestReceiver->cursorFileState != NULL)
 	{
 		tupleDestReceiver->continuationState = CursorFileStateClose(
-			tupleDestReceiver->cursorFileState);
+			tupleDestReceiver->cursorFileState, tupleDestReceiver->writerContext);
 	}
 }
 
@@ -1416,7 +1416,7 @@ CursorHashEntryCompareFunc(const void *obj1, const void *obj2,
 /*
  * Updates a single shard's cursor document into the cursor map.
  */
-static void
+pg_attribute_no_sanitize_alignment() static void
 UpdateCursorInContinuationMapCore(bson_iter_t *singleContinuationDoc, HTAB *cursorMap)
 {
 	bson_value_t continuationBinaryValue = { 0 };

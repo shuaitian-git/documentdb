@@ -217,7 +217,7 @@ typedef struct UpdateArrayWriter
 	bool isValid;
 
 	/* Whether or not the array writer modified something */
-	bool modified;
+	ModifyType modifyType;
 } UpdateArrayWriter;
 
 
@@ -238,18 +238,12 @@ typedef struct UpdateOperatorWriter
 	const char *relativePath;
 
 	/* whether or not the value was modified */
-	bool modified;
+	ModifyType modifyType;
 
 	/* the underlying array writer if one is requested */
 	UpdateArrayWriter updateArrayWriter;
 } UpdateOperatorWriter;
 
-/* --------------------------------------------------------- */
-/* Global hooks */
-/* --------------------------------------------------------- */
-NotifyUpdatedField_HookType notify_updated_field_hook = NULL;
-NotifyUpdatedFieldPathView_HookType notify_updated_field_path_view_hook = NULL;
-NotifyRemovedField_HookType notify_remove_field_hook = NULL;
 
 /* --------------------------------------------------------- */
 /* Forward declaration */
@@ -475,14 +469,16 @@ WriteCurrentNode(const BsonUpdateLeafNode *leaf, const bson_value_t *currentValu
 	/* If the update operator did not modify the document
 	 * and there is a value to be written,
 	 * write out the original value.
+	 * Exclude MODIFY_TYPE_ORIGINAL_REWRITE since that means the existing
+	 * value is already written on the new document.
 	 */
-	if (!updateWriter.modified &&
+	if (updateWriter.modifyType == MODIFY_TYPE_NOCHANGE &&
 		currentValue->value_type != BSON_TYPE_EOD)
 	{
 		PgbsonElementWriterWriteValue(writer, currentValue);
 	}
 
-	return updateWriter.modified;
+	return updateWriter.modifyType == MODIFY_TYPE_CHANGED;
 }
 
 
@@ -735,12 +731,7 @@ void
 UpdateWriterWriteModifiedValue(UpdateOperatorWriter *writer, const bson_value_t *value)
 {
 	PgbsonElementWriterWriteValue(writer->writer, value);
-	writer->modified = true;
-
-	if (notify_updated_field_hook != NULL)
-	{
-		notify_updated_field_hook(writer->updateTracker, writer->relativePath, value);
-	}
+	writer->modifyType = MODIFY_TYPE_CHANGED;
 }
 
 
@@ -751,11 +742,7 @@ UpdateWriterWriteModifiedValue(UpdateOperatorWriter *writer, const bson_value_t 
 void
 UpdateWriterSkipValue(UpdateOperatorWriter *writer)
 {
-	writer->modified = true;
-	if (notify_remove_field_hook != NULL)
-	{
-		notify_remove_field_hook(writer->updateTracker, writer->relativePath);
-	}
+	writer->modifyType = MODIFY_TYPE_CHANGED;
 }
 
 
@@ -769,7 +756,7 @@ UpdateWriterGetArrayWriter(UpdateOperatorWriter *writer)
 	{
 		PgbsonElementWriterStartArray(writer->writer, &writer->updateArrayWriter.writer);
 		writer->updateArrayWriter.isValid = true;
-		writer->updateArrayWriter.modified = false;
+		writer->updateArrayWriter.modifyType = MODIFY_TYPE_NOCHANGE;
 	}
 
 	return &writer->updateArrayWriter;
@@ -794,8 +781,20 @@ UpdateArrayWriterWriteOriginalValue(UpdateArrayWriter *writer, const bson_value_
 void
 UpdateArrayWriterWriteModifiedValue(UpdateArrayWriter *writer, const bson_value_t *value)
 {
+	UpdateArrayWriterWriteValueWithModifyType(writer, value, MODIFY_TYPE_CHANGED);
+}
+
+
+/*
+ * Writes a value to the arrayWriter with the specified modify type.
+ */
+void
+UpdateArrayWriterWriteValueWithModifyType(UpdateArrayWriter *writer,
+										  const bson_value_t *value,
+										  ModifyType modifyType)
+{
 	PgbsonArrayWriterWriteValue(&writer->writer, value);
-	writer->modified = true;
+	writer->modifyType = modifyType;
 }
 
 
@@ -806,7 +805,7 @@ UpdateArrayWriterWriteModifiedValue(UpdateArrayWriter *writer, const bson_value_
 void
 UpdateArrayWriterSkipValue(UpdateArrayWriter *writer)
 {
-	writer->modified = true;
+	writer->modifyType = MODIFY_TYPE_CHANGED;
 }
 
 
@@ -818,21 +817,8 @@ void
 UpdateArrayWriterFinalize(UpdateOperatorWriter *writer, UpdateArrayWriter *arrayWriter)
 {
 	PgbsonElementWriterEndArray(writer->writer, &arrayWriter->writer);
-
-	if (writer->updateTracker != NULL &&
-		arrayWriter->modified)
-	{
-		bson_value_t value = PgbsonElementWriterGetValue(writer->writer);
-
-		if (notify_updated_field_hook != NULL)
-		{
-			notify_updated_field_hook(writer->updateTracker, writer->relativePath,
-									  &value);
-		}
-	}
-
 	writer->updateArrayWriter.isValid = false;
-	writer->modified = writer->modified || arrayWriter->modified;
+	writer->modifyType = Max(writer->modifyType, arrayWriter->modifyType);
 }
 
 
@@ -1627,11 +1613,9 @@ TraverseArrayAndApplyUpdate(bson_iter_t *sourceDocIterator,
 	 * See use of trackArrayValue.
 	 */
 	BsonUpdateTracker *trackerInner = tracker;
-	bool trackArrayValue = false;
 	if (tree->hasPositionalChildren)
 	{
 		trackerInner = NULL;
-		trackArrayValue = true;
 	}
 
 	int32_t index = 0;
@@ -1659,16 +1643,6 @@ TraverseArrayAndApplyUpdate(bson_iter_t *sourceDocIterator,
 	if (fieldHandledBitmapSet != NULL)
 	{
 		bms_free(fieldHandledBitmapSet);
-	}
-
-	if (modified && trackArrayValue && notify_updated_field_hook != NULL)
-	{
-		bson_value_t value = PgbsonArrayWriterGetValue(writer);
-
-		/* The relative path reported here is the relative path until the array */
-		StringView relativePathToNode = GetRelativePathUntilField((const
-																   BsonPathNode *) tree);
-		notify_updated_field_path_view_hook(tracker, &relativePathToNode, &value);
 	}
 
 	return modified;

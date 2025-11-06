@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 
 use crate::{
     configuration::{DynamicConfiguration, SetupConfiguration},
-    context::{CursorStore, CursorStoreEntry, TransactionStore},
+    context::{CursorStore, TransactionStore},
     error::{DocumentDBError, Result},
     postgres::{Connection, ConnectionPool, QueryCatalog},
     service::TlsProvider,
@@ -89,40 +89,8 @@ impl ServiceContext {
         }
     }
 
-    pub async fn add_cursor(&self, key: (i64, String), entry: CursorStoreEntry) {
-        self.0.cursor_store.add_cursor(key, entry).await
-    }
-
-    pub async fn get_cursor(&self, id: i64, username: &str) -> Option<CursorStoreEntry> {
-        self.0
-            .cursor_store
-            .get_cursor((id, username.to_string()))
-            .await
-    }
-
-    pub async fn invalidate_cursors_by_collection(&self, db: &str, collection: &str) {
-        self.0
-            .cursor_store
-            .invalidate_cursors_by_collection(db, collection)
-            .await
-    }
-
-    pub async fn invalidate_cursors_by_database(&self, db: &str) {
-        self.0.cursor_store.invalidate_cursors_by_database(db).await
-    }
-
-    pub async fn invalidate_cursors_by_session(&self, session: &[u8]) {
-        self.0
-            .cursor_store
-            .invalidate_cursors_by_session(session)
-            .await
-    }
-
-    pub async fn kill_cursors(&self, username: &str, cursors: &[i64]) -> (Vec<i64>, Vec<i64>) {
-        self.0
-            .cursor_store
-            .kill_cursors(username.to_string(), cursors)
-            .await
+    pub fn cursor_store(&self) -> &CursorStore {
+        &self.0.cursor_store
     }
 
     pub async fn system_requests_connection(&self) -> Result<Connection> {

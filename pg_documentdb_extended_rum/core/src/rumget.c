@@ -4119,11 +4119,16 @@ MoveScanForward(RumScanOpaque so, Snapshot snapshot)
 					}
 					else
 					{
+						OffsetNumber targetOffset = so->orderByScanData->orderStack->off;
 						entryLocateLeafEntryBounds(&btree, page,
 												   so->orderByScanData->orderStack->off,
 												   PageGetMaxOffsetNumber(page),
-												   &so->orderByScanData->orderStack->off);
-						continue;
+												   &targetOffset);
+						if (targetOffset > so->orderByScanData->orderStack->off)
+						{
+							so->orderByScanData->orderStack->off = targetOffset;
+							continue;
+						}
 					}
 				}
 			}
@@ -4507,8 +4512,8 @@ reverseScan(IndexScanDesc scan)
 bool
 rumgettuple(IndexScanDesc scan, ScanDirection direction)
 {
-	bool recheck;
-	bool recheckOrderby;
+	bool recheck = false;
+	bool recheckOrderby = false;
 	RumScanOpaque so = (RumScanOpaque) scan->opaque;
 	RumSortItem *item;
 	bool should_free;

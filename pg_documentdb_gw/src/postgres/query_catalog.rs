@@ -43,12 +43,15 @@ pub struct QueryCatalog {
     pub single_index_condition_regex: String,
     pub api_catalog_name_regex: String,
     pub output_count_regex: String,
+    pub output_bson_count_aggregate: String,
+    pub output_bson_command_count_aggregate: String,
 
     // client.rs
     pub set_search_path_and_timeout: String,
 
     // cursor.rs
     pub cursor_get_more: String,
+    pub kill_cursors: String,
 
     // data_description.rs
     pub create_collection_view: String,
@@ -199,6 +202,14 @@ impl QueryCatalog {
 
     pub fn output_count_regex(&self) -> &str {
         &self.output_count_regex
+    }
+
+    pub fn output_bson_count_aggregate(&self) -> &str {
+        &self.output_bson_count_aggregate
+    }
+
+    pub fn output_bson_command_count_aggregate(&self) -> &str {
+        &self.output_bson_command_count_aggregate
     }
 
     // Client getters
@@ -379,6 +390,10 @@ impl QueryCatalog {
     pub fn compact(&self) -> &str {
         &self.compact
     }
+
+    pub fn kill_cursors(&self) -> &str {
+        &self.kill_cursors
+    }
 }
 
 pub fn create_query_catalog() -> QueryCatalog {
@@ -407,9 +422,12 @@ pub fn create_query_catalog() -> QueryCatalog {
             single_index_condition_regex: "(OPERATOR\\()?(documentdb_api_catalog\\.)?(?<operator>@[^\\)\\s]+)\\)?\\s+'BSONHEX(?<queryBson>\\S+)'".to_string(),
             api_catalog_name_regex: "documentdb_api_catalog.".to_string(),
             output_count_regex: "BSONSUM('{ \"\" : { \"$numberInt\" : \"1\" } }'::documentdb_core.bson)".to_string(),
+            output_bson_count_aggregate: "bsoncount(1)".to_string(),
+            output_bson_command_count_aggregate: "bsoncommandcount(1)".to_string(),
 
             // cursor.rs
             cursor_get_more: "SELECT cursorPage, continuation FROM documentdb_api.cursor_get_more($1, $2, $3)".to_string(),
+            kill_cursors: "SELECT documentdb_api_internal.delete_cursors($1)".to_string(),
 
             // client.rs
             set_search_path_and_timeout: "-c search_path=documentdb_api_catalog,documentdb_api,public -c statement_timeout={timeout} -c idle_in_transaction_session_timeout={transaction_timeout}".to_string(),

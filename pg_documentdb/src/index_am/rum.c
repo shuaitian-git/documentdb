@@ -1098,23 +1098,25 @@ extension_amgettuple(IndexScanDesc scan, ScanDirection direction)
 }
 
 
-static bool
+pg_attribute_no_sanitize_alignment() static bool
 GetOneTupleCore(DocumentDBRumIndexState *outerScanState,
 				IndexScanDesc scan, ScanDirection direction,
 				IndexAmRoutine *coreRoutine)
 {
 	bool result = coreRoutine->amgettuple(outerScanState->innerScan, direction);
+	if (result)
+	{
+		scan->xs_heaptid = outerScanState->innerScan->xs_heaptid;
+		scan->xs_recheck = outerScanState->innerScan->xs_recheck;
+		scan->xs_recheckorderby = outerScanState->innerScan->xs_recheckorderby;
 
-	scan->xs_heaptid = outerScanState->innerScan->xs_heaptid;
-	scan->xs_recheck = outerScanState->innerScan->xs_recheck;
-	scan->xs_recheckorderby = outerScanState->innerScan->xs_recheckorderby;
+		/* Set the pointers to handle order by values */
+		scan->xs_orderbyvals = outerScanState->innerScan->xs_orderbyvals;
+		scan->xs_orderbynulls = outerScanState->innerScan->xs_orderbynulls;
 
-	/* Set the pointers to handle order by values */
-	scan->xs_orderbyvals = outerScanState->innerScan->xs_orderbyvals;
-	scan->xs_orderbynulls = outerScanState->innerScan->xs_orderbynulls;
-
-	scan->xs_itup = outerScanState->innerScan->xs_itup;
-	scan->xs_itupdesc = outerScanState->innerScan->xs_itupdesc;
+		scan->xs_itup = outerScanState->innerScan->xs_itup;
+		scan->xs_itupdesc = outerScanState->innerScan->xs_itupdesc;
+	}
 
 	return result;
 }

@@ -524,7 +524,7 @@ CompareGeoDatumsForDollarCenter(const ProcessCommonGeospatialState *state,
  *    This is hard to fix without handling the geometries ourselves, so we error out for now if polygons with holes are part of the match
  *    TODO: fix polygons with holes behavior with our own handling.
  */
-static bool
+static pg_attribute_no_sanitize_alignment() bool
 CompareForGeoWithinDatum(const ProcessCommonGeospatialState *state, StringInfo wkbBuffer)
 {
 	GeospatialType type = state->geospatialType;

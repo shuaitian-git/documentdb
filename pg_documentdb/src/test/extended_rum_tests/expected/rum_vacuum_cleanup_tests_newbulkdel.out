@@ -225,9 +225,8 @@ set documentdb_rum.prune_rum_empty_pages to on;
 set client_min_messages to DEBUG1;
 SELECT FORMAT('VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_%s;', :vacuum_col) \gexec
 VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_500;
-psql:sql/rum_vacuum_cleanup_tests_core.sql:82: DEBUG:  [RUM] Vacuum posting tree void pages 0, deleted pages 0
-psql:sql/rum_vacuum_cleanup_tests_core.sql:82: LOG:  Vacuum found emptyEntryPages=17, emptyEntries=36, emptyPostingTrees=1, prunedEntries=18, prunedPages=15,prunedPostingTrees=1, postingPagesDeleted=0, emptyPostingPages=0, numBacktracks=0 isNewBulkDelete=1 for index=19052
-psql:sql/rum_vacuum_cleanup_tests_core.sql:82: LOG:  Vacuum pages - marked 1 pages as reusable
+psql:sql/rum_vacuum_cleanup_tests_core.sql:82: LOG:  Vacuum[index=19052,vacuumCleanup=0] emptyEntryPages=16, emptyEntries=36, emptyPostingTrees=0, prunedEntries=18, prunedPages=13,prunedPostingTrees=0, postingPagesDeleted=0, emptyPostingPages=0, numBacktracks=0, isNewBulkDelete=1, numEntryPages=19, numDataPages=1, numVoidPages=0
+psql:sql/rum_vacuum_cleanup_tests_core.sql:82: LOG:  Vacuum[index=19052,vacuumCleanup=1] emptyEntryPages=0, emptyEntries=0, emptyPostingTrees=0, prunedEntries=0, prunedPages=0,prunedPostingTrees=0, postingPagesDeleted=0, emptyPostingPages=0, numBacktracks=0, isNewBulkDelete=0, numEntryPages=19, numDataPages=1, numVoidPages=0
 reset client_min_messages;
 -- delete one more row to ensure vacuum has a chance to clean up
 reset documentdb.forceDisableSeqScan;
@@ -240,7 +239,7 @@ SELECT documentdb_api.delete('pvacuum_db', '{ "delete": "pclean", "deletes": [ {
 set client_min_messages to DEBUG1;
 SELECT FORMAT('VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_%s;', :vacuum_col) \gexec
 VACUUM (FREEZE ON, INDEX_CLEANUP ON, DISABLE_PAGE_SKIPPING ON) documentdb_data.documents_500;
-psql:sql/rum_vacuum_cleanup_tests_core.sql:89: LOG:  Vacuum pages - marked 16 pages as reusable
+psql:sql/rum_vacuum_cleanup_tests_core.sql:89: LOG:  Vacuum[index=19052,vacuumCleanup=1] emptyEntryPages=0, emptyEntries=0, emptyPostingTrees=0, prunedEntries=0, prunedPages=0,prunedPostingTrees=0, postingPagesDeleted=0, emptyPostingPages=0, numBacktracks=0, isNewBulkDelete=0, numEntryPages=6, numDataPages=1, numVoidPages=13
 reset client_min_messages;
 set documentdb.forceDisableSeqScan to on;
 SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, VERBOSE OFF, BUFFERS OFF, SUMMARY OFF, TIMING OFF) SELECT document FROM bson_aggregation_count('pvacuum_db', '{ "count": "pclean", "query": { "a": { "$exists": true } } }') $cmd$);
@@ -251,7 +250,7 @@ SELECT documentdb_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, AN
          indexName: a_1
          isMultiKey: false
          indexBounds: ["a": [MinKey, MaxKey]]
-         innerScanLoops: 12 loops
+         innerScanLoops: 15 loops
          scanType: ordered
          scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 9)]
          ->  Index Only Scan using a_1 on documents_500 collection (actual rows=9 loops=1)

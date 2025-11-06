@@ -11,6 +11,7 @@
 #include <postgres.h>
 #include <fmgr.h>
 #include <catalog/pg_type.h>
+#include <common/int.h>
 
 #include "io/bson_core.h"
 #include "query/bson_compare.h"
@@ -140,6 +141,10 @@ PG_FUNCTION_INFO_V1(bson_maxn_transition);
 PG_FUNCTION_INFO_V1(bson_maxminn_final);
 PG_FUNCTION_INFO_V1(bson_minn_transition);
 PG_FUNCTION_INFO_V1(bson_maxminn_combine);
+PG_FUNCTION_INFO_V1(bson_count_transition);
+PG_FUNCTION_INFO_V1(bson_count_combine);
+PG_FUNCTION_INFO_V1(bson_count_final);
+PG_FUNCTION_INFO_V1(bson_command_count_final);
 
 Datum
 bson_out_transition(PG_FUNCTION_ARGS)
@@ -157,7 +162,7 @@ bson_out_final(PG_FUNCTION_ARGS)
 }
 
 
-inline static Datum
+pg_attribute_no_sanitize_alignment() inline static Datum
 BsonArrayAggTransitionCore(PG_FUNCTION_ARGS, bool handleSingleValueElement,
 						   const char *path)
 {
@@ -274,7 +279,7 @@ bson_array_agg_transition(PG_FUNCTION_ARGS)
 }
 
 
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_array_agg_minvtransition(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -338,7 +343,7 @@ bson_distinct_array_agg_transition(PG_FUNCTION_ARGS)
 }
 
 
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_array_agg_final(PG_FUNCTION_ARGS)
 {
 	bytea *currentArrayAgg = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -415,7 +420,7 @@ bson_array_agg_final(PG_FUNCTION_ARGS)
  * Similar to array_agg but also writes "ok": 1
  * Also returns an empty array with "ok": 1 if never initialized.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_distinct_array_agg_final(PG_FUNCTION_ARGS)
 {
 	bytea *currentArrayAgg = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -452,7 +457,7 @@ bson_distinct_array_agg_final(PG_FUNCTION_ARGS)
  * Core implementation of the object aggregation stage. This is used by both object_agg and merge_objects.
  * Both have the same implementation but differ in validations made inside the caller method.
  */
-inline static Datum
+pg_attribute_no_sanitize_alignment() inline static Datum
 AggregateObjectsCore(PG_FUNCTION_ARGS)
 {
 	BsonObjectAggState *currentState;
@@ -635,7 +640,7 @@ bson_object_agg_final(PG_FUNCTION_ARGS)
  * It ignores non-numeric values, and manages type upgrades and coercion
  * to the right types as documents are encountered.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_sum_avg_transition(PG_FUNCTION_ARGS)
 {
 	bytea *bytes;
@@ -701,7 +706,7 @@ bson_sum_avg_transition(PG_FUNCTION_ARGS)
  * It ignores non-numeric values, and manages type upgrades and coercion
  * to the right types as documents are encountered.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_sum_avg_minvtransition(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -753,7 +758,7 @@ bson_sum_avg_minvtransition(PG_FUNCTION_ARGS)
  * This takes the final value created and outputs a bson "sum"
  * with the appropriate type.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_sum_final(PG_FUNCTION_ARGS)
 {
 	bytea *currentSum = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -782,7 +787,7 @@ bson_sum_final(PG_FUNCTION_ARGS)
  * Applies the "final calculation" (FINALFUNC) for average.
  * This takes the final value created and outputs a bson "average"
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_avg_final(PG_FUNCTION_ARGS)
 {
 	bytea *avgIntermediateState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -920,7 +925,7 @@ bson_min_transition(PG_FUNCTION_ARGS)
  * and combines them to form a new bson_numeric_agg_state that has the combined
  * sum and count.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_sum_avg_combine(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -1146,7 +1151,7 @@ bson_build_distinct_response(PG_FUNCTION_ARGS)
 /*
  * Transition function for the BSON_ADD_TO_SET aggregate.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_add_to_set_transition(PG_FUNCTION_ARGS)
 {
 	BsonAddToSetState *currentState = { 0 };
@@ -1229,7 +1234,7 @@ bson_add_to_set_transition(PG_FUNCTION_ARGS)
 /*
  * Final function for the BSON_ADD_TO_SET aggregate.
  */
-Datum
+pg_attribute_no_sanitize_alignment() Datum
 bson_add_to_set_final(PG_FUNCTION_ARGS)
 {
 	bytea *currentState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
@@ -1323,7 +1328,7 @@ CheckAggregateIntermediateResultSize(uint32_t size)
  * Helper method that iterates a pgbson writing its values to a bson tree. If a key already
  * exists in the tree, then it's overwritten.
  */
-static void
+pg_attribute_no_sanitize_alignment() static void
 CreateObjectAggTreeNodes(BsonObjectAggState *currentState, pgbson *currentValue)
 {
 	bson_iter_t docIter;
@@ -1412,7 +1417,7 @@ ValidateMergeObjectsInput(pgbson *input)
 /*
  * Function used to parse and return a mergeObjects tree.
  */
-static Datum
+pg_attribute_no_sanitize_alignment() static Datum
 ParseAndReturnMergeObjectsTree(BsonObjectAggState *state)
 {
 	if (state != NULL)
@@ -1603,10 +1608,10 @@ bson_maxminn_transition(PG_FUNCTION_ARGS, bool isMaxN)
  * Resulting bytes look like:
  * | Varlena Header | isMaxN | heapSize | heapSpace | heapNode * heapSpace |
  */
-bytea *
+pg_attribute_no_sanitize_alignment() bytea *
 SerializeBinaryHeapState(MemoryContext aggregateContext,
-						 BinaryHeapState *state,
-						 bytea *byteArray)
+						 BinaryHeapState * state,
+						 bytea * byteArray)
 {
 	int heapNodesSize = 0;
 	pgbson **heapNodeList = NULL;
@@ -1675,7 +1680,7 @@ SerializeBinaryHeapState(MemoryContext aggregateContext,
  * Incoming bytes look like:
  * | Varlena Header | isMaxN | heapSize | heapSpace | heapNode * heapSpace |
  */
-void
+pg_attribute_no_sanitize_alignment() void
 DeserializeBinaryHeapState(bytea *byteArray,
 						   BinaryHeapState *state)
 {
@@ -1858,4 +1863,84 @@ bson_maxminn_combine(PG_FUNCTION_ARGS)
 	bytesRight = SerializeBinaryHeapState(aggregateContext, currentRightState,
 										  bytesRight);
 	PG_RETURN_POINTER(bytesRight);
+}
+
+
+Datum
+bson_count_transition(PG_FUNCTION_ARGS)
+{
+	int64_t currentCount = PG_GETARG_INT64(0);
+	int64_t result = 0;
+
+	if (unlikely(pg_add_s64_overflow(currentCount, 1, &result)))
+	{
+		ereport(ERROR, errcode(ERRCODE_DOCUMENTDB_OVERFLOW),
+				errmsg("Count overflowed"));
+	}
+
+	PG_RETURN_INT64(result);
+}
+
+
+Datum
+bson_count_combine(PG_FUNCTION_ARGS)
+{
+	int64_t leftCount = PG_GETARG_INT64(0);
+	int64_t rightCount = PG_GETARG_INT64(1);
+	int64_t result = 0;
+
+	if (unlikely(pg_add_s64_overflow(leftCount, rightCount, &result)))
+	{
+		ereport(ERROR, errcode(ERRCODE_DOCUMENTDB_OVERFLOW),
+				errmsg("Count overflowed when combining the result"));
+	}
+
+	PG_RETURN_INT64(result);
+}
+
+
+static inline pgbson *
+CreateCountBson(int64_t count, bool isCommandCount)
+{
+	pgbson_writer writer;
+	PgbsonWriterInit(&writer);
+
+	const char *path = isCommandCount ? "n" : "";
+	const int pathLength = isCommandCount ? 1 : 0;
+
+	if (count <= INT32_MAX)
+	{
+		PgbsonWriterAppendInt32(&writer, path, pathLength, (int32_t) count);
+	}
+	else
+	{
+		PgbsonWriterAppendInt64(&writer, path, pathLength, count);
+	}
+
+	if (isCommandCount)
+	{
+		PgbsonWriterAppendDouble(&writer, "ok", 2, 1.0);
+	}
+
+	return PgbsonWriterGetPgbson(&writer);
+}
+
+
+Datum
+bson_count_final(PG_FUNCTION_ARGS)
+{
+	int64_t finalCount = PG_GETARG_INT64(0);
+	bool isCommandCount = false;
+
+	PG_RETURN_POINTER(CreateCountBson(finalCount, isCommandCount));
+}
+
+
+Datum
+bson_command_count_final(PG_FUNCTION_ARGS)
+{
+	int64_t finalCount = PG_GETARG_INT64(0);
+	bool isCommandCount = true;
+
+	PG_RETURN_POINTER(CreateCountBson(finalCount, isCommandCount));
 }

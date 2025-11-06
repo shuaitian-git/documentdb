@@ -1376,6 +1376,14 @@ fn query_planner(
                 doc.append("page_size", smallest_from_i64(page_size));
             }
 
+            if let Some(startup_cost) = plan.startup_cost {
+                doc.append("startupCost", startup_cost);
+            }
+
+            if let Some(total_cost) = plan.total_cost {
+                doc.append("totalCost", total_cost);
+            }
+
             if let Some(sort_keys) = plan.sort_keys.as_ref() {
                 let mut sort_keys_arr = RawArrayBuf::new();
                 for order_string in sort_keys {

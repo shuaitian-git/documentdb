@@ -190,19 +190,10 @@ documentdb_rum_page_get_stats(PG_FUNCTION_ARGS)
 		values[4].val.numeric = int64_to_numeric(PageGetMaxOffsetNumber(page));
 	}
 
-	if (RumPageIsData(page))
-	{
-		args[5] = "entryPageCycleId";
-		values[5].type = jbvNumeric;
-		values[5].val.numeric = int64_to_numeric(0);
-	}
-	else
-	{
-		args[5] = "entryPageCycleId";
-		values[5].type = jbvNumeric;
-		values[5].val.numeric = int64_to_numeric(RumPageGetOpaque(
-													 page)->entryPageCycleId);
-	}
+	args[5] = "cycleId";
+	values[5].type = jbvNumeric;
+	values[5].val.numeric = int64_to_numeric(RumPageGetOpaque(
+												 page)->cycleId);
 
 	PG_RETURN_POINTER(GetResultJsonB(nargs, args, values));
 }
@@ -347,7 +338,6 @@ RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid)
 	JsonbValue values[8] = { 0 };
 	IndexTuple tuple;
 
-	Datum firstEntryDatum, firstEntryCStringDatum;
 	char *ptr, *dump, *datacstring, *firstEntryCString;
 	Size dlen;
 	int off;
@@ -402,12 +392,19 @@ RumPrintEntryToJsonB(Page page, uint64 counter, Oid firstEntryOid)
 		dump += 2;
 	}
 
-	firstEntryDatum = fetch_att(ptr, get_typbyval(firstEntryOid), get_typlen(
-									firstEntryOid));
-	getTypeOutputInfo(firstEntryOid, &typeOutputFunction, &typIsVarlena);
-
-	firstEntryCStringDatum = OidFunctionCall1(typeOutputFunction, firstEntryDatum);
-	firstEntryCString = DatumGetCString(firstEntryCStringDatum);
+	if (firstEntryOid != InvalidOid)
+	{
+		Datum firstEntryDatum, firstEntryCStringDatum;
+		firstEntryDatum = fetch_att(ptr, get_typbyval(firstEntryOid), get_typlen(
+										firstEntryOid));
+		getTypeOutputInfo(firstEntryOid, &typeOutputFunction, &typIsVarlena);
+		firstEntryCStringDatum = OidFunctionCall1(typeOutputFunction, firstEntryDatum);
+		firstEntryCString = DatumGetCString(firstEntryCStringDatum);
+	}
+	else
+	{
+		firstEntryCString = "";
+	}
 
 	values[4].val.string.len = dlen * 2;
 	values[4].val.string.val = datacstring;

@@ -251,6 +251,7 @@ static char FeatureMapping[MAX_FEATURE_COUNT][MAX_FEATURE_NAME_LENGTH] = {
 	[FEATURE_COMMAND_COLLMOD_TTL_UPDATE] = "collMod_ttl_update",
 	[FEATURE_COMMAND_COLLMOD_INDEX_HIDDEN] = "collMod_index_hidden",
 	[FEATURE_COMMAND_COLLMOD_INDEX_PREPARE_UNIQUE] = "collMod_index_prepare_unique",
+	[FEATURE_COMMAND_COLLMOD_UNIQUE] = "collMod_index_unique",
 
 	/* Feature Connection Status */
 	[FEATURE_CONNECTION_STATUS] = "connection_status",

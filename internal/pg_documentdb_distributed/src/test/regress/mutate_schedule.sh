@@ -46,3 +46,7 @@ function ProcessMutateFile()
 
 ProcessMutateFile "./test_mutate_${pg_version}"
 ProcessMutateFile "$scriptDir/test_mutate_${pg_version}"
+
+if [ "${DOCDB_ENABLE_ASAN:-}" == "true" ]; then
+    ProcessMutateFile "./test_mutate_asan"
+fi

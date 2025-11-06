@@ -283,11 +283,20 @@ async fn get_response<T>(
 where
     T: PgDataClient,
 {
-    if !connection_context.auth_state.authorized
-        || request_context.payload.request_type().handle_with_auth()
-    {
+    if request_context.payload.request_type().handle_with_auth() {
         let response = auth::process::<T>(connection_context, request_context).await?;
         return Ok(response);
+    }
+
+    if !*connection_context.auth_state.is_authorized().read().await {
+        if *connection_context.auth_state.auth_kind() == Some(auth::AuthKind::ExternalIdentity) {
+            return Err(DocumentDBError::reauthentication_required(
+                "External identity token has expired.".to_string(),
+            ));
+        } else {
+            let response = auth::process::<T>(connection_context, request_context).await?;
+            return Ok(response);
+        }
     }
 
     // Once authorized, make sure that there is a pool of pg clients for the user/password.

@@ -89,7 +89,10 @@ impl ConnectionContext {
             }
         }
 
-        self.service_context.get_cursor(id, username).await
+        self.service_context
+            .cursor_store()
+            .get_cursor((id, username.to_string()))
+            .await
     }
 
     pub async fn add_cursor(
@@ -123,7 +126,10 @@ impl ConnectionContext {
         }
 
         // Otherwise add it to the service context
-        self.service_context.add_cursor(key, value).await
+        self.service_context
+            .cursor_store()
+            .add_cursor(key, value)
+            .await
     }
 
     pub async fn allocate_data_pool(&self) -> Result<()> {

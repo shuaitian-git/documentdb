@@ -134,6 +134,7 @@ extern bool EnableIndexPriorityOrdering;
 extern bool EnableLogRelationIndexesOrder;
 extern bool ForceBitmapScanForLookup;
 extern bool EnableIndexOnlyScan;
+extern bool EnableCursorsOnAggregationQueryRewrite;
 
 planner_hook_type ExtensionPreviousPlannerHook = NULL;
 set_rel_pathlist_hook_type ExtensionPreviousSetRelPathlistHook = NULL;
@@ -1785,6 +1786,11 @@ ExpandAggregationFunction(Query *query, ParamListInfo boundParams, PlannedStmt *
 
 		/* For point reads, allow for fast path planning */
 		*plan = TryCreatePointReadPlan(finalQuery);
+	}
+
+	if (EnableCursorsOnAggregationQueryRewrite)
+	{
+		ereport(DEBUG1, (errmsg("Aggregation cursorKind is %d", queryData.cursorKind)));
 	}
 
 	return finalQuery;

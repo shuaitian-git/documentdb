@@ -293,6 +293,13 @@ pub trait PgDataClient: Send + Sync {
         connection_context: &ConnectionContext,
     ) -> Result<Response>;
 
+    async fn execute_kill_cursors(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        connection_context: &ConnectionContext,
+        cursor_ids: &[i64],
+    ) -> Result<Response>;
+
     async fn execute_create_role(
         &self,
         request_context: &mut RequestContext<'_>,
