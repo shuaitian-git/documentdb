@@ -3,7 +3,6 @@
 DocumentDB Test Runner for MongoDB JStests
 
 This script runs MongoDB's official jstests against a DocumentDB-compatible database.
-It follows a similar strategy to pgmongo's test harness:
 
 1. Reads a test manifest (tests.csv) that lists tests and expected outcomes
 2. For each test, runs it using the mongo shell with environment patching
@@ -87,9 +86,14 @@ class DocumentDBTestRunner:
         self.connection_string = args.connection_string
         self.manifest_file = Path(args.manifest)
         self.commonsetup_file = Path(args.commonsetup)
+        self.ssl_helper_file = Path(args.ssl_helper) if hasattr(args, 'ssl_helper') else Path(__file__).parent / "sslEnabledParallelShell.js"
         self.output_dir = Path(args.output_dir)
         self.filter_pattern = re.compile(args.filter) if args.filter else None
         self.verbose = args.verbose
+        self.drop_collections = args.drop_collections if hasattr(args, 'drop_collections') else True
+        
+        # Parse connection string to extract components
+        self._parse_connection_string()
         
         # Create output directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -113,6 +117,34 @@ class DocumentDBTestRunner:
         except Exception:
             pass
         raise RuntimeError("Could not find legacy mongo shell. Please specify with --mongo-shell")
+    
+    def _parse_connection_string(self):
+        """Parse connection string to extract host, port, username, password"""
+        # Simple parsing for host:port format
+        # Format: mongodb://username:password@host:port or just host:port
+        self.username = None
+        self.password = None
+        self.host = "localhost"
+        self.port = "27017"
+        
+        conn_str = self.connection_string
+        
+        # Check for mongodb:// prefix
+        if conn_str.startswith("mongodb://"):
+            conn_str = conn_str[10:]  # Remove mongodb://
+            
+            # Check for username:password@
+            if "@" in conn_str:
+                auth, host_port = conn_str.split("@", 1)
+                if ":" in auth:
+                    self.username, self.password = auth.split(":", 1)
+                conn_str = host_port
+        
+        # Parse host:port
+        if ":" in conn_str:
+            self.host, self.port = conn_str.split(":", 1)
+        else:
+            self.host = conn_str
     
     def load_tests(self) -> List[TestCase]:
         """Load test cases from the manifest CSV"""
@@ -149,6 +181,89 @@ class DocumentDBTestRunner:
         
         return tests
     
+    def drop_all_collections(self, test_name: str) -> bool:
+        """
+        Drop all collections in all databases before running a test.
+        This ensures test isolation and prevents test interference.
+        """
+        if not self.drop_collections:
+            return True
+        
+        drop_script = """
+        var dbs = db.getMongo().getDBNames();
+        for(var i in dbs) {
+            var dbName = dbs[i];
+            // Skip system databases
+            if (dbName == 'admin' || dbName == 'config' || dbName == 'local') {
+                continue;
+            }
+            var database = db.getMongo().getDB(dbName);
+            var colls = database.getCollectionNames();
+            for(var j in colls) {
+                var collName = colls[j];
+                // Skip system collections
+                if (collName.startsWith('system.')) {
+                    continue;
+                }
+                database.getCollection(collName).drop();
+            }
+        }
+        """
+        
+        cmd = [
+            self.mongo_shell,
+            self.connection_string,
+            '--tls',
+            '--tlsAllowInvalidCertificates',
+            '--eval', drop_script
+        ]
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode != 0:
+                if self.verbose:
+                    print(f"  Warning: Failed to drop collections: {result.stderr[:100]}")
+                return False
+            return True
+        except Exception as e:
+            if self.verbose:
+                print(f"  Warning: Exception while dropping collections: {str(e)[:100]}")
+            return False
+    
+    def log_test_name_to_server(self, test_name: str) -> bool:
+        """
+        Log test name to server by running a dummy command.
+        This helps isolate connection failures from test failures.
+        """
+        # Escape special characters in test name for JavaScript string
+        escaped_name = test_name.replace('\\', '\\\\').replace("'", "\\'")
+        
+        log_script = f"db.runCommand({{'TESTCASE: {escaped_name}':1}})"
+        
+        cmd = [
+            self.mongo_shell,
+            self.connection_string,
+            '--tls',
+            '--tlsAllowInvalidCertificates',
+            '--eval', log_script
+        ]
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0 or 'command not found' in result.stdout.lower()
+        except Exception:
+            return False
+    
     def run_test(self, test_case: TestCase) -> TestRun:
         """Run a single test case"""
         if self.verbose:
@@ -178,16 +293,53 @@ class DocumentDBTestRunner:
                 matches_expectation=False
             )
         
+        # Pre-test cleanup: Drop all collections
+        if self.verbose:
+            print(f"  Dropping collections...")
+        if not self.drop_all_collections(test_case.name):
+            if self.verbose:
+                print(f"  Warning: Could not drop collections, continuing anyway")
+        
+        # Log test name to server for debugging
+        if self.verbose:
+            print(f"  Logging test name to server...")
+        if not self.log_test_name_to_server(test_case.name):
+            if self.verbose:
+                print(f"  Warning: Could not log test name (connection issue?)")
+        
+        # Get test name without extension for JS_TEST_NAME environment variable
+        test_name_no_ext = Path(test_case.name).stem
+        
         # Build mongo shell command
-        # Load commonsetup.js first, then the test file
+        # Load SSL helper first, then commonsetup.js, then the test file
         cmd = [
             self.mongo_shell,
             self.connection_string,
             '--tls',
             '--tlsAllowInvalidCertificates',
-            '--eval', f'load("{self.commonsetup_file.absolute()}");',
-            str(test_case.test_file)
         ]
+        
+        # Load SSL helper if it exists
+        if self.ssl_helper_file.exists():
+            cmd.append(str(self.ssl_helper_file.absolute()))
+        
+        # Load commonsetup.js
+        cmd.append(str(self.commonsetup_file.absolute()))
+        
+        # Load the actual test file
+        cmd.append(str(test_case.test_file))
+        
+        # Set up environment variables for the test
+        env = os.environ.copy()
+        env['JS_TEST_NAME'] = test_name_no_ext
+        env['TEST_ROOT_DIR'] = str(Path.cwd())
+        env['MONGO_TEST_WORKING_DIR'] = str(self.jstests_dir.parent)
+        
+        # Add username/password to environment for SSL helper
+        if self.username:
+            env['MONGO_USERNAME'] = self.username
+        if self.password:
+            env['MONGO_PASSWORD'] = self.password
         
         # Run the test
         # Set working directory to MongoDB repo root so tests can find helper files
@@ -198,7 +350,8 @@ class DocumentDBTestRunner:
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minute timeout per test
-                cwd=str(self.jstests_dir.parent)  # Run from /tmp/mongo_r7.0.11
+                cwd=str(self.jstests_dir.parent),  # Run from /tmp/mongo_r7.0.11
+                env=env
             )
             duration_ms = (datetime.now() - start_time).total_seconds() * 1000
             exit_code = result.returncode
@@ -369,6 +522,11 @@ def main():
         help='Path to commonsetup.js'
     )
     parser.add_argument(
+        '--ssl-helper',
+        default='sslEnabledParallelShell.js',
+        help='Path to SSL helper JS file'
+    )
+    parser.add_argument(
         '--output-dir',
         default=str(Path.home() / 'tmp' / 'jstests-results'),
         help='Directory for test output logs'
@@ -381,6 +539,13 @@ def main():
         '--verbose',
         action='store_true',
         help='Enable verbose output'
+    )
+    parser.add_argument(
+        '--no-drop-collections',
+        dest='drop_collections',
+        action='store_false',
+        default=True,
+        help='Skip dropping collections before each test'
     )
     parser.add_argument(
         '--parallel',
