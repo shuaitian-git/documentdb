@@ -577,6 +577,24 @@ unique, btree, for table "documentdb_api_catalog.collections"
  collection_name | text | yes  | collection_name
 primary key, btree, for table "documentdb_api_catalog.collections"
 
+              Table "documentdb_api_catalog.documentdb_background_jobs"
+          Column          |           Type           | Collation | Nullable | Default 
+--------------------------+--------------------------+-----------+----------+---------
+ jobid                    | integer                  |           | not null | 
+ schedule_sec             | integer                  |           | not null | 
+ command                  | text                     |           | not null | 
+ timeout_sec              | integer                  |           | not null | 
+ exec_on_coordinator_only | boolean                  |           | not null | 
+ registered_time          | timestamp with time zone |           |          | now()
+Indexes:
+    "documentdb_background_jobs_jobid_idx" UNIQUE, btree (jobid)
+
+Index "documentdb_api_catalog.documentdb_background_jobs_jobid_idx"
+ Column |  Type   | Key? | Definition 
+--------+---------+------+------------
+ jobid  | integer | yes  | jobid
+unique, btree, for table "documentdb_api_catalog.documentdb_background_jobs"
+
             Table "documentdb_api_catalog.documentdb_index_queue"
       Column      |           Type           | Collation | Nullable | Default 
 ------------------+--------------------------+-----------+----------+---------

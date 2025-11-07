@@ -237,6 +237,14 @@ bool UsePgStatsLiveTuplesForCount = DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT;
 #define DEFAULT_ENABLE_PREPARE_UNIQUE false
 bool EnablePrepareUnique = DEFAULT_ENABLE_PREPARE_UNIQUE;
 
+/*
+ * SECTION: Background worker telemetry feature flags.
+ */
+
+/* Remove after v110 */
+#define DEFAULT_POPULATE_BACKGROUND_WORKER_JOBS_TABLE true
+bool PopulateBackgroundWorkerJobsTable = DEFAULT_POPULATE_BACKGROUND_WORKER_JOBS_TABLE;
+
 #define DEFAULT_ENABLE_COLLMOD_UNIQUE false
 bool EnableCollModUnique = DEFAULT_ENABLE_COLLMOD_UNIQUE;
 
@@ -638,6 +646,14 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable prepareUnique for coll mod."),
 		NULL, &EnablePrepareUnique, DEFAULT_ENABLE_PREPARE_UNIQUE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.populateBackgroundWorkerJobsTable", newGucPrefix),
+		gettext_noop(
+			"Whether to populate the background worker jobs table with telemetry data."),
+		NULL, &PopulateBackgroundWorkerJobsTable,
+		DEFAULT_POPULATE_BACKGROUND_WORKER_JOBS_TABLE,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

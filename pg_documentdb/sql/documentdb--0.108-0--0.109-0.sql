@@ -1,5 +1,6 @@
 
 #include "udfs/query/bson_dollar_evaluation--0.109-0.sql"
+#include "schema/background_jobs_registry--0.109-0.sql"
 #include "udfs/commands_diagnostic/kill_op--0.109-0.sql"
 #include "udfs/aggregation/group_aggregates_support--0.109-0.sql"
 #include "udfs/aggregation/group_aggregates--0.109-0.sql"
