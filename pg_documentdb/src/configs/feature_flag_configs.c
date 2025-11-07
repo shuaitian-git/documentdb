@@ -94,6 +94,12 @@ bool EnableIndexOrderByReverse = DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE;
 #define DEFAULT_ENABLE_INDEX_ONLY_SCAN false
 bool EnableIndexOnlyScan = DEFAULT_ENABLE_INDEX_ONLY_SCAN;
 
+#define DEFAULT_ENABLE_ID_INDEX_CUSTOM_COST_FUNCTION true
+bool EnableIdIndexCustomCostFunction = DEFAULT_ENABLE_ID_INDEX_CUSTOM_COST_FUNCTION;
+
+#define DEFAULT_ENABLE_ORDER_BY_ID_ON_COST false
+bool EnableOrderByIdOnCostFunction = DEFAULT_ENABLE_ORDER_BY_ID_ON_COST;
+
 /* Note: this is a long term feature flag since we need to validate compatiblity
  * in mixed mode for older indexes - once this is
  * enabled by default - please move this to testing_configs.
@@ -632,6 +638,21 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable the update_bson_document command."),
 		NULL, &EnableUpdateBsonDocument, DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableIdIndexCustomCostFunction", newGucPrefix),
+		gettext_noop(
+			"Whether to enable index terms that are value only."),
+		NULL, &EnableIdIndexCustomCostFunction,
+		DEFAULT_ENABLE_ID_INDEX_CUSTOM_COST_FUNCTION,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableOrderByIdOnCostFunction", newGucPrefix),
+		gettext_noop(
+			"Whether to enable index terms that are value only."),
+		NULL, &EnableOrderByIdOnCostFunction, DEFAULT_ENABLE_ORDER_BY_ID_ON_COST,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

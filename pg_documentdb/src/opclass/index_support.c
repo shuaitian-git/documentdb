@@ -29,6 +29,7 @@
 #include <optimizer/restrictinfo.h>
 #include <optimizer/cost.h>
 #include <access/genam.h>
+#include <utils/index_selfuncs.h>
 
 #include "metadata/index.h"
 #include "query/query_operator.h"
@@ -197,6 +198,10 @@ static OpExpr * CreateFullScanOpExpr(Expr *documentExpr, const char *sourcePath,
 									 sourcePathLength, int32_t orderByScanDirection);
 static OpExpr * CreateExistsTrueOpExpr(Expr *documentExpr, const char *sourcePath,
 									   uint32_t sourcePathLength);
+static List * GetSortDetails(PlannerInfo *root, Index rti,
+							 bool *hasOrderBy, bool *hasGroupby, bool *isOrderById);
+static bool IsValidIndexPathForIdOrderBy(IndexPath *indexPath, List *sortDetails);
+static bool IsValidForIndexOnlyScans(PlannerInfo *root);
 
 /*-------------------------------*/
 /* Force index support functions */
@@ -318,6 +323,9 @@ extern bool EnableExprLookupIndexPushdown;
 extern bool EnableUnifyPfeOnIndexInfo;
 extern bool EnableIdIndexPushdown;
 extern bool ForceIndexOnlyScanIfAvailable;
+extern bool EnableIdIndexCustomCostFunction;
+extern bool EnableIndexOnlyScan;
+extern bool EnableOrderByIdOnCostFunction;
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -1519,6 +1527,36 @@ PlanHasAggregates(PlannerInfo *root)
 }
 
 
+static bool
+IsValidForIndexOnlyScans(PlannerInfo *root)
+{
+	if (!PlanHasAggregates(root) ||
+		root->hasJoinRTEs)
+	{
+		/* Don't handle simple queries for now - only things with aggregates
+		 * Note: Things like GroupBy with no aggregates will not work here, but
+		 * that's okay. We also only consider base tables for index only scans.
+		 * TODO: This can also be extended to handle covered indexes later.
+		 */
+		return false;
+	}
+
+	bool projectionHasVarOrQuery = false;
+	expression_tree_walker((Node *) root->processed_tlist,
+						   ProjectionReferencesDocumentVar,
+						   &projectionHasVarOrQuery);
+	if (projectionHasVarOrQuery)
+	{
+		/* If the projection has a Var or a Query, we can't do index only scan
+		 * because we can't cover the projection.
+		 */
+		return false;
+	}
+
+	return true;
+}
+
+
 /*
  * Check whether we can handle index scans as index only scans.
  * This is possible if:
@@ -1534,27 +1572,13 @@ void
 ConsiderIndexOnlyScan(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 					  Index rti, ReplaceExtensionFunctionContext *context)
 {
-	if (!PlanHasAggregates(root) ||
-		rte->rtekind != RTE_RELATION ||
-		root->hasJoinRTEs)
+	if (rte->rtekind != RTE_RELATION)
 	{
-		/* Don't handle simple queries for now - only things with aggregates
-		 * Note: Things like GroupBy with no aggregates will not work here, but
-		 * that's okay. We also only consider base tables for index only scans.
-		 * TODO: This can also be extended to handle covered indexes later.
-		 */
 		return;
 	}
 
-	bool projectionHasVarOrQuery = false;
-	expression_tree_walker((Node *) root->parse->targetList,
-						   ProjectionReferencesDocumentVar,
-						   &projectionHasVarOrQuery);
-	if (projectionHasVarOrQuery)
+	if (!IsValidForIndexOnlyScans(root))
 	{
-		/* If the projection has a Var or a Query, we can't do index only scan
-		 * because we can't cover the projection.
-		 */
 		return;
 	}
 
@@ -1586,9 +1610,21 @@ ConsiderIndexOnlyScan(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 
 		bool isBtreeIndex = false;
 		IndexPath *indexPath = (IndexPath *) path;
+
+		if (indexPath->path.pathtype == T_IndexOnlyScan)
+		{
+			/* Already an index only scan */
+			continue;
+		}
+
 		if (IsBtreePrimaryKeyIndex(indexPath->indexinfo) &&
 			EnableIdIndexPushdown)
 		{
+			if (EnableIdIndexCustomCostFunction && !ForceIndexOnlyScanIfAvailable)
+			{
+				continue;
+			}
+
 			isBtreeIndex = true;
 			bool hasOtherQuals = false;
 			IndexPath *modified = TrimIndexRestrictInfoForBtreePath(root, indexPath,
@@ -1677,6 +1713,8 @@ ConsiderIndexOnlyScan(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 			Path *newPath = lfirst(pathsToAddCell);
 			add_path(rel, newPath);
 		}
+
+		list_free(addedPaths);
 	}
 }
 
@@ -1695,6 +1733,82 @@ GetPrimaryKeyIndexOptInfo(RelOptInfo *rel)
 	}
 
 	return NULL;
+}
+
+
+static void
+ConsiderBtreeOrderByPushdown(PlannerInfo *root, IndexPath *indexPath)
+{
+	bool hasOrderBy = false;
+	bool hasGroupby = false;
+	bool isOrderById = false;
+	List *sortDetails = GetSortDetails(root, indexPath->path.parent->relid, &hasOrderBy,
+									   &hasGroupby, &isOrderById);
+
+	if (sortDetails == NIL || !isOrderById)
+	{
+		list_free_deep(sortDetails);
+		return;
+	}
+
+	if (!IsValidIndexPathForIdOrderBy(indexPath, sortDetails))
+	{
+		list_free_deep(sortDetails);
+		return;
+	}
+
+	/*
+	 * We have a single sort and a primary key - consider if
+	 * it is an _id pushdown.
+	 */
+	SortIndexInputDetails *sortDetailsInput = linitial(sortDetails);
+
+	/* The first clause is a shard key equality - can push order by */
+	indexPath->path.pathkeys = list_make1(sortDetailsInput->sortPathKey);
+
+	/* If the sort is descending, we need to scan the index backwards */
+	if (SortPathKeyStrategy(sortDetailsInput->sortPathKey) == BTGreaterStrategyNumber)
+	{
+		indexPath->indexscandir = BackwardScanDirection;
+	}
+
+	list_free_deep(sortDetails);
+}
+
+
+void
+documentdb_btcostestimate(PlannerInfo *root, IndexPath *path, double loop_count,
+						  Cost *indexStartupCost, Cost *indexTotalCost,
+						  Selectivity *indexSelectivity, double *indexCorrelation,
+						  double *indexPages)
+{
+	if (EnableOrderByIdOnCostFunction && EnableIdIndexCustomCostFunction &&
+		list_length(root->query_pathkeys) == 1)
+	{
+		ConsiderBtreeOrderByPushdown(root, path);
+	}
+
+	if (EnableIdIndexCustomCostFunction && EnableIndexOnlyScan &&
+		IsValidForIndexOnlyScans(root))
+	{
+		bool hasOtherQuals = false;
+		IndexPath *modified = TrimIndexRestrictInfoForBtreePath(root, path,
+																&hasOtherQuals);
+		if (!hasOtherQuals)
+		{
+			*path = *modified;
+			path->path.pathtype = T_IndexOnlyScan;
+		}
+
+		if (modified != path)
+		{
+			/* Free if copy */
+			pfree(modified);
+		}
+	}
+
+	btcostestimate(root, path, loop_count, indexStartupCost, indexTotalCost,
+				   indexSelectivity, indexCorrelation, indexPages);
 }
 
 
@@ -1829,14 +1943,67 @@ GetSortDetails(PlannerInfo *root, Index rti,
 }
 
 
+static bool
+IsValidIndexPathForIdOrderBy(IndexPath *indexPath, List *sortDetails)
+{
+	if (indexPath->indexinfo->relam != BTREE_AM_OID ||
+		!IsBtreePrimaryKeyIndex(indexPath->indexinfo))
+	{
+		return false;
+	}
+
+	if (list_length(sortDetails) != 1)
+	{
+		return false;
+	}
+
+	/* We have a single sort and a primary key - consider if
+	 * it is an _id pushdown.
+	 */
+	SortIndexInputDetails *sortDetailsInput = linitial(sortDetails);
+	if (strcmp(sortDetailsInput->sortPath, "_id") != 0)
+	{
+		return false;
+	}
+
+	/*
+	 * We can push down the _id sort to the primary key index
+	 * if and only if there's a shard_key equality.
+	 */
+	if (list_length(indexPath->indexclauses) < 1)
+	{
+		return false;
+	}
+
+	IndexClause *indexClause = linitial(indexPath->indexclauses);
+	if (!IsA(indexClause->rinfo->clause, OpExpr))
+	{
+		return false;
+	}
+
+	OpExpr *opExpr = (OpExpr *) indexClause->rinfo->clause;
+	Expr *firstArg = linitial(opExpr->args);
+	Expr *secondArg = lsecond(opExpr->args);
+
+	if (opExpr->opno != BigintEqualOperatorId() ||
+		!IsA(firstArg, Var) || !IsA(secondArg, Const))
+	{
+		return false;
+	}
+
+	Var *firstVar = (Var *) firstArg;
+	return firstVar->varattno == DOCUMENT_DATA_TABLE_SHARD_KEY_VALUE_VAR_ATTR_NUMBER;
+}
+
+
 void
-ConsiderIndexOrderByPushdown(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
-							 Index rti, ReplaceExtensionFunctionContext *context)
+ConsiderIndexOrderByPushdownForId(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
+								  Index rti, ReplaceExtensionFunctionContext *context)
 {
 	/* In this path, we only consider order by pushdown for the PK index - so we only support
 	 * having a single order by path key
 	 */
-	if (list_length(root->query_pathkeys) != 1)
+	if (EnableOrderByIdOnCostFunction || list_length(root->query_pathkeys) != 1)
 	{
 		return;
 	}
@@ -1881,59 +2048,25 @@ ConsiderIndexOrderByPushdown(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *
 
 		IndexPath *indexPath = (IndexPath *) path;
 		hasIndexPaths = true;
-		if (indexPath->indexinfo->relam == BTREE_AM_OID &&
-			IsBtreePrimaryKeyIndex(indexPath->indexinfo) &&
-			list_length(sortDetails) == 1)
+		if (!IsValidIndexPathForIdOrderBy(indexPath, sortDetails))
 		{
-			/* We have a single sort and a primary key - consider if
-			 * it is an _id pushdown.
-			 */
-			SortIndexInputDetails *sortDetailsInput = linitial(sortDetails);
-			if (strcmp(sortDetailsInput->sortPath, "_id") != 0)
-			{
-				continue;
-			}
-
-			/*
-			 * We can push down the _id sort to the primary key index
-			 * if and only if there's a shard_key equality.
-			 */
-			if (list_length(indexPath->indexclauses) < 1)
-			{
-				continue;
-			}
-
-			IndexClause *indexClause = linitial(indexPath->indexclauses);
-			if (!IsA(indexClause->rinfo->clause, OpExpr))
-			{
-				continue;
-			}
-
-			OpExpr *opExpr = (OpExpr *) indexClause->rinfo->clause;
-			Expr *firstArg = linitial(opExpr->args);
-			Expr *secondArg = lsecond(opExpr->args);
-
-			if (opExpr->opno != BigintEqualOperatorId() ||
-				!IsA(firstArg, Var) || !IsA(secondArg, Const))
-			{
-				continue;
-			}
-
-			/* The first clause is a shard key equality - can push order by */
-			IndexPath *newPath = makeNode(IndexPath);
-			memcpy(newPath, indexPath, sizeof(IndexPath));
-			newPath->path.pathkeys = list_make1(sortDetailsInput->sortPathKey);
-
-			/* If the sort is descending, we need to scan the index backwards */
-			if (SortPathKeyStrategy(sortDetailsInput->sortPathKey) ==
-				BTGreaterStrategyNumber)
-			{
-				newPath->indexscandir = BackwardScanDirection;
-			}
-
-			/* Don't modify the list we're enumerating */
-			pathsToAdd = lappend(pathsToAdd, newPath);
+			continue;
 		}
+
+		/* The first clause is a shard key equality - can push order by */
+		IndexPath *newPath = makeNode(IndexPath);
+		memcpy(newPath, indexPath, sizeof(IndexPath));
+		SortIndexInputDetails *sortDetailsInput = linitial(sortDetails);
+		newPath->path.pathkeys = list_make1(sortDetailsInput->sortPathKey);
+
+		/* If the sort is descending, we need to scan the index backwards */
+		if (SortPathKeyStrategy(sortDetailsInput->sortPathKey) == BTGreaterStrategyNumber)
+		{
+			newPath->indexscandir = BackwardScanDirection;
+		}
+
+		/* Don't modify the list we're enumerating */
+		pathsToAdd = lappend(pathsToAdd, newPath);
 	}
 
 	/* Special case: if there were no index paths and
