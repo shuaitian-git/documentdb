@@ -1195,11 +1195,15 @@ GetIndexTermMetadata(void *indexOptions)
 								"Index version V1 is not supported by hashed, text or 2d sphere indexes")));
 		}
 
-		uint32_t wildcardIndexTruncatedPathLimit =
-			options->wildcardIndexTruncatedPathLimit == 0 ?
-			UINT32_MAX :
-			options->
-			wildcardIndexTruncatedPathLimit;
+		uint32_t wildcardIndexTruncatedPathLimit = UINT32_MAX;
+		if (isWildcard)
+		{
+			wildcardIndexTruncatedPathLimit = options->wildcardIndexTruncatedPathLimit ==
+											  0 ?
+											  UINT32_MAX :
+											  options->wildcardIndexTruncatedPathLimit;
+		}
+
 
 		return (IndexTermCreateMetadata) {
 				   .indexTermSizeLimit = truncationLimit,

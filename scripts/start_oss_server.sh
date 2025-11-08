@@ -18,7 +18,8 @@ gatewayWorker="false"
 useDocumentdbExtendedRum="false"
 customAdminUser="docdb_admin"
 customAdminUserPassword="Admin100"
-while getopts "d:p:u:a:hcsxegr" opt; do
+valgrindMode="false"
+while getopts "d:p:u:a:hcsxegrv" opt; do
   case $opt in
     d) postgresDirectory="$OPTARG"
     ;;
@@ -42,6 +43,8 @@ while getopts "d:p:u:a:hcsxegr" opt; do
     u) customAdminUser="$OPTARG"
     ;;
     a) customAdminUserPassword="$OPTARG"
+    ;;
+    v) valgrindMode="true"
     ;;
   esac
 
@@ -77,6 +80,7 @@ if [ "$help" == "true" ]; then
     echo "${green}[-a <password>] - optional argument. Specifies the password for the custom admin user"
     echo "${green}[-g] - optional argument. starts the gateway worker host along with the backend"
     echo "${green}[-r] - optional argument. use the pg_documentdb_extended_rum extension instead of rum"
+    echo "${green}[-v] - optional argument. run via valgrind mode"
     echo "${green}if postgresDir not specified assumed to be $HOME/.documentdb/data"
     exit 1;
 fi
@@ -166,6 +170,12 @@ fi
 
 echo "InitDatabaseExtended $initSetup $postgresDirectory"
 
+if [ "$valgrindMode" == "true" ]; then
+  # Ensure that initdb is not run via valgrind
+  echo "Disabling valgrind on server"
+  sudo $scriptDir/set_valgrind_on_postgres.sh -d
+fi
+
 if [ "$initSetup" == "true" ]; then
     InitDatabaseExtended $postgresDirectory "$preloadLibraries"
 fi
@@ -194,8 +204,10 @@ if [ "$useDocumentdbExtendedRum" == "true" ] && [ "$initSetup" == "true" ]; then
 fi
 
 userName=$(whoami)
-sudo mkdir -p /var/run/postgresql
-sudo chown -R $userName:$userName /var/run/postgresql
+if [ ! -d /var/run/postgresql ]; then
+  sudo mkdir -p /var/run/postgresql
+  sudo chown -R $userName:$userName /var/run/postgresql
+fi
 
 StartServer $postgresDirectory $coordinatorPort
 
@@ -212,6 +224,14 @@ if [ "$initSetup" == "true" ]; then
     psql -p $coordinatorPort -d postgres -c "SELECT documentdb_api_distributed.initialize_cluster()"
   fi
   SetupCustomAdminUser "$customAdminUser" "$customAdminUserPassword" $coordinatorPort "$userName"
+fi
+
+if [ "$valgrindMode" == "true" ]; then
+  # Ensure that initdb is not run via valgrind
+  StopServer $postgresDirectory
+  echo "Enabling valgrind on server"
+  sudo $scriptDir/set_valgrind_on_postgres.sh -e
+  StartServer $postgresDirectory $coordinatorPort $postgresDirectory/pglog.log "-W"
 fi
 
 . $scriptDir/setup_psqlrc.sh

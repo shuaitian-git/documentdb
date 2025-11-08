@@ -46,4 +46,9 @@ generate_version_schedule:
 	@./mutate_schedule.sh log/basic_schedule_$(pg_major_version) $(pg_major_version)
 
 
+installcheck: generate_version_schedule
+	psql -d postgres -c "ALTER SYSTEM set documentdb_core.bsonUseEJson to on;" && psql -d postgres -c "SELECT pg_reload_conf()"
+	$(top_builddir)/src/test/regress/pg_regress --encoding=UTF8 --dlpath=$(BASEPATH) --use-existing --dbname=postgres $(EXTENSIONLOAD) --schedule=./log/basic_schedule_$(pg_major_version) || (cat regression.diffs && false)
+	psql -d postgres -c "ALTER SYSTEM reset documentdb_core.bsonUseEJson;" && psql -d postgres -c "SELECT pg_reload_conf()"
+
 all: check-basic check-test-output

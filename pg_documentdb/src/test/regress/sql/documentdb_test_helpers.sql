@@ -1,6 +1,7 @@
-CREATE SCHEMA documentdb_test_helpers;
+CREATE SCHEMA IF NOT EXISTS documentdb_test_helpers;
 
-SELECT datname, datcollate, datctype, pg_encoding_to_char(encoding), datlocprovider FROM pg_database;
+SELECT MIN(datcollate), MIN(datctype), MIN(pg_encoding_to_char(encoding)), MIN(datlocprovider) FROM pg_database;
+SELECT MAX(datcollate), MAX(datctype), MAX(pg_encoding_to_char(encoding)), MAX(datlocprovider) FROM pg_database;
 
 -- binary version should return the installed version after recreating the extension
 SELECT documentdb_api.binary_version() = (SELECT REPLACE(extversion, '-', '.') FROM pg_extension where extname = 'documentdb_core');
@@ -99,7 +100,7 @@ $$ LANGUAGE plpgsql;
 
 -- Returns the command (without "CONCURRENTLY" option) used to create given
 -- index on a collection.
-CREATE FUNCTION documentdb_test_helpers.documentdb_index_get_pg_def(
+CREATE OR REPLACE FUNCTION documentdb_test_helpers.documentdb_index_get_pg_def(
     p_database_name text,
     p_collection_name text,
     p_index_name text)

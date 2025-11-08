@@ -74,11 +74,12 @@ function StartServer()
   local _directory=$1
   local _port=$2
   local _logPath=${3:-$_directory/pglog.log}
+  local _additionalArgs=${4:-''}
   local _pgctlPath=$(GetPGCTL)
 
   echo "Starting postgres in $_directory"
-  echo "Calling: $_pgctlPath start -D $_directory -o \"-p $_port\" -l $_logPath"
-  $_pgctlPath start -D $_directory -o "-p $_port" -l $_logPath
+  echo "Calling: $_pgctlPath start -D $_directory -o \"-p $_port\" -l $_logPath $_additionalArgs"
+  $_pgctlPath start -D $_directory -o "-p $_port" -l $_logPath $_additionalArgs
 }
 
 

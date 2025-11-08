@@ -604,6 +604,8 @@ extension_rumcostestimate_core(PlannerInfo *root, IndexPath *path, double loop_c
 		*indexStartupCost = 0;
 		*indexTotalCost = INFINITY;
 		*indexSelectivity = 0;
+		*indexCorrelation = 0;
+		*indexPages = 0;
 		return;
 	}
 
@@ -622,6 +624,8 @@ extension_rumcostestimate_core(PlannerInfo *root, IndexPath *path, double loop_c
 			*indexStartupCost = 0;
 			*indexTotalCost = INFINITY;
 			*indexSelectivity = 0;
+			*indexCorrelation = 0;
+			*indexPages = 0;
 			return;
 		}
 	}

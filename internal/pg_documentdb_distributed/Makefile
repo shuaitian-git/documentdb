@@ -61,6 +61,12 @@ clean-sql:
 check:
 	$(MAKE) -C src/test all
 
+installcheck:
+	$(MAKE) -C src/test installcheck
+
+installcheck-minimal:
+	$(MAKE) -C src/test installcheck-minimal $@
+
 check-dist-minimal:
 	$(MAKE) -C src/test $@
 

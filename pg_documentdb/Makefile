@@ -59,6 +59,9 @@ clean-sql:
 check:
 	$(MAKE) -C src/test all
 
+installcheck:
+	$(MAKE) -C src/test installcheck
+
 check-extended-rum:
 	$(MAKE) -C src/test/extended_rum_tests all
 
