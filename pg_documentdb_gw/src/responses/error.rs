@@ -84,16 +84,14 @@ impl CommandError {
                 CommandError::new(*e, documentdb_error_message(), msg.to_string())
             }
             DocumentDBError::RawBsonError(e, _) => {
-                CommandError::internal(format!("Raw BSON error: {}", e))
+                CommandError::internal(format!("Raw BSON error: {e}"))
             }
-            DocumentDBError::PoolError(e, _) => {
-                CommandError::internal(format!("Pool error: {}", e))
-            }
+            DocumentDBError::PoolError(e, _) => CommandError::internal(format!("Pool error: {e}")),
             DocumentDBError::CreatePoolError(e, _) => {
-                CommandError::internal(format!("Create pool error: {}", e))
+                CommandError::internal(format!("Create pool error: {e}"))
             }
             DocumentDBError::BuildPoolError(e, _) => {
-                CommandError::internal(format!("Build pool error: {}", e))
+                CommandError::internal(format!("Build pool error: {e}"))
             }
             DocumentDBError::DocumentDBError(error_code, msg, _) => {
                 CommandError::new(*error_code as i32, error_code.to_string(), msg.to_string())
@@ -102,10 +100,10 @@ impl CommandError {
                 CommandError::new(*error_code, code.clone(), msg.to_string())
             }
             DocumentDBError::SSLErrorStack(error_stack, _) => {
-                CommandError::internal(format!("SSL error stack: {}", error_stack))
+                CommandError::internal(format!("SSL error stack: {error_stack}"))
             }
             DocumentDBError::SSLError(error, _) => {
-                CommandError::internal(format!("SSL error: {}", error))
+                CommandError::internal(format!("SSL error: {error}"))
             }
             DocumentDBError::ValueAccessError(error, _) => match &error.kind {
                 ValueAccessErrorKind::UnexpectedType {

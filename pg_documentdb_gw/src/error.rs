@@ -36,7 +36,7 @@ pub enum DocumentDBError {
 
 impl DocumentDBError {
     pub fn parse_failure<'a, E: std::fmt::Display>() -> impl Fn(E) -> Self + 'a {
-        move |e| DocumentDBError::bad_value(format!("Failed to parse: {}", e))
+        move |e| DocumentDBError::bad_value(format!("Failed to parse: {e}"))
     }
 
     pub fn pg_response_empty() -> Self {
@@ -96,10 +96,10 @@ impl Display for DocumentDBError {
                 if let Some(dbe) = e.as_db_error() {
                     write!(f, "PostgresError({:?}, {:?})", dbe.code(), dbe.hint())
                 } else {
-                    write!(f, "{:?}", e)
+                    write!(f, "{e:?}")
                 }
             }
-            _ => write!(f, "{:?}", self),
+            _ => write!(f, "{self:?}"),
         }
     }
 }
@@ -163,6 +163,6 @@ impl From<ValueAccessError> for DocumentDBError {
 
 impl Display for ErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }

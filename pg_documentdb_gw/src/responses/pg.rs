@@ -140,8 +140,7 @@ impl PgResponse {
         Ok(SqlState::from_code(str::from_utf8(&chars).map_err(
             |_| {
                 DocumentDBError::internal_error(format!(
-                    "Failed to map command error code '{:?}' to SQL state.",
-                    chars
+                    "Failed to map command error code '{chars:?}' to SQL state."
                 ))
             },
         )?))
