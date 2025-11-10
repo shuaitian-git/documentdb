@@ -525,7 +525,7 @@ SELECT documentdb_api.create_user('{"createUser":"newPrepareUniqueUser", "pwd":"
  { "ok" : { "$numberInt" : "1" } }
 (1 row)
 
-\c regression newPrepareUniqueUser
+\c - newPrepareUniqueUser
 set documentdb.enablePrepareUnique to on;
 SELECT documentdb_api.coll_mod('prep_unique_db', 'collection', '{ "collMod": "collection", "index": { "name": "f_1", "prepareUnique": true } }');
                                           coll_mod                                          

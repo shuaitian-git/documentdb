@@ -9,7 +9,8 @@ PG_VERSION=${PG_VERSION_USED:-16}
 valgrindToggle=""
 help=""
 valgrind_suppressions_file=""
-while getopts "dehs:" opt; do
+enable_valgrind_debugging="false"
+while getopts "dehs:x" opt; do
   case $opt in
     d) valgrindToggle="disable"
     ;;
@@ -18,6 +19,9 @@ while getopts "dehs:" opt; do
     h) help="true"
     ;;
     s) valgrind_suppressions_file="$OPTARG"
+    ;;
+    x) enable_valgrind_debugging="true"
+    ;;
   esac
 
   # Assume empty string if it's unset since we cannot reference to
@@ -70,10 +74,14 @@ fi
 
 # now that everything is set up - check what the user wants
 if [ "$valgrindToggle" == "enable" ]; then
+valgrind_debug_flags=""
+if [ "$enable_valgrind_debugging" == "true" ]; then
+  valgrind_debug_flags="--vgdb-error=1 --vgdb=yes"
+fi
   
 cat << EOF > $postgres_script_file
 #!/bin/bash
-valgrind --quiet --exit-on-first-error=yes --error-markers=VALGRINDERROR-BEGIN,VALGRINDERROR-END \
+valgrind --quiet --exit-on-first-error=yes $valgrind_debug_flags --error-markers=VALGRINDERROR-BEGIN,VALGRINDERROR-END \
   --error-exitcode=1 --read-var-info=no --leak-check=no --max-stackframe=16000000 --time-stamp=yes --track-origins=yes --gen-suppressions=all \
   --trace-children=yes --suppressions=$valgrind_suppressions_file $postgres_orig_host \$@
 EOF

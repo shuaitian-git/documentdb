@@ -73,6 +73,17 @@ check-documentdb-minimal: check-minimal
 check-docdb-rum-minimal:
 	$(MAKE) -C src/test/extended_rum_tests check-minimal
 
+check-valgrind:
+	$(OSS_SRC_DIR)/scripts/start_oss_server.sh -c -u "" -v -p 58070 -f $(CURDIR)/src/test/regress/regression_opts.conf
+	@sleep 5
+	$(MAKE) INSTALL_PG_PORT=58070 -C src/test installcheck || :
+	$(OSS_SRC_DIR)/scripts/start_oss_server.sh -s -v
+
+check-start-oss-server:
+	$(OSS_SRC_DIR)/scripts/start_oss_server.sh -c -u "" -p 58070 -f $(CURDIR)/src/test/regress/regression_opts.conf
+	@sleep 5
+	$(MAKE) INSTALL_PG_PORT=58070 -C src/test installcheck
+
 citus-indent:
 	citus_indent
 

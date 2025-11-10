@@ -51,3 +51,8 @@ if [ "${DOCDB_ENABLE_ASAN:-}" == "true" ]; then
     ProcessMutateFile "./test_mutate_asan"
     ProcessMutateFile "$scriptDir/test_mutate_asan"
 fi
+
+if [ "${DOCDB_ENABLE_VALGRIND:-}" == "true" ]; then
+    ProcessMutateFile "./test_mutate_valgrind"
+    ProcessMutateFile "$scriptDir/test_mutate_valgrind"
+fi

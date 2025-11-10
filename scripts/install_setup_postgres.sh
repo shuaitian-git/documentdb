@@ -98,6 +98,8 @@ elif [ "$debug" == "true" ]; then
   ./configure --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -Og -g3 -fno-omit-frame-pointer $EXTRA_CPP_FLAGS" --with-openssl --prefix="$postgresqlInstallDir" --with-icu
 elif [ "$cassert" == "true" ]; then
   ./configure --enable-debug --enable-cassert --enable-tap-tests CFLAGS="$EXTRA_CPP_FLAGS" --with-openssl --prefix="$postgresqlInstallDir" --with-icu
+elif [ "$withvalgrind" == "true" ]; then
+  ./configure --enable-debug --enable-tap-tests --with-openssl --prefix="$postgresqlInstallDir" --with-icu CFLAGS="$EXTRA_CPP_FLAGS"
 else
   ./configure --enable-debug --enable-tap-tests --with-openssl --prefix="$postgresqlInstallDir" --with-icu
 fi

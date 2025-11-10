@@ -19,7 +19,8 @@ useDocumentdbExtendedRum="false"
 customAdminUser="docdb_admin"
 customAdminUserPassword="Admin100"
 valgrindMode="false"
-while getopts "d:p:u:a:hcsxegrv" opt; do
+extraConfigFile=""
+while getopts "d:p:u:a:hcsxegrvf:" opt; do
   case $opt in
     d) postgresDirectory="$OPTARG"
     ;;
@@ -45,6 +46,8 @@ while getopts "d:p:u:a:hcsxegrv" opt; do
     a) customAdminUserPassword="$OPTARG"
     ;;
     v) valgrindMode="true"
+    ;;
+    f) extraConfigFile="$OPTARG"
     ;;
   esac
 
@@ -81,6 +84,7 @@ if [ "$help" == "true" ]; then
     echo "${green}[-g] - optional argument. starts the gateway worker host along with the backend"
     echo "${green}[-r] - optional argument. use the pg_documentdb_extended_rum extension instead of rum"
     echo "${green}[-v] - optional argument. run via valgrind mode"
+    echo "${green}[-f <file>] - optional argument. add this extra conf file to postgresql.conf"
     echo "${green}if postgresDir not specified assumed to be $HOME/.documentdb/data"
     exit 1;
 fi
@@ -164,17 +168,17 @@ fi
 echo "${green}Stopping any existing postgres servers${reset}"
 StopServer $postgresDirectory
 
+if [ "$valgrindMode" == "true" ]; then
+  # Disable valgrind on shutdown.
+  echo "Disabling valgrind on server"
+  sudo $scriptDir/set_valgrind_on_postgres.sh -d
+fi
+
 if [ "$stop" == "true" ]; then
   exit 0;
 fi
 
 echo "InitDatabaseExtended $initSetup $postgresDirectory"
-
-if [ "$valgrindMode" == "true" ]; then
-  # Ensure that initdb is not run via valgrind
-  echo "Disabling valgrind on server"
-  sudo $scriptDir/set_valgrind_on_postgres.sh -d
-fi
 
 if [ "$initSetup" == "true" ]; then
     InitDatabaseExtended $postgresDirectory "$preloadLibraries"
@@ -203,6 +207,10 @@ if [ "$useDocumentdbExtendedRum" == "true" ] && [ "$initSetup" == "true" ]; then
   echo "documentdb.alternate_index_handler_name = 'extended_rum'" >> $postgresConfigFile
 fi
 
+if [ "$extraConfigFile" != "" ]; then
+  echo "include '$extraConfigFile'" >> $postgresConfigFile
+fi
+
 userName=$(whoami)
 if [ ! -d /var/run/postgresql ]; then
   sudo mkdir -p /var/run/postgresql
@@ -223,14 +231,20 @@ if [ "$initSetup" == "true" ]; then
     AddNodeToCluster $coordinatorPort $coordinatorPort
     psql -p $coordinatorPort -d postgres -c "SELECT documentdb_api_distributed.initialize_cluster()"
   fi
-  SetupCustomAdminUser "$customAdminUser" "$customAdminUserPassword" $coordinatorPort "$userName"
+  if [ "$customAdminUser" != "" ]; then
+    SetupCustomAdminUser "$customAdminUser" "$customAdminUserPassword" $coordinatorPort "$userName"
+  fi
 fi
 
 if [ "$valgrindMode" == "true" ]; then
   # Ensure that initdb is not run via valgrind
   StopServer $postgresDirectory
   echo "Enabling valgrind on server"
-  sudo $scriptDir/set_valgrind_on_postgres.sh -e
+  if [ "${ENABLE_VALGRIND_DEBUGGING:-}" == "1" ]; then
+    sudo $scriptDir/set_valgrind_on_postgres.sh -e -x
+  else
+    sudo $scriptDir/set_valgrind_on_postgres.sh -e
+  fi
   StartServer $postgresDirectory $coordinatorPort $postgresDirectory/pglog.log "-W"
 fi
 
