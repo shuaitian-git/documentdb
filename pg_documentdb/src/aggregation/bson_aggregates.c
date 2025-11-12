@@ -13,6 +13,7 @@
 #include <catalog/pg_type.h>
 #include <common/int.h>
 
+#include "aggregation/bson_aggregate.h"
 #include "io/bson_core.h"
 #include "query/bson_compare.h"
 #include <utils/array.h>
@@ -55,17 +56,6 @@ typedef struct BsonArrayAggState
 } BsonArrayAggState;
 
 
-/*
- * Varlena wrapper for above BsonArrayAggState to ensure
- * 8-byte alignment of the in-memory state.
- */
-typedef struct BsonArrayAggStateVarlena
-{
-	int32 vl_len_; /* (DO NOT TOUCH) varlena header */
-	int32 pad; /* 4 bytes to realign next field to 8 */
-	BsonArrayAggState state; /* in-memory state, now 8-byte aligned */
-} BsonArrayAggStateVarlena;
-
 typedef struct BsonObjectAggState
 {
 	BsonIntermediatePathNode *tree;
@@ -94,7 +84,7 @@ const char charset[] = "abcdefghijklmnopqrstuvwxyz0123456789";
 /* Forward declaration */
 /* --------------------------------------------------------- */
 
-static bytea * AllocateBsonNumericAggState(void);
+static MaxAlignedVarlena * AllocateBsonNumericAggState(void);
 static void CheckAggregateIntermediateResultSize(uint32_t size);
 static void CreateObjectAggTreeNodes(BsonObjectAggState *currentState,
 									 pgbson *currentValue);
@@ -162,12 +152,12 @@ bson_out_final(PG_FUNCTION_ARGS)
 }
 
 
-pg_attribute_no_sanitize_alignment() inline static Datum
+inline static Datum
 BsonArrayAggTransitionCore(PG_FUNCTION_ARGS, bool handleSingleValueElement,
 						   const char *path)
 {
 	BsonArrayAggState *currentState = { 0 };
-	BsonArrayAggStateVarlena *bytes;
+	MaxAlignedVarlena *bytes;
 	MemoryContext aggregateContext;
 	int aggregationContext = AggCheckCallContext(fcinfo, &aggregateContext);
 	if (aggregationContext == 0)
@@ -184,10 +174,9 @@ BsonArrayAggTransitionCore(PG_FUNCTION_ARGS, bool handleSingleValueElement,
 	/* If the intermediate state has never been initialized, create it */
 	if (PG_ARGISNULL(0)) /* First arg is the running aggregated state*/
 	{
-		bytes = palloc(sizeof(BsonArrayAggStateVarlena));
-		SET_VARSIZE(bytes, sizeof(BsonArrayAggStateVarlena));
+		bytes = AllocateMaxAlignedVarlena(sizeof(BsonArrayAggState));
 
-		currentState = &bytes->state;
+		currentState = (BsonArrayAggState *) bytes->state;
 		currentState->isWindowAggregation = isWindowAggregation;
 		currentState->currentSizeWritten = 0;
 		currentState->aggregateList = NIL;
@@ -196,8 +185,8 @@ BsonArrayAggTransitionCore(PG_FUNCTION_ARGS, bool handleSingleValueElement,
 	}
 	else
 	{
-		bytes = (BsonArrayAggStateVarlena *) PG_GETARG_POINTER(0);
-		currentState = &bytes->state;
+		bytes = GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
+		currentState = (BsonArrayAggState *) bytes->state;
 	}
 
 	pgbson *currentValue = PG_GETARG_MAYBE_NULL_PGBSON_PACKED(1);
@@ -239,7 +228,7 @@ bson_array_agg_transition(PG_FUNCTION_ARGS)
 }
 
 
-pg_attribute_no_sanitize_alignment() Datum
+Datum
 bson_array_agg_minvtransition(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -255,9 +244,8 @@ bson_array_agg_minvtransition(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	BsonArrayAggStateVarlena *bytes =
-		(BsonArrayAggStateVarlena *) PG_GETARG_POINTER(0);
-	BsonArrayAggState *currentState = (BsonArrayAggState *) &bytes->state;
+	MaxAlignedVarlena *bytes = GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
+	BsonArrayAggState *currentState = (BsonArrayAggState *) bytes->state;
 
 	if (!currentState->isWindowAggregation)
 	{
@@ -302,16 +290,15 @@ bson_distinct_array_agg_transition(PG_FUNCTION_ARGS)
 }
 
 
-pg_attribute_no_sanitize_alignment() Datum
+Datum
 bson_array_agg_final(PG_FUNCTION_ARGS)
 {
-	BsonArrayAggStateVarlena
-	*currentArrayAgg = PG_ARGISNULL(0) ? NULL :
-					   (BsonArrayAggStateVarlena *) PG_GETARG_POINTER(0);
+	MaxAlignedVarlena *currentArrayAgg =
+		PG_ARGISNULL(0) ? NULL : GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
 
 	if (currentArrayAgg != NULL)
 	{
-		BsonArrayAggState *state = &currentArrayAgg->state;
+		BsonArrayAggState *state = (BsonArrayAggState *) currentArrayAgg->state;
 
 		/* Initialize the writes to make final aggregated BSON array */
 		pgbson_writer writer;
@@ -349,17 +336,15 @@ bson_array_agg_final(PG_FUNCTION_ARGS)
  * Similar to array_agg but also writes "ok": 1
  * Also returns an empty array with "ok": 1 if never initialized.
  */
-pg_attribute_no_sanitize_alignment() Datum
+Datum
 bson_distinct_array_agg_final(PG_FUNCTION_ARGS)
 {
-	BsonArrayAggStateVarlena
-	*currentArrayAgg = PG_ARGISNULL(0) ? NULL :
-					   (BsonArrayAggStateVarlena *) PG_GETARG_POINTER(0);
+	MaxAlignedVarlena *currentArrayAgg =
+		PG_ARGISNULL(0) ? NULL : GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
 
 	if (currentArrayAgg != NULL)
 	{
-		BsonArrayAggState *state = &currentArrayAgg->state;
-
+		BsonArrayAggState *state = (BsonArrayAggState *) currentArrayAgg->state;
 		if (state->isWindowAggregation)
 		{
 			ereport(ERROR, errmsg(
@@ -390,11 +375,11 @@ bson_distinct_array_agg_final(PG_FUNCTION_ARGS)
  * Core implementation of the object aggregation stage. This is used by both object_agg and merge_objects.
  * Both have the same implementation but differ in validations made inside the caller method.
  */
-pg_attribute_no_sanitize_alignment() inline static Datum
+inline static Datum
 AggregateObjectsCore(PG_FUNCTION_ARGS)
 {
 	BsonObjectAggState *currentState;
-	bytea *bytes;
+	MaxAlignedVarlena *bytes;
 
 	MemoryContext aggregateContext;
 	if (!AggCheckCallContext(fcinfo, &aggregateContext))
@@ -409,20 +394,17 @@ AggregateObjectsCore(PG_FUNCTION_ARGS)
 	/* If the intermediate state has never been initialized, create it */
 	if (PG_ARGISNULL(0)) /* First arg is the running aggregated state*/
 	{
-		int bson_size = sizeof(BsonObjectAggState) + sizeof(int64_t) + VARHDRSZ;
-		bytea *combinedStateBytes = (bytea *) palloc0(bson_size);
-		SET_VARSIZE(combinedStateBytes, bson_size);
-		bytes = combinedStateBytes;
+		bytes = AllocateMaxAlignedVarlena(sizeof(BsonObjectAggState));
 
-		currentState = (BsonObjectAggState *) VARDATA(bytes);
+		currentState = (BsonObjectAggState *) bytes->state;
 		currentState->currentSizeWritten = 0;
 		currentState->tree = MakeRootNode();
 		currentState->addEmptyPath = false;
 	}
 	else
 	{
-		bytes = PG_GETARG_BYTEA_P(0);
-		currentState = (BsonObjectAggState *) VARDATA_ANY(bytes);
+		bytes = GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
+		currentState = (BsonObjectAggState *) bytes->state;
 	}
 
 	pgbson *currentValue = PG_GETARG_MAYBE_NULL_PGBSON(1);
@@ -552,12 +534,12 @@ bson_merge_objects_final(PG_FUNCTION_ARGS)
 Datum
 bson_object_agg_final(PG_FUNCTION_ARGS)
 {
-	bytea *currentArrayAgg = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
+	MaxAlignedVarlena *currentArrayAgg =
+		PG_ARGISNULL(0) ? NULL : GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
 
 	if (currentArrayAgg != NULL)
 	{
-		BsonObjectAggState *state = (BsonObjectAggState *) VARDATA_ANY(
-			currentArrayAgg);
+		BsonObjectAggState *state = (BsonObjectAggState *) currentArrayAgg->state;
 		return ParseAndReturnMergeObjectsTree(state);
 	}
 	else
@@ -573,10 +555,10 @@ bson_object_agg_final(PG_FUNCTION_ARGS)
  * It ignores non-numeric values, and manages type upgrades and coercion
  * to the right types as documents are encountered.
  */
-pg_attribute_no_sanitize_alignment() Datum
+Datum
 bson_sum_avg_transition(PG_FUNCTION_ARGS)
 {
-	bytea *bytes;
+	MaxAlignedVarlena *bytes;
 	BsonNumericAggState *currentState;
 
 	/* If the intermediate state has never been initialized, create it */
@@ -594,7 +576,7 @@ bson_sum_avg_transition(PG_FUNCTION_ARGS)
 
 		bytes = AllocateBsonNumericAggState();
 
-		currentState = (BsonNumericAggState *) VARDATA(bytes);
+		currentState = (BsonNumericAggState *) bytes->state;
 		currentState->count = 0;
 		currentState->sum.value_type = BSON_TYPE_INT32;
 		currentState->sum.value.v_int32 = 0;
@@ -603,8 +585,8 @@ bson_sum_avg_transition(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		bytes = PG_GETARG_BYTEA_P(0);
-		currentState = (BsonNumericAggState *) VARDATA_ANY(bytes);
+		bytes = GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
+		currentState = (BsonNumericAggState *) bytes->state;
 	}
 	pgbson *currentValue = PG_GETARG_MAYBE_NULL_PGBSON(1);
 
@@ -639,7 +621,7 @@ bson_sum_avg_transition(PG_FUNCTION_ARGS)
  * It ignores non-numeric values, and manages type upgrades and coercion
  * to the right types as documents are encountered.
  */
-pg_attribute_no_sanitize_alignment() Datum
+Datum
 bson_sum_avg_minvtransition(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -649,7 +631,7 @@ bson_sum_avg_minvtransition(PG_FUNCTION_ARGS)
 					"window aggregate function called in non-window-aggregate context"));
 	}
 
-	bytea *bytes;
+	MaxAlignedVarlena *bytes;
 	BsonNumericAggState *currentState;
 
 	if (PG_ARGISNULL(0))
@@ -659,8 +641,8 @@ bson_sum_avg_minvtransition(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		bytes = PG_GETARG_BYTEA_P(0);
-		currentState = (BsonNumericAggState *) VARDATA_ANY(bytes);
+		bytes = GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
+		currentState = (BsonNumericAggState *) bytes->state;
 	}
 	pgbson *currentValue = PG_GETARG_MAYBE_NULL_PGBSON(1);
 
@@ -691,18 +673,19 @@ bson_sum_avg_minvtransition(PG_FUNCTION_ARGS)
  * This takes the final value created and outputs a bson "sum"
  * with the appropriate type.
  */
-pg_attribute_no_sanitize_alignment() Datum
+Datum
 bson_sum_final(PG_FUNCTION_ARGS)
 {
-	bytea *currentSum = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
+	MaxAlignedVarlena *currentSum = PG_ARGISNULL(0) ?
+									NULL :
+									GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
 
 	pgbsonelement finalValue;
 	finalValue.path = "";
 	finalValue.pathLength = 0;
 	if (currentSum != NULL)
 	{
-		BsonNumericAggState *state = (BsonNumericAggState *) VARDATA_ANY(
-			currentSum);
+		BsonNumericAggState *state = (BsonNumericAggState *) currentSum->state;
 		finalValue.bsonValue = state->sum;
 	}
 	else
@@ -720,18 +703,19 @@ bson_sum_final(PG_FUNCTION_ARGS)
  * Applies the "final calculation" (FINALFUNC) for average.
  * This takes the final value created and outputs a bson "average"
  */
-pg_attribute_no_sanitize_alignment() Datum
+Datum
 bson_avg_final(PG_FUNCTION_ARGS)
 {
-	bytea *avgIntermediateState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
+	MaxAlignedVarlena *avgIntermediateState = PG_ARGISNULL(0) ? NULL :
+											  GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
 
 	pgbsonelement finalValue;
 	finalValue.path = "";
 	finalValue.pathLength = 0;
 	if (avgIntermediateState != NULL)
 	{
-		BsonNumericAggState *averageState = (BsonNumericAggState *) VARDATA_ANY(
-			avgIntermediateState);
+		BsonNumericAggState *averageState =
+			(BsonNumericAggState *) avgIntermediateState->state;
 		if (averageState->count == 0)
 		{
 			/* Mongo returns $null for empty sets */
@@ -858,7 +842,7 @@ bson_min_transition(PG_FUNCTION_ARGS)
  * and combines them to form a new bson_numeric_agg_state that has the combined
  * sum and count.
  */
-pg_attribute_no_sanitize_alignment() Datum
+Datum
 bson_sum_avg_combine(PG_FUNCTION_ARGS)
 {
 	MemoryContext aggregateContext;
@@ -871,9 +855,9 @@ bson_sum_avg_combine(PG_FUNCTION_ARGS)
 	/* Create the aggregate state in the aggregate context. */
 	MemoryContext oldContext = MemoryContextSwitchTo(aggregateContext);
 
-	bytea *combinedStateBytes = AllocateBsonNumericAggState();
-	BsonNumericAggState *currentState = (BsonNumericAggState *) VARDATA_ANY(
-		combinedStateBytes);
+	MaxAlignedVarlena *combinedStateBytes = AllocateBsonNumericAggState();
+	BsonNumericAggState *currentState =
+		(BsonNumericAggState *) combinedStateBytes->state;
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -886,8 +870,9 @@ bson_sum_avg_combine(PG_FUNCTION_ARGS)
 		{
 			PG_RETURN_NULL();
 		}
-		memcpy(VARDATA(combinedStateBytes), VARDATA_ANY(PG_GETARG_BYTEA_P(1)),
-			   sizeof(BsonNumericAggState));
+		MaxAlignedVarlena *rightBytes =
+			GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(1));
+		memcpy(currentState, rightBytes->state, sizeof(BsonNumericAggState));
 	}
 	else if (PG_ARGISNULL(1))
 	{
@@ -895,15 +880,18 @@ bson_sum_avg_combine(PG_FUNCTION_ARGS)
 		{
 			PG_RETURN_NULL();
 		}
-		memcpy(VARDATA(combinedStateBytes), VARDATA_ANY(PG_GETARG_BYTEA_P(0)),
-			   sizeof(BsonNumericAggState));
+		MaxAlignedVarlena *leftBytes =
+			GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
+		memcpy(currentState, leftBytes->state, sizeof(BsonNumericAggState));
 	}
 	else
 	{
-		BsonNumericAggState *leftState = (BsonNumericAggState *) VARDATA_ANY(
-			PG_GETARG_BYTEA_P(0));
-		BsonNumericAggState *rightState = (BsonNumericAggState *) VARDATA_ANY(
-			PG_GETARG_BYTEA_P(1));
+		MaxAlignedVarlena *leftBytes =
+			GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
+		MaxAlignedVarlena *rightBytes =
+			GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(1));
+		BsonNumericAggState *leftState = (BsonNumericAggState *) leftBytes->state;
+		BsonNumericAggState *rightState = (BsonNumericAggState *) rightBytes->state;
 
 		currentState->count = leftState->count + rightState->count;
 		currentState->sum = leftState->sum;
@@ -1084,11 +1072,11 @@ bson_build_distinct_response(PG_FUNCTION_ARGS)
 /*
  * Transition function for the BSON_ADD_TO_SET aggregate.
  */
-pg_attribute_no_sanitize_alignment() Datum
+Datum
 bson_add_to_set_transition(PG_FUNCTION_ARGS)
 {
 	BsonAddToSetState *currentState = { 0 };
-	bytea *bytes;
+	MaxAlignedVarlena *bytes;
 	MemoryContext aggregateContext;
 	int aggregationContext = AggCheckCallContext(fcinfo, &aggregateContext);
 	if (aggregationContext == 0)
@@ -1105,20 +1093,17 @@ bson_add_to_set_transition(PG_FUNCTION_ARGS)
 	/* If the intermediate state has never been initialized, create it */
 	if (PG_ARGISNULL(0)) /* First arg is the running aggregated state*/
 	{
-		int bson_size = sizeof(BsonAddToSetState) + VARHDRSZ;
-		bytea *combinedStateBytes = (bytea *) palloc0(bson_size);
-		SET_VARSIZE(combinedStateBytes, bson_size);
-		bytes = combinedStateBytes;
+		bytes = AllocateMaxAlignedVarlena(sizeof(BsonAddToSetState));
 
-		currentState = (BsonAddToSetState *) VARDATA(bytes);
+		currentState = (BsonAddToSetState *) bytes->state;
 		currentState->currentSizeWritten = 0;
 		currentState->set = CreateBsonValueHashSet();
 		currentState->isWindowAggregation = isWindowAggregation;
 	}
 	else
 	{
-		bytes = PG_GETARG_BYTEA_P(0);
-		currentState = (BsonAddToSetState *) VARDATA_ANY(bytes);
+		bytes = GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
+		currentState = (BsonAddToSetState *) bytes->state;
 	}
 
 	pgbson *currentValue = PG_GETARG_MAYBE_NULL_PGBSON(1);
@@ -1167,15 +1152,14 @@ bson_add_to_set_transition(PG_FUNCTION_ARGS)
 /*
  * Final function for the BSON_ADD_TO_SET aggregate.
  */
-pg_attribute_no_sanitize_alignment() Datum
+Datum
 bson_add_to_set_final(PG_FUNCTION_ARGS)
 {
-	bytea *currentState = PG_ARGISNULL(0) ? NULL : PG_GETARG_BYTEA_P(0);
+	MaxAlignedVarlena *currentState = PG_ARGISNULL(0) ? NULL :
+									  GetMaxAlignedVarlena(PG_GETARG_BYTEA_P(0));
 	if (currentState != NULL)
 	{
-		BsonAddToSetState *state = (BsonAddToSetState *) VARDATA_ANY(
-			currentState);
-
+		BsonAddToSetState *state = (BsonAddToSetState *) currentState->state;
 		HASH_SEQ_STATUS seq_status;
 		const bson_value_t *entry;
 		hash_seq_init(&seq_status, state->set);
@@ -1233,13 +1217,11 @@ bson_add_to_set_final(PG_FUNCTION_ARGS)
 /* Private helper methods */
 /* --------------------------------------------------------- */
 
-bytea *
+static MaxAlignedVarlena *
 AllocateBsonNumericAggState()
 {
-	int bson_size = sizeof(BsonNumericAggState) + VARHDRSZ;
-	bytea *combinedStateBytes = (bytea *) palloc0(bson_size);
-	SET_VARSIZE(combinedStateBytes, bson_size);
-
+	MaxAlignedVarlena *combinedStateBytes =
+		AllocateMaxAlignedVarlena(sizeof(BsonNumericAggState));
 	return combinedStateBytes;
 }
 
@@ -1306,7 +1288,7 @@ CheckAggregateIntermediateResultSize(uint32_t size)
  * Helper method that iterates a pgbson writing its values to a bson tree. If a key already
  * exists in the tree, then it's overwritten.
  */
-pg_attribute_no_sanitize_alignment() static void
+static void
 CreateObjectAggTreeNodes(BsonObjectAggState *currentState, pgbson *currentValue)
 {
 	bson_iter_t docIter;
@@ -1395,7 +1377,7 @@ ValidateMergeObjectsInput(pgbson *input)
 /*
  * Function used to parse and return a mergeObjects tree.
  */
-pg_attribute_no_sanitize_alignment() static Datum
+static Datum
 ParseAndReturnMergeObjectsTree(BsonObjectAggState *state)
 {
 	if (state != NULL)
