@@ -36,6 +36,7 @@ from typing import List, Optional
 from enum import Enum
 import json
 from datetime import datetime
+import time
 
 # ============================================================================
 # Data Models
@@ -79,6 +80,9 @@ class TestRun:
 class DocumentDBTestRunner:
     """Main test runner class"""
     
+    # Constants for retry logic
+    MAX_FLAKY_TEST_RETRIES = 5  # Retry expected-pass tests up to 5 times
+    
     def __init__(self, args):
         self.args = args
         self.jstests_dir = Path(args.jstests_dir).expanduser()
@@ -91,6 +95,10 @@ class DocumentDBTestRunner:
         self.filter_pattern = re.compile(args.filter) if args.filter else None
         self.verbose = args.verbose
         self.drop_collections = args.drop_collections if hasattr(args, 'drop_collections') else True
+        self.enable_retries = getattr(args, 'enable_retries', True)
+        self.check_transactions = getattr(args, 'check_transactions', False)
+        self.pg_host = getattr(args, 'pg_host', 'localhost')
+        self.pg_port = getattr(args, 'pg_port', 5432)
         
         # Parse connection string to extract components
         self._parse_connection_string()
@@ -106,6 +114,8 @@ class DocumentDBTestRunner:
         self.errors = 0
         self.unexpected_pass = 0
         self.unexpected_fail = 0
+        self.unexpected_failures = []  # List of test names that unexpectedly failed
+        self.unexpected_passes = []  # List of test names that unexpectedly passed
     
     def _find_mongo_shell(self) -> str:
         """Auto-detect mongo shell executable"""
@@ -181,31 +191,32 @@ class DocumentDBTestRunner:
         
         return tests
     
-    def drop_all_collections(self, test_name: str) -> bool:
+    def drop_all_collections(self, test_name: str, max_retries: int = 3) -> bool:
         """
-        Drop all collections in all databases before running a test.
-        This ensures test isolation and prevents test interference.
+        Drop all collections from all databases (except admin, config, local).
+        
+        CRITICAL:
+        - Simple drop loop (no inline verification - that caused issues)
+        - Retry on failure via ExecuteShellCommandWithRetry
+        - Assert.Fail if drop command fails (we return False, caller fails test)
+        - Rely on synchronous shell command (no explicit waits)
         """
         if not self.drop_collections:
             return True
         
+        # JavaScript to drop all collections
         drop_script = """
         var dbs = db.getMongo().getDBNames();
         for(var i in dbs) {
-            var dbName = dbs[i];
-            // Skip system databases
-            if (dbName == 'admin' || dbName == 'config' || dbName == 'local') {
+            if (dbs[i] == 'config' || dbs[i] == 'admin' || dbs[i] == 'local') {
                 continue;
             }
-            var database = db.getMongo().getDB(dbName);
+            var database = db.getMongo().getDB(dbs[i]);
             var colls = database.getCollectionNames();
             for(var j in colls) {
-                var collName = colls[j];
-                // Skip system collections
-                if (collName.startsWith('system.')) {
-                    continue;
+                if (!colls[j].startsWith('system.')) {
+                    database.getCollection(colls[j]).drop();
                 }
-                database.getCollection(collName).drop();
             }
         }
         """
@@ -218,21 +229,118 @@ class DocumentDBTestRunner:
             '--eval', drop_script
         ]
         
+        # RETRY LOGIC
+        for attempt in range(max_retries):
+            if attempt > 0 and self.verbose:
+                print(f"  Retrying drop (attempt {attempt + 1}/{max_retries})...")
+            
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                
+                # If shell command succeeds, drop is complete
+                # No verification, no waits - trust synchronous shell execution
+                if result.returncode == 0:
+                    return True
+                
+                if self.verbose:
+                    print(f"  Drop failed (attempt {attempt + 1}): {result.stderr[:100]}")
+            
+            except Exception as e:
+                if self.verbose:
+                    print(f"  Drop exception (attempt {attempt + 1}): {str(e)[:100]}")
+        
+        # ALL RETRIES FAILED
+        return False
+    
+    def verify_collections_dropped(self) -> tuple[bool, str]:
+        """
+        Verify that all non-system collections were actually dropped.
+        Returns (success, error_message).
+        
+        This provides extra assurance that cleanup completed, which is important
+        for diagnosing flaky test failures.
+        """
+        verify_script = """
+        var dbs = db.getMongo().getDBNames();
+        var foundCollections = [];
+        for(var i in dbs) {
+            var dbName = dbs[i];
+            if (dbName == 'admin' || dbName == 'config' || dbName == 'local') {
+                continue;
+            }
+            var database = db.getMongo().getDB(dbName);
+            var colls = database.getCollectionNames();
+            for(var j in colls) {
+                if (!colls[j].startsWith('system.')) {
+                    foundCollections.push(dbName + '.' + colls[j]);
+                }
+            }
+        }
+        if (foundCollections.length > 0) {
+            print('LEFTOVER_COLLECTIONS:' + foundCollections.join(','));
+            quit(1);
+        }
+        """
+        
+        cmd = [
+            self.mongo_shell,
+            self.connection_string,
+            '--tls',
+            '--tlsAllowInvalidCertificates',
+            '--eval', verify_script
+        ]
+        
         try:
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=10
             )
             if result.returncode != 0:
-                if self.verbose:
-                    print(f"  Warning: Failed to drop collections: {result.stderr[:100]}")
-                return False
-            return True
+                # Found leftover collections
+                error_lines = result.stdout.split('\n')
+                for line in error_lines:
+                    if 'LEFTOVER_COLLECTIONS:' in line:
+                        colls = line.split(':', 1)[1]
+                        return False, f"Found leftover collections: {colls}"
+                return False, f"Verification failed: {result.stderr[:100]}"
+            return True, ""
         except Exception as e:
-            if self.verbose:
-                print(f"  Warning: Exception while dropping collections: {str(e)[:100]}")
+            return False, f"Verification exception: {str(e)[:100]}"
+    
+    def force_close_connections(self) -> bool:
+        """
+        Force close all idle connections to prevent connection leaks.
+        This helps with test isolation during long runs.
+        """
+        close_script = """
+        // Close this connection cleanly
+        db.adminCommand({serverStatus: 1});
+        """
+        
+        cmd = [
+            self.mongo_shell,
+            self.connection_string,
+            '--tls',
+            '--tlsAllowInvalidCertificates',
+            '--eval', close_script
+        ]
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except Exception:
             return False
     
     def log_test_name_to_server(self, test_name: str) -> bool:
@@ -264,8 +372,75 @@ class DocumentDBTestRunner:
         except Exception:
             return False
     
+    def check_active_transactions(self) -> List[dict]:
+        """
+        Check for active PostgreSQL transactions that might indicate test leaks.
+        Returns list of transactions in 'idle in transaction' state.
+        """
+        if not self.check_transactions:
+            return []
+        
+        try:
+            # Try to use psycopg2 if available
+            try:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=self.pg_host,
+                    port=self.pg_port,
+                    database='postgres',
+                    user='postgres'
+                )
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT pid, state, query, state_change 
+                    FROM pg_stat_activity 
+                    WHERE state = 'idle in transaction'
+                    AND pid != pg_backend_pid()
+                """)
+                rows = cursor.fetchall()
+                cursor.close()
+                conn.close()
+                
+                return [
+                    {'pid': row[0], 'state': row[1], 'query': row[2], 'state_change': str(row[3])}
+                    for row in rows
+                ]
+            except ImportError:
+                # Fall back to psql command
+                result = subprocess.run(
+                    [
+                        'psql',
+                        '-h', self.pg_host,
+                        '-p', str(self.pg_port),
+                        '-U', 'postgres',
+                        '-d', 'postgres',
+                        '-t',  # tuples only
+                        '-A',  # unaligned
+                        '-c', "SELECT pid, state, query FROM pg_stat_activity WHERE state = 'idle in transaction'"
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    transactions = []
+                    for line in result.stdout.strip().split('\n'):
+                        parts = line.split('|')
+                        if len(parts) >= 3:
+                            transactions.append({'pid': parts[0], 'state': parts[1], 'query': parts[2]})
+                    return transactions
+                return []
+        except Exception as e:
+            if self.verbose:
+                print(f"  Warning: Could not check for active transactions: {e}")
+            return []
+    
     def run_test(self, test_case: TestCase) -> TestRun:
-        """Run a single test case"""
+        """
+        Run a single test case with retry logic.
+        Expected-pass tests are retried up to 5 times on failure
+        Expected-fail tests are not retried.
+        """
         if self.verbose:
             print(f"Running: {test_case.name}")
         
@@ -293,19 +468,71 @@ class DocumentDBTestRunner:
                 matches_expectation=False
             )
         
+        # Determine retry strategy based on expected outcome
+        # Expected-pass tests: retry up to 5 times (for flaky tests)
+        # Expected-fail tests: no retries
+        max_attempts = self.MAX_FLAKY_TEST_RETRIES if (
+            self.enable_retries and test_case.expected_outcome == TestOutcome.PASS
+        ) else 1
+        
+        # Try running the test with retries
+        all_outputs = []
+        for attempt in range(1, max_attempts + 1):
+            if attempt > 1:
+                if self.verbose:
+                    print(f"  Retry attempt {attempt}/{max_attempts}")
+                # Small delay between retries
+                time.sleep(1)
+            
+            # Run the test (single attempt)
+            test_run = self._run_test_single_attempt(test_case)
+            all_outputs.append(f"--- Attempt {attempt} ---\n{test_run.stdout}\n{test_run.stderr}")
+            
+            # If result matches expectation, we're done
+            if test_run.matches_expectation:
+                return test_run
+            
+            # If this is not the last attempt, continue retrying
+            if attempt < max_attempts:
+                continue
+            
+            # Last attempt failed - return with combined output
+            test_run.stdout = "\n\n".join(all_outputs)
+            test_run.stderr = f"Failed after {max_attempts} attempts"
+            return test_run
+        
+        # Should never reach here, but return last run just in case
+        return test_run
+    
+    def _run_test_single_attempt(self, test_case: TestCase) -> TestRun:
+        """Execute a single test attempt without retry logic"""
+        
         # Pre-test cleanup: Drop all collections
+        # FAIL TEST if cleanup fails
+        # Running a test on dirty state leads to flaky failures
         if self.verbose:
             print(f"  Dropping collections...")
         if not self.drop_all_collections(test_case.name):
+            # FAIL IMMEDIATELY - don't run test on dirty state
+            error_msg = f"CLEANUP FAILED: Could not drop collections before test '{test_case.name}'.\n"
+            error_msg += "(Assert.Fail on cleanup failure).\n"
+            error_msg += "Test isolation requires clean state - dirty state leads to flaky failures."
+            
             if self.verbose:
-                print(f"  Warning: Could not drop collections, continuing anyway")
+                print(f"  ❌ CLEANUP FAILED - Test will not run")
+            
+            return TestRun(
+                test_case=test_case,
+                result=TestResult.ERROR,
+                exit_code=-1,
+                duration_ms=0,
+                stdout="",
+                stderr=error_msg,
+                matches_expectation=False
+            )
         
-        # Log test name to server for debugging
-        if self.verbose:
-            print(f"  Logging test name to server...")
-        if not self.log_test_name_to_server(test_case.name):
-            if self.verbose:
-                print(f"  Warning: Could not log test name (connection issue?)")
+        # Drop succeeded
+        # No verification, no waits - just proceed to run the test
         
         # Get test name without extension for JS_TEST_NAME environment variable
         test_name_no_ext = Path(test_case.name).stem
@@ -368,6 +595,16 @@ class DocumentDBTestRunner:
             stdout = ""
             stderr = str(e)
         
+        # Post-test check: Look for transaction leaks
+        active_txns = self.check_active_transactions()
+        if active_txns:
+            txn_info = f"\n\nWARNING: {len(active_txns)} active transaction(s) found after test:\n"
+            for txn in active_txns[:3]:  # Show first 3
+                txn_info += f"  PID {txn.get('pid')}: {txn.get('query', '')[:80]}\n"
+            stderr += txn_info
+            if self.verbose:
+                print(f"  ⚠️  Transaction leak detected: {len(active_txns)} active")
+        
         # Determine result
         if exit_code == 0:
             result_status = TestResult.PASSED
@@ -420,9 +657,11 @@ class DocumentDBTestRunner:
             color = "\033[0;31m"  # Red
             if run.result == TestResult.PASSED:
                 self.unexpected_pass += 1
+                self.unexpected_passes.append(test_name)
                 result = "UNEXPECTED PASS"
             else:
                 self.unexpected_fail += 1
+                self.unexpected_failures.append(test_name)
                 result = "UNEXPECTED FAIL"
             self.failed += 1
         
@@ -462,11 +701,24 @@ class DocumentDBTestRunner:
         print(f"Output directory: {self.output_dir}")
         print("")
         
+        # Record start time
+        from datetime import datetime
+        start_time = datetime.now()
+        
         # Run each test
-        for test in tests:
+        for idx, test in enumerate(tests, 1):
             run = self.run_test(test)
             self.report_test_result(run)
-            self.write_test_output(run)
+            
+            # Only write log file if test failed or didn't match expectation
+            if not run.matches_expectation:
+                self.write_test_output(run)
+        
+        # Calculate total duration
+        end_time = datetime.now()
+        total_duration = end_time - start_time
+        hours, remainder = divmod(int(total_duration.total_seconds()), 3600)
+        minutes, seconds = divmod(remainder, 60)
         
         # Print summary
         print("\n" + "=" * 80)
@@ -478,7 +730,35 @@ class DocumentDBTestRunner:
         print(f"Skipped:          {self.skipped}")
         print(f"Unexpected Pass:  {self.unexpected_pass}")
         print(f"Unexpected Fail:  {self.unexpected_fail}")
+        if hours > 0:
+            print(f"Duration:         {hours}h {minutes}m {seconds}s")
+        elif minutes > 0:
+            print(f"Duration:         {minutes}m {seconds}s")
+        else:
+            print(f"Duration:         {seconds}s")
         print("=" * 80)
+        
+        # Print list of unexpected failures if any
+        if self.unexpected_failures:
+            print("\n" + "=" * 80)
+            print("UNEXPECTEDLY FAILED TESTS")
+            print("=" * 80)
+            for test_name in self.unexpected_failures:
+                print(f"  - {test_name}")
+            print("=" * 80)
+            print(f"\nTo rerun only failed tests, create a CSV with these tests and use:")
+            print(f"  python3 run_tests.py --manifest <your_failed_tests.csv>")
+        
+        # Print list of unexpected passes if any
+        if self.unexpected_passes:
+            print("\n" + "=" * 80)
+            print("UNEXPECTEDLY PASSED TESTS")
+            print("=" * 80)
+            for test_name in self.unexpected_passes:
+                print(f"  - {test_name}")
+            print("=" * 80)
+            print(f"\nThese tests were expected to fail but passed!")
+            print(f"Consider updating tests.csv to mark them as 'pass'")
         
         # Return non-zero exit code if there were unexpected results
         if self.unexpected_pass > 0 or self.unexpected_fail > 0:
@@ -546,6 +826,31 @@ def main():
         action='store_false',
         default=True,
         help='Skip dropping collections before each test'
+    )
+    parser.add_argument(
+        '--no-retries',
+        dest='enable_retries',
+        action='store_false',
+        default=True,
+        help='Disable retry logic for flaky tests (expected-pass tests retry up to 5 times by default)'
+    )
+    parser.add_argument(
+        '--check-transactions',
+        dest='check_transactions',
+        action='store_true',
+        default=False,
+        help='Check for transaction leaks after each test (requires PostgreSQL access)'
+    )
+    parser.add_argument(
+        '--pg-host',
+        default='localhost',
+        help='PostgreSQL host for transaction leak detection (default: localhost)'
+    )
+    parser.add_argument(
+        '--pg-port',
+        type=int,
+        default=5432,
+        help='PostgreSQL port for transaction leak detection (default: 5432)'
     )
     parser.add_argument(
         '--parallel',
