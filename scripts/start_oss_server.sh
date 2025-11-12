@@ -5,7 +5,16 @@ set -e
 # fail if trying to reference a variable that is not set.
 set -u
 
-PG_VERSION=${PG_VERSION_USED:-16}
+PG_VERSION=16
+
+# Overrides from environment
+if [ "${PG_VERSION_USED:-}" != "" ]; then
+  PG_VERSION=$PG_VERSION_USED
+elif [ "${PGVERSION_USED:-}" != "" ]; then
+  PG_VERSION=${PGVERSION_USED}
+fi
+
+
 coordinatorPort="9712"
 postgresDirectory=""
 initSetup="false"
@@ -168,10 +177,12 @@ fi
 echo "${green}Stopping any existing postgres servers${reset}"
 StopServer $postgresDirectory
 
+pg_config_path=$(GetPGConfig $PG_VERSION)
+
 if [ "$valgrindMode" == "true" ]; then
   # Disable valgrind on shutdown.
-  echo "Disabling valgrind on server"
-  sudo $scriptDir/set_valgrind_on_postgres.sh -d
+  echo "Disabling valgrind on server with pg_config $pg_config_path"
+  sudo $scriptDir/set_valgrind_on_postgres.sh -d -p $pg_config_path
 fi
 
 if [ "$stop" == "true" ]; then
@@ -241,9 +252,9 @@ if [ "$valgrindMode" == "true" ]; then
   StopServer $postgresDirectory
   echo "Enabling valgrind on server"
   if [ "${ENABLE_VALGRIND_DEBUGGING:-}" == "1" ]; then
-    sudo $scriptDir/set_valgrind_on_postgres.sh -e -x
+    sudo $scriptDir/set_valgrind_on_postgres.sh -e -x -p $pg_config_path
   else
-    sudo $scriptDir/set_valgrind_on_postgres.sh -e
+    sudo $scriptDir/set_valgrind_on_postgres.sh -e -p $pg_config_path
   fi
   StartServer $postgresDirectory $coordinatorPort $postgresDirectory/pglog.log "-W"
 fi

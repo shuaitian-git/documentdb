@@ -10,7 +10,8 @@ valgrindToggle=""
 help=""
 valgrind_suppressions_file=""
 enable_valgrind_debugging="false"
-while getopts "dehs:x" opt; do
+pg_config_path="pg_config"
+while getopts "dehs:xp:" opt; do
   case $opt in
     d) valgrindToggle="disable"
     ;;
@@ -21,6 +22,8 @@ while getopts "dehs:x" opt; do
     s) valgrind_suppressions_file="$OPTARG"
     ;;
     x) enable_valgrind_debugging="true"
+    ;;
+    p) pg_config_path="$OPTARG"
     ;;
   esac
 
@@ -57,14 +60,19 @@ done
 
 scriptDir="$( cd -P "$( dirname "$source" )" && pwd )"
 
-pg_bin_directory=$(pg_config --bindir)
+pg_bin_directory=$($pg_config_path --bindir)
 postgres_host=$pg_bin_directory/postgres
 postgres_orig_host=$pg_bin_directory/postgres.orig
 postgres_script_file=$pg_bin_directory/postgres.valgrind
 
 if [ "$valgrind_suppressions_file" == "" ]; then
-  versionStr=$(pg_config --version | awk -F' ' '{ print $2 }' | awk -F'.' '{ print $1 }')
-  valgrind_suppressions_file=$INSTALL_DEPENDENCIES_ROOT/postgres-repo/$versionStr/src/tools/valgrind.supp
+  versionStr=$($pg_config_path --version | awk -F' ' '{ print $2 }' | awk -F'.' '{ print $1 }')
+  mkdir -p $scriptDir/build/$versionStr
+  valgrind_suppressions_file="$scriptDir/build/$versionStr/valgrind.supp"
+  if [ ! -f $valgrind_suppressions_file ]; then
+    echo "Downloading valgrind suppressions file for $versionStr"
+    curl -o $valgrind_suppressions_file -JLO https://raw.githubusercontent.com/postgres/postgres/refs/heads/REL_${versionStr}_STABLE/src/tools/valgrind.supp
+  fi
 fi
 
 # Save the original host file

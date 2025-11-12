@@ -60,6 +60,12 @@ function GetInitDB()
   echo $(GetPostgresPath $pgVersion)/initdb
 }
 
+function GetPGConfig()
+{
+  local pgVersion=${PG_VERSION:-16}
+  echo $(GetPostgresPath $pgVersion)/pg_config
+}
+
 function StopServer()
 {
   local _directory=$1
