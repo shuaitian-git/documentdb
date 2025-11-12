@@ -1423,7 +1423,7 @@ ExtensionScanNextRecheck(ScanState *state, TupleTableSlot *slot)
  * Parses the incoming continuation to build the continuation state
  * For the current query.
  */
-static pg_attribute_no_sanitize_alignment() void
+static void
 ParseContinuationState(ExtensionScanState *extensionScanState,
 					   InputContinuation *continuation)
 {
@@ -1590,8 +1590,9 @@ ParseContinuationState(ExtensionScanState *extensionScanState,
 					extensionScanState->hasPrimaryKeyState = true;
 				}
 
-				extensionScanState->userContinuationState =
-					*(ItemPointerData *) continuationBinaryValue.value.v_binary.data;
+				memcpy(&extensionScanState->userContinuationState,
+					   continuationBinaryValue.value.v_binary.data,
+					   sizeof(ItemPointerData));
 				extensionScanState->rawUsercontinuation = *currentValue;
 				extensionScanState->hasUserContinuationState = true;
 			}
