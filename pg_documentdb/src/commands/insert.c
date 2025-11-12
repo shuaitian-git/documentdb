@@ -644,27 +644,21 @@ DoMultiInsertWithoutTransactionId(MongoCollection *collection, List *inserts, Oi
 		}
 
 		int errorCode = errorData->sqlerrcode;
-		const char *errorCodeStr = unpack_sql_state(errorCode);
 		if (EreportCodeIsDocumentDBError(errorCode))
 		{
 			/*
 			 * TODO: Since there is no mapping from PG error to mongo error today in engine,
 			 * we can't deduce the mongo specific error code.
 			 */
-			ereport(LOG, (
-						errmsg(
-							"Optimistic Batch Insert failed. Retrying with single insert. documentDB errorCode %s",
-							errorCodeStr)));
+			elog_unredacted(
+				"Optimistic Batch Insert failed. Retrying with single insert. documentDB errorCode %d",
+				errorCode);
 		}
 		else
 		{
-			ereport(LOG, (
-						errmsg(
-							"Optimistic Batch Insert failed. Retrying with single insert. SQL Error %s",
-							errorCodeStr),
-						errdetail_log(
-							"Optimistic Batch Insert failed. Retrying with single insert. SQL Error %s",
-							errorCodeStr)));
+			elog_unredacted(
+				"Optimistic Batch Insert failed. Retrying with single insert. SQL Error %d",
+				errorCode);
 		}
 	}
 	PG_END_TRY();
