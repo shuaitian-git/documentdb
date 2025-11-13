@@ -34,6 +34,9 @@ use simple_logger::SimpleLogger;
 use tokio_postgres::{error::SqlState, NoTls};
 use tokio_util::sync::CancellationToken;
 
+pub mod rbac_utils;
+pub mod validation_utils;
+
 static INIT: Once = Once::new();
 
 // Starts the server and returns an authenticated client

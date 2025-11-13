@@ -170,6 +170,12 @@ SELECT documentdb_api.drop_user('{"dropUser":"documentdb_user", "$db":"admin"}')
 --Drop non-existent user
 SELECT documentdb_api.drop_user('{"dropUser":"nonexistent_user", "$db":"admin"}');
 
+--Drop a system user
+SELECT documentdb_api.drop_user('{"dropUser":"documentdb_bg_worker_role", "$db":"admin"}');
+
+--Drop a built-in user
+SELECT documentdb_api.drop_user('{"dropUser":"documentdb_admin_role", "$db":"admin"}');
+
 --Drop with disallowed parameter
 SELECT documentdb_api.drop_user('{"user":"test_user", "$db":"admin"}');
 

@@ -286,6 +286,9 @@ impl PgResponse {
             SqlState::UNDEFINED_OBJECT => {
                 Some((ErrorCode::UserNotFound as i32, Some("UserNotFound".to_string()), msg))
             },
+            SqlState::DUPLICATE_OBJECT => {
+                Some((ErrorCode::Location51003 as i32, Some("User already exists".to_string()), msg))
+            },
             _ => None,
         }
     }
