@@ -6,13 +6,15 @@ SET search_path TO documentdb_api,documentdb_api_catalog,documentdb_api_internal
 SET documentdb.enableExtendedExplainPlans to on;
 SET documentdb.enableIndexOnlyScan to on;
 
+-- we set this to make sure it doesn't pick index only scan on cases it shouldn't and when it should, costing won't affect test stability.
+SET documentdb.forceIndexOnlyScanIfAvailable to on;
+
+
 -- if documentdb_extended_rum exists, set alternate index handler
 SELECT pg_catalog.set_config('documentdb.alternate_index_handler_name', 'extended_rum', false), extname FROM pg_extension WHERE extname = 'documentdb_extended_rum';
 
 SELECT documentdb_api.drop_collection('idx_only_scan_db', 'idx_only_scan_coll') IS NOT NULL;
 SELECT documentdb_api.create_collection('idx_only_scan_db', 'idx_only_scan_coll');
-
-SELECT collection_id as coll_id FROM documentdb_api_catalog.collections WHERE collection_name = 'idx_only_scan_coll' AND database_name = 'idx_only_scan_db' \gset
 
 SELECT documentdb_api_internal.create_indexes_non_concurrently('idx_only_scan_db', '{ "createIndexes": "idx_only_scan_coll", "indexes": [ { "key": { "country": 1 }, "storageEngine": { "enableOrderedIndex": true }, "name": "country_1" }] }', true);
 
@@ -33,7 +35,7 @@ select documentdb_api.insert_one('idx_only_scan_db', 'idx_only_scan_coll', '{"_i
 select documentdb_api.insert_one('idx_only_scan_db', 'idx_only_scan_coll', '{"_id": 15, "country": "France", "provider": "GCP"}');
 select documentdb_api.insert_one('idx_only_scan_db', 'idx_only_scan_coll', '{"_id": 16, "country": "Mexico", "provider": "AWS"}');
 
-SELECT 'ANALYZE documentdb_data.documents_' || :'coll_id' \gexec
+ANALYZE documentdb_data.documents_69001;
 
 set enable_seqscan to off;
 set enable_bitmapscan to off;
@@ -49,7 +51,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
 SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_only_scan_coll", "query": {"country": {"$eq": "USA"}}}');
 
 -- now run VACUUM should see the heap blocks go down
-SELECT 'VACUUM documentdb_data.documents_' || :'coll_id' \gexec
+VACUUM (FREEZE ON) documentdb_data.documents_69001;
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_only_scan_coll", "query": {"country": {"$eq": "USA"}}}');
 
@@ -123,7 +125,8 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
 
 -- if we delete it and vacuum it should use index only scan again
 SELECT documentdb_api.delete('idx_only_scan_db', '{ "delete": "idx_only_scan_coll", "deletes": [ {"q": {"_id": {"$eq": 18} }, "limit": 0} ]}');
-SELECT 'VACUUM documentdb_data.documents_' || :'coll_id' \gexec
+
+VACUUM (FREEZE ON) documentdb_data.documents_69001;
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$eq": "Mexico"}} }, { "$count": "count" }]}');
 
