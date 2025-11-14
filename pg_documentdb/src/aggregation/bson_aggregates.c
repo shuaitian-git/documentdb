@@ -77,7 +77,7 @@ typedef struct BinaryHeapState
 	bool isMaxN;
 } BinaryHeapState;
 
-const char charset[] = "abcdefghijklmnopqrstuvwxyz0123456789";
+static const char charset[] = "abcdefghijklmnopqrstuvwxyz0123456789";
 
 
 /* --------------------------------------------------------- */

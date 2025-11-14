@@ -10,6 +10,8 @@
 #ifndef DOCUMENTDB_API_INIT_H
 #define DOCUMENTDB_API_INIT_H
 
+#include <stdbool.h>
+
 void InitApiConfigurations(char *prefix, char *newGucPrefix);
 void InstallDocumentDBApiPostgresHooks(void);
 void UninstallDocumentDBApiPostgresHooks(void);
@@ -17,4 +19,6 @@ void InitializeDocumentDBBackgroundWorker(char *libraryName, char *gucPrefix,
 										  char *extensionObjectPrefix);
 void InitializeSharedMemoryHooks(void);
 void InitializeBackgroundWorkerJobAllowedCommands(void);
+
+extern bool SkipDocumentDBLoad;
 #endif

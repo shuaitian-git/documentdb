@@ -30,6 +30,7 @@
 #include "infrastructure/cursor_store.h"
 #include "background_worker/background_worker_job.h"
 #include "index_am/roaring_bitmap_adapter.h"
+#include "api_hooks_def.h"
 
 /* --------------------------------------------------------- */
 /* Data Types & Enum values */
