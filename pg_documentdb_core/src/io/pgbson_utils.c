@@ -39,6 +39,7 @@
 
 extern bool SkipBsonArrayTraverseOptimization;
 
+extern const StringView IdFieldStringView;
 PGDLLEXPORT const StringView IdFieldStringView = { .string = "_id", .length = 3 };
 
 /* arithmetic functions */
