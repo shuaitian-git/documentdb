@@ -6,6 +6,7 @@
 #include "udfs/aggregation/group_aggregates--0.109-0.sql"
 #include "udfs/rum/bson_rum_shard_exclusion_functions--0.109-0.sql"
 #include "schema/unique_shard_path_operator_class--0.109-0.sql"
+#include "udfs/aggregation/bson_aggregation_getmore--0.109-0.sql"
 
 -- fix the return of gin_bson_compare which was created incorrectly.
 UPDATE pg_proc SET prorettype = 'integer'::regtype WHERE proname = 'gin_bson_compare' AND pronamespace = 'documentdb_api_catalog'::regnamespace;

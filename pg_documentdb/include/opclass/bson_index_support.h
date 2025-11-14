@@ -150,6 +150,10 @@ void ConsiderIndexOrderByPushdownForId(PlannerInfo *root, RelOptInfo *rel,
 void ConsiderIndexOnlyScan(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 						   Index rti, ReplaceExtensionFunctionContext *context);
 
+IndexPath * TrimIndexRestrictInfoForBtreePath(PlannerInfo *root,
+											  IndexPath *indexPath,
+											  bool *hasNonIdClauses);
+
 void WalkPathsForIndexOperations(List *pathsList,
 								 ReplaceExtensionFunctionContext *context);
 void WalkRestrictionPathsForIndexOperations(List *restrictInfo,

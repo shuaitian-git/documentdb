@@ -324,6 +324,7 @@ Oid ApiCatalogAggregationPipelineFunctionId(void);
 Oid ApiCatalogAggregationFindFunctionId(void);
 Oid ApiCatalogAggregationCountFunctionId(void);
 Oid ApiCatalogAggregationDistinctFunctionId(void);
+Oid ApiCatalogAggregationGetMoreFunctionId(void);
 Oid BsonCovariancePopAggregateFunctionOid(void);
 Oid BsonCovarianceSampAggregateFunctionOid(void);
 Oid BsonDollarAddFieldsFunctionOid(void);
@@ -441,6 +442,7 @@ Oid UpdateWorkerFunctionOid(void);
 Oid InsertWorkerFunctionOid(void);
 Oid DeleteWorkerFunctionOid(void);
 Oid CommandNodeWorkerFunctionOid(void);
+Oid CursorGetMoreFunctionOid(void);
 
 /* Compat functions*/
 Oid DocumentDBCoreBsonToBsonFunctionOId(void);

@@ -57,6 +57,7 @@
  documentdb_api_catalog | bson_aggregation_count                  | SETOF documentdb_core.bson | databasename text, countspec documentdb_core.bson, OUT document documentdb_core.bson                                            | func
  documentdb_api_catalog | bson_aggregation_distinct               | SETOF documentdb_core.bson | databasename text, distinctspec documentdb_core.bson, OUT document documentdb_core.bson                                         | func
  documentdb_api_catalog | bson_aggregation_find                   | SETOF documentdb_core.bson | databasename text, findspec documentdb_core.bson, OUT document documentdb_core.bson                                             | func
+ documentdb_api_catalog | bson_aggregation_getmore                | SETOF documentdb_core.bson | databasename text, getmorespec documentdb_core.bson, continuationspec documentdb_core.bson, OUT document documentdb_core.bson   | func
  documentdb_api_catalog | bson_aggregation_pipeline               | SETOF documentdb_core.bson | databasename text, aggregationpipeline documentdb_core.bson, OUT document documentdb_core.bson                                  | func
  documentdb_api_catalog | bson_array_agg                          | documentdb_core.bson       | documentdb_core.bson, text                                                                                                      | agg
  documentdb_api_catalog | bson_array_agg                          | documentdb_core.bson       | documentdb_core.bson, text, boolean                                                                                             | agg
@@ -175,7 +176,7 @@
  documentdb_api_catalog | gin_bson_wildcard_project_extract_value | internal                   | documentdb_core.bson, internal                                                                                                  | func
  documentdb_api_catalog | gin_bson_wildcard_project_options       | void                       | internal                                                                                                                        | func
  documentdb_api_catalog | query_match_support                     | internal                   | internal                                                                                                                        | func
-(121 rows)
+(122 rows)
 
 \df documentdb_api_internal.*
                                                                                                                                                                                                                                                                                                                               List of functions

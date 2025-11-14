@@ -842,7 +842,8 @@ IsAggregationFunction(Oid funcId)
 	return funcId == ApiCatalogAggregationPipelineFunctionId() ||
 		   funcId == ApiCatalogAggregationFindFunctionId() ||
 		   funcId == ApiCatalogAggregationCountFunctionId() ||
-		   funcId == ApiCatalogAggregationDistinctFunctionId();
+		   funcId == ApiCatalogAggregationDistinctFunctionId() ||
+		   funcId == ApiCatalogAggregationGetMoreFunctionId();
 }
 
 
@@ -880,7 +881,8 @@ DocumentDbQueryFlagsWalker(Node *node, DocumentDbQueryFlagsState *queryFlags)
 			FuncExpr *funcExpr = (FuncExpr *) rangeTblFunc->funcexpr;
 
 			/* Defer the func check until we really have to */
-			if (list_length(funcExpr->args) != 2)
+			if (list_length(funcExpr->args) != 2 &&
+				list_length(funcExpr->args) != 3)
 			{
 				return false;
 			}
@@ -1710,14 +1712,16 @@ ExpandAggregationFunction(Query *query, ParamListInfo boundParams, PlannedStmt *
 
 	FuncExpr *aggregationFunc = (FuncExpr *) rangeTblFunc->funcexpr;
 
-	if (list_length(aggregationFunc->args) != 2)
+	if (list_length(aggregationFunc->args) != 2 &&
+		list_length(aggregationFunc->args) != 3)
 	{
 		ereport(ERROR, (errmsg(
-							"Aggregation pipeline node should have 2 args. This is unexpected")));
+							"Aggregation pipeline node should have 2 or 3 args. This is unexpected")));
 	}
 
 	Node *databaseArg = linitial(aggregationFunc->args);
 	Node *secondArg = lsecond(aggregationFunc->args);
+	Node *thirdArg = NULL;
 
 	if (!IsA(secondArg, Const) || !IsA(databaseArg, Const))
 	{
@@ -1731,6 +1735,23 @@ ExpandAggregationFunction(Query *query, ParamListInfo boundParams, PlannedStmt *
 		 * to be evaluated during the EXECUTE)
 		 */
 		return query;
+	}
+
+	if (list_length(aggregationFunc->args) == 3)
+	{
+		thirdArg = lthird(aggregationFunc->args);
+		if (!IsA(thirdArg, Const))
+		{
+			thirdArg = EvaluateBoundParameters(thirdArg, boundParams);
+		}
+
+		if (!IsA(thirdArg, Const))
+		{
+			/* Let the runtime deal with this (This will either go to the runtime function and fail,
+			 * or noop due to prepared and come back here
+			 * to be evaluated during the EXECUTE)*/
+			return query;
+		}
 	}
 
 	Const *databaseConst = (Const *) databaseArg;
@@ -1771,6 +1792,21 @@ ExpandAggregationFunction(Query *query, ParamListInfo boundParams, PlannedStmt *
 		finalQuery = GenerateDistinctQuery(DatumGetTextPP(databaseConst->constvalue),
 										   pipeline,
 										   setStatementTimeout);
+	}
+	else if (aggregationFunc->funcid == ApiCatalogAggregationGetMoreFunctionId())
+	{
+		Const *thirdConst = (Const *) thirdArg;
+		if (thirdConst->constisnull)
+		{
+			ereport(ERROR, (errmsg(
+								"Aggregation pipeline arguments should not be null. This is unexpected")));
+		}
+
+		finalQuery = GenerateGetMoreQuery(DatumGetTextPP(databaseConst->constvalue),
+										  pipeline, DatumGetPgBson(
+											  thirdConst->constvalue),
+										  &queryData, enableCursorParam,
+										  setStatementTimeout);
 	}
 	else
 	{

@@ -224,9 +224,6 @@ static bool PushTextQueryToRuntime(PlannerInfo *root, RelOptInfo *rel,
 static void ThrowNoTextIndexFound(void);
 static void ThrowNoVectorIndexFound(void);
 
-static IndexPath * TrimIndexRestrictInfoForBtreePath(PlannerInfo *root,
-													 IndexPath *indexPath,
-													 bool *hasNonIdClauses);
 static bool MatchIndexPathEquals(IndexPath *path, void *matchContext);
 static bool EnableGeoNearForceIndexPushdown(PlannerInfo *root,
 											ReplaceExtensionFunctionContext *context);
@@ -2920,7 +2917,7 @@ OptimizeIndexExpressionsForRange(List *indexClauses)
 }
 
 
-static IndexPath *
+IndexPath *
 TrimIndexRestrictInfoForBtreePath(PlannerInfo *root, IndexPath *indexPath,
 								  bool *hasNonIdClauses)
 {
