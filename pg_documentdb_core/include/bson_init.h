@@ -10,8 +10,14 @@
 #ifndef BSON_INIT_H
 #define BSON_INIT_H
 
+#include <stdbool.h>
+
 void InstallBsonMemVTables(void);
 
 void InitDocumentDBCoreConfigurations(const char *prefix);
+
+extern bool BsonTextUseJsonRepresentation;
+extern bool EnableCollation;
+extern bool SkipBsonArrayTraverseOptimization;
 
 #endif
