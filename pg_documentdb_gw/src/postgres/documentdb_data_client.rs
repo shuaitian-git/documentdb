@@ -792,6 +792,28 @@ impl PgDataClient for DocumentDBDataClient {
         Ok(Response::Pg(PgResponse::new(current_op_rows)))
     }
 
+    async fn execute_kill_op(
+        &self,
+        request_context: &mut RequestContext<'_>,
+        _: &str,
+        connection_context: &ConnectionContext,
+    ) -> Result<Response> {
+        let (request, request_info, request_tracker) = request_context.get_components();
+        let kill_op_rows = self
+            .pull_connection(connection_context)
+            .await?
+            .query(
+                connection_context.service_context.query_catalog().kill_op(),
+                &[Type::BYTEA],
+                &[&PgDocument(request.document())],
+                Timeout::transaction(request_info.max_time_ms),
+                request_tracker,
+            )
+            .await?;
+
+        Ok(Response::Pg(PgResponse::new(kill_op_rows)))
+    }
+
     async fn execute_coll_mod(
         &self,
         request_context: &mut RequestContext<'_>,

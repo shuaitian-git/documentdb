@@ -13,3 +13,6 @@ UPDATE pg_proc SET prorettype = 'integer'::regtype WHERE proname = 'gin_bson_com
 GRANT UPDATE (indisexclusion) ON pg_catalog.pg_index to __API_ADMIN_ROLE__;
 
 GRANT pg_read_all_stats to __API_BG_WORKER_ROLE__;
+
+-- Killop access
+GRANT pg_signal_backend to __API_ADMIN_ROLE__;
