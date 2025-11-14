@@ -29,12 +29,12 @@ jobs:
     strategy:
       fail-fast: false
       # Use reduced matrix for PRs to speed up checks
-      # Use full matrix for pushes to main/manualy triggers, but exclude pg18 on deb11 as postgresql-18-postgis-3 is not available there
+      # Use full matrix for pushes to main/manual triggers, but exclude pg18 on deb11/deb13 because required packages are missing
       matrix:
         ${{ fromJson(
           github.event_name == 'pull_request' &&
           '{"include":[{"os":"deb12","arch":"amd64","runner":"ubuntu-24.04","pg_version":"17"},{"os":"ubuntu22.04","arch":"arm64","runner":"ubuntu-24.04-arm","pg_version":"18"}]}' ||
-          '{"os":["deb11","deb12","deb13","ubuntu22.04","ubuntu24.04"],"arch":["amd64","arm64"],"include":[{"arch":"amd64","runner":"ubuntu-24.04"},{"arch":"arm64","runner":"ubuntu-24.04-arm"}],"pg_version":["16","17",18],"exclude":[{"os":"deb11","pg_version":18}]}'
+          '{"os":["deb11","deb12","deb13","ubuntu22.04","ubuntu24.04"],"arch":["amd64","arm64"],"include":[{"arch":"amd64","runner":"ubuntu-24.04"},{"arch":"arm64","runner":"ubuntu-24.04-arm"}],"pg_version":["16","17",18],"exclude":[{"os":"deb11","pg_version":18},{"os":"deb13","pg_version":18}]}'
         ) }}
 
     steps:

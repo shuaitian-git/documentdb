@@ -18,7 +18,7 @@ PG_MODULE_MAGIC;
 void _PG_init(void);
 void _PG_fini(void);
 
-static bool SkipDocumentDBCoreLoad = false;
+bool SkipDocumentDBCoreLoad = false;
 
 /*
  * _PG_init gets called when the extension is loaded.

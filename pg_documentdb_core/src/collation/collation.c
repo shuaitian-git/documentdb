@@ -81,7 +81,7 @@ static UConverter *icu_converter = NULL;
  * 'Y' -> si, si@collation=dictionary
  * 'Z' -> zh, zh@collation=big5han, zh@collation=gb2312han, zh@collation=unihan, zh@collation=zhuyin, zh_Hant
  */
-static char supported_locale_codes[ALPHABET_SIZE][ALPHABET_SIZE] = {
+char supported_locale_codes[ALPHABET_SIZE][ALPHABET_SIZE] = {
 	/*         a    b    c    d    e    f    g    h    i    j    k    l    m    n    o  */
 	/* a */
 	{ ' ', ' ', ' ', ' ', ' ', 't', ' ', ' ', ' ', ' ', ' ', ' ', 't', ' ', ' ',

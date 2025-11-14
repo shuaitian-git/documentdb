@@ -27,9 +27,11 @@
 
 #include "utils/type_cache.h"
 #include "io/bson_core.h"
-#include "bson_init.h"
 #include "utils/documentdb_errors.h"
 #include "types/decimal128.h"
+
+
+extern bool BsonTextUseJsonRepresentation;
 
 
 /* --------------------------------------------------------- */
