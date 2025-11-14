@@ -43,7 +43,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libkrb5-dev \
     postgresql-${POSTGRES_VERSION}-cron \
     postgresql-${POSTGRES_VERSION}-pgvector \
-    postgresql-${POSTGRES_VERSION}-postgis-3 \
     $(if [ "${POSTGRES_VERSION}" -lt 18 ]; then echo "postgresql-${POSTGRES_VERSION}-rum"; fi) \
     devscripts \
     debhelper \
@@ -58,6 +57,20 @@ RUN export CLEAN_SETUP=1 && \
     /tmp/install_setup/install_setup_pcre2.sh && \
     /tmp/install_setup/install_setup_intel_decimal_math_lib.sh && \
     /tmp/install_setup/install_citus_indent.sh
+
+# Install PostGIS - try package first, fall back to building from source if not available
+RUN apt-get update && \
+    (apt-get install -y --no-install-recommends postgresql-${POSTGRES_VERSION}-postgis-3 || \
+     (apt-get update && \
+      apt-get install -qy \
+      libproj-dev \
+      libxml2-dev \
+      libjson-c-dev \
+      libgeos-dev \
+      libgeos++-dev \
+    && rm -rf /var/lib/apt/lists/* && \
+    export INSTALL_DEPENDENCIES_ROOT=/tmp/install_setup && \
+    PGVERSION=${POSTGRES_VERSION} /tmp/install_setup/install_setup_postgis.sh))
 
 # Set the working directory inside the container
 WORKDIR /build
