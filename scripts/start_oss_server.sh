@@ -29,7 +29,8 @@ customAdminUser="docdb_admin"
 customAdminUserPassword="Admin100"
 valgrindMode="false"
 extraConfigFile=""
-while getopts "d:p:u:a:hcsxegrvf:" opt; do
+logPath=""
+while getopts "d:p:u:a:hcsxegrvf:l:" opt; do
   case $opt in
     d) postgresDirectory="$OPTARG"
     ;;
@@ -57,6 +58,8 @@ while getopts "d:p:u:a:hcsxegrvf:" opt; do
     v) valgrindMode="true"
     ;;
     f) extraConfigFile="$OPTARG"
+    ;;
+    l) logPath="$OPTARG"
     ;;
   esac
 
@@ -94,6 +97,7 @@ if [ "$help" == "true" ]; then
     echo "${green}[-r] - optional argument. use the pg_documentdb_extended_rum extension instead of rum"
     echo "${green}[-v] - optional argument. run via valgrind mode"
     echo "${green}[-f <file>] - optional argument. add this extra conf file to postgresql.conf"
+    echo "${green}[-l <file>] - optional argument. log to this file for the postgres server logs"
     echo "${green}if postgresDir not specified assumed to be $HOME/.documentdb/data"
     exit 1;
 fi
@@ -228,7 +232,11 @@ if [ ! -d /var/run/postgresql ]; then
   sudo chown -R $userName:$userName /var/run/postgresql
 fi
 
-StartServer $postgresDirectory $coordinatorPort
+if [ "$logPath" == "" ]; then
+  logPath="$postgresDirectory/pglog.log"
+fi
+
+StartServer $postgresDirectory $coordinatorPort $logPath
 
 if [ "$initSetup" == "true" ]; then
   SetupPostgresServerExtensions "$userName" $coordinatorPort $extensionName
@@ -256,7 +264,35 @@ if [ "$valgrindMode" == "true" ]; then
   else
     sudo $scriptDir/set_valgrind_on_postgres.sh -e -p $pg_config_path
   fi
-  StartServer $postgresDirectory $coordinatorPort $postgresDirectory/pglog.log "-W"
+  StartServer $postgresDirectory $coordinatorPort $logPath "-W"
+
+  # Now wait for server up via pgctl
+  echo -n "Waiting for server up with valgrind via pg_ctl"
+  wait="true"
+  while [ "$wait" == "true" ]; do
+    result=$($(GetPGCTL) status -D $postgresDirectory || true)
+    if [[ "$result" =~ "server is running" ]]; then
+      echo "Server is up via pg_ctl."
+      wait="false";
+    else
+      echo -n "."
+      sleep 1;
+    fi
+  done
+
+  # Validate connectivity via psql as well
+  echo -n "Waiting for server up with valgrind via psql"
+  wait="true"
+  while [ "$wait" == "true" ]; do
+    result=$(psql -X -t -d postgres -p $coordinatorPort -c "SELECT 1" || true)
+    if [[ "$result" =~ "1" ]]; then
+      echo "Server is up via psql."
+      wait="false";
+    else
+      echo -n "."
+      sleep 1;
+    fi
+  done
 fi
 
 . $scriptDir/setup_psqlrc.sh
