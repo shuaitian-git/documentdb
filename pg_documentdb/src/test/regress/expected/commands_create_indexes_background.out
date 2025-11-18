@@ -934,8 +934,8 @@ SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'background
 CALL documentdb_api_internal.build_index_concurrently(1);
 --all indexes should be built and queue should be empty.
 SELECT * FROM documentdb_api_catalog.documentdb_index_queue;
- index_cmd | cmd_type | index_id | index_cmd_status | global_pid | start_time | collection_id | comment | attempt | update_time | user_oid 
------------+----------+----------+------------------+------------+------------+---------------+---------+---------+-------------+----------
+ index_cmd | cmd_type | index_id | index_cmd_status | global_pid | start_time | collection_id | comment | attempt | update_time | user_oid | options 
+-----------+----------+----------+------------------+------------+------------+---------------+---------+---------+-------------+----------+---------
 (0 rows)
 
 SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'backgroundcoll1');
@@ -969,7 +969,7 @@ SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM docum
 CALL documentdb_api_internal.build_index_concurrently(1);
 --all indexes should be built and queue should be empty.
 SELECT * FROM documentdb_api_catalog.documentdb_index_queue;
- index_cmd | cmd_type | index_id | index_cmd_status | global_pid | start_time | collection_id | comment | attempt | update_time | user_oid 
------------+----------+----------+------------------+------------+------------+---------------+---------+---------+-------------+----------
+ index_cmd | cmd_type | index_id | index_cmd_status | global_pid | start_time | collection_id | comment | attempt | update_time | user_oid | options 
+-----------+----------+----------+------------------+------------+------------+---------------+---------+---------+-------------+----------+---------
 (0 rows)
 
