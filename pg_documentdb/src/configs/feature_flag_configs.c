@@ -189,6 +189,12 @@ bool ForceCollStatsDataCollection = DEFAULT_FORCE_COLL_STATS_DATA_COLLECTION;
 #define DEFAULT_ENABLE_ID_INDEX_PUSHDOWN true
 bool EnableIdIndexPushdown = DEFAULT_ENABLE_ID_INDEX_PUSHDOWN;
 
+/* Remove after 111*/
+#define DEFAULT_USE_LOOKUP_NEW_PROJECT_INLINE_METHOD true
+bool EnableUseLookupNewProjectInlineMethod = DEFAULT_USE_LOOKUP_NEW_PROJECT_INLINE_METHOD;
+#define DEFAULT_USE_FOREIGN_KEY_LOOKUP_INLINE true
+bool EnableUseForeignKeyLookupInline = DEFAULT_USE_FOREIGN_KEY_LOOKUP_INLINE;
+
 
 /*
  * SECTION: Let support feature flags
@@ -705,5 +711,21 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether to enable new unique hash equality implementation."),
 		NULL, &EnableCompositeUniqueHash,
 		DEFAULT_ENABLE_COMPOSITE_UNIQUE_HASH,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableUseLookupNewProjectInlineMethod", newGucPrefix),
+		gettext_noop(
+			"Whether to use new inline method for $project in $lookup."),
+		NULL, &EnableUseLookupNewProjectInlineMethod,
+		DEFAULT_USE_LOOKUP_NEW_PROJECT_INLINE_METHOD,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableUseForeignKeyLookupInline", newGucPrefix),
+		gettext_noop(
+			"Whether to use foreign key for lookup inline method."),
+		NULL, &EnableUseForeignKeyLookupInline,
+		DEFAULT_USE_FOREIGN_KEY_LOOKUP_INLINE,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }

@@ -81,6 +81,7 @@ extern bool EnableIndexOrderbyPushdown;
 extern bool EnableConversionStreamableToSingleBatch;
 extern bool EnableFindProjectionAfterOffset;
 extern bool EnableNewCountAggregates;
+extern bool EnableUseLookupNewProjectInlineMethod;
 
 /* GUC to config tdigest compression */
 extern int TdigestCompressionAccuracy;
@@ -228,8 +229,10 @@ static bool RequiresPersistentCursorFalseNoSingleRow(const bson_value_t *pipelin
 static bool RequiresPersistentCursorTrueSingleRow(const bson_value_t *pipelineValue,
 												  bool *isSingleRowResult);
 
-static bool CanInlineLookupStageProjection(const bson_value_t *stageValue, const
-										   StringView *lookupPath, bool hasLet);
+static bool CanInlineLookupStageSetAddFields(const bson_value_t *stageValue, const
+											 StringView *lookupPath, bool hasLet);
+static bool CanInlineLookupStageProject(const bson_value_t *stageValue, const
+										StringView *lookupPath, bool hasLet);
 static bool CanInlineLookupStageUnset(const bson_value_t *stageValue, const
 									  StringView *lookupPath, bool hasLet);
 static bool CanInlineLookupStageUnwind(const bson_value_t *stageValue, const
@@ -308,7 +311,7 @@ static const AggregationStageDefinition StageDefinitions[] =
 		.stage = "$addFields",
 		.mutateFunc = &HandleAddFields,
 		.requiresPersistentCursor = &RequiresPersistentCursorFalse,
-		.canInlineLookupStageFunc = &CanInlineLookupStageProjection,
+		.canInlineLookupStageFunc = &CanInlineLookupStageSetAddFields,
 		.preservesStableSortOrder = true,
 		.canHandleAgnosticQueries = false,
 		.isProjectTransform = true,
@@ -639,7 +642,7 @@ static const AggregationStageDefinition StageDefinitions[] =
 		.stage = "$project",
 		.mutateFunc = &HandleProject,
 		.requiresPersistentCursor = &RequiresPersistentCursorFalse,
-		.canInlineLookupStageFunc = &CanInlineLookupStageProjection,
+		.canInlineLookupStageFunc = &CanInlineLookupStageProject,
 
 		/* Project does not change the output format */
 		.preservesStableSortOrder = true,
@@ -742,7 +745,7 @@ static const AggregationStageDefinition StageDefinitions[] =
 		.stage = "$set",
 		.mutateFunc = &HandleAddFields,
 		.requiresPersistentCursor = &RequiresPersistentCursorFalse,
-		.canInlineLookupStageFunc = &CanInlineLookupStageProjection,
+		.canInlineLookupStageFunc = &CanInlineLookupStageSetAddFields,
 		.preservesStableSortOrder = true,
 		.canHandleAgnosticQueries = false,
 		.isProjectTransform = true,
@@ -7577,8 +7580,8 @@ CanInlineLookupStageMatch(const bson_value_t *stageValue, const
  * We can probably do better but that is left as an exercise for later.
  */
 static bool
-CanInlineLookupStageProjection(const bson_value_t *stageValue, const
-							   StringView *lookupPath, bool hasLet)
+CanInlineLookupStageSetAddFields(const bson_value_t *stageValue, const
+								 StringView *lookupPath, bool hasLet)
 {
 	if (stageValue->value_type != BSON_TYPE_DOCUMENT)
 	{
@@ -7601,6 +7604,139 @@ CanInlineLookupStageProjection(const bson_value_t *stageValue, const
 		{
 			return false;
 		}
+	}
+
+	return true;
+}
+
+
+/*
+ * Helper for a $project stage on whether it can be inlined for a $lookup.
+ * Can be inlined if all the $project fields does not exclude or overwrite the lookup path.
+ */
+static bool
+CanInlineLookupStageProject(const bson_value_t *stageValue, const
+							StringView *lookupPath, bool hasLet)
+{
+	if (!EnableUseLookupNewProjectInlineMethod)
+	{
+		return CanInlineLookupStageSetAddFields(stageValue, lookupPath, hasLet);
+	}
+
+	if (stageValue->value_type != BSON_TYPE_DOCUMENT)
+	{
+		return false;
+	}
+
+	if (hasLet)
+	{
+		return false;
+	}
+
+	bson_iter_t projectIter;
+	BsonValueInitIterator(stageValue, &projectIter);
+
+	bool hasInclusion = false;
+	bool hasExclusion = false;
+	bool foundMatchInInclusion = false;
+	bool foundMatchInExclusion = false;
+	bool isIdModifiedorExcluded = false;
+	bool isJoinOnIdField = StringViewEqualsCString(lookupPath, "_id");
+
+	while (bson_iter_next(&projectIter))
+	{
+		const StringView keyView = bson_iter_key_string_view(&projectIter);
+		const bson_value_t *value = bson_iter_value(&projectIter);
+
+		StringView keyViewPrefix = StringViewFindPrefix(&keyView, '.');
+		if (keyViewPrefix.length != 0 && StringViewEquals(&keyViewPrefix, lookupPath))
+		{
+			/* it's a dotted projection and both prefix are matching so we safely return false */
+			/* TODO: We can probably do better but that is left as an exercise for later. */
+			return false;
+		}
+
+		/* handle _id cases */
+		if (StringViewEqualsCString(&keyView, "_id"))
+		{
+			if (!isJoinOnIdField)
+			{
+				/* join is not on _id so we skip */
+				continue;
+			}
+
+			if (BsonValueIsNumberOrBool(value))
+			{
+				/* join is on _id and excluded */
+				if (BsonValueAsInt32(value) == 0)
+				{
+					isIdModifiedorExcluded = true;
+				}
+			}
+			else
+			{
+				/* join is on _id and modified */
+				isIdModifiedorExcluded = true;
+			}
+			continue;
+		}
+
+		if (BsonValueIsNumberOrBool(value))
+		{
+			if (BsonValueAsInt32(value) == 0)
+			{
+				hasExclusion = true;
+
+				if (StringViewEquals(&keyView, lookupPath))
+				{
+					foundMatchInExclusion = true;
+				}
+			}
+			else
+			{
+				hasInclusion = true;
+
+				if (StringViewEquals(&keyView, lookupPath))
+				{
+					foundMatchInInclusion = true;
+				}
+			}
+		}
+		else
+		{
+			/* If a projection assigns a value (not 1, 0, true, or false) to a field */
+			/* that's used in the join, we cannot inline it as it would overwrite the join field. */
+			hasInclusion = true;
+			if (StringViewEquals(&keyView, lookupPath))
+			{
+				return false;
+			}
+		}
+
+		if (hasInclusion && hasExclusion)
+		{
+			/* Mixed inclusion and exclusion, cannot inline */
+			/* Can we do better fail early, but that is left as an exercise for later.*/
+			return false;
+		}
+	}
+
+	if (isJoinOnIdField && isIdModifiedorExcluded)
+	{
+		/* join is on _id and _id is either excluded or modified */
+		return false;
+	}
+
+	if (hasExclusion && foundMatchInExclusion)
+	{
+		/* Excluding the lookup path */
+		return false;
+	}
+
+	if (hasInclusion && !foundMatchInInclusion)
+	{
+		/* Inclusion but path does not exist */
+		return false;
 	}
 
 	return true;

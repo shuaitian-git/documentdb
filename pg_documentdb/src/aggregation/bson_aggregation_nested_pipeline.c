@@ -58,6 +58,7 @@ extern bool EnableLookupIdJoinOptimizationOnCollation;
 extern bool EnableNowSystemVariable;
 extern bool EnableLookupInnerJoin;
 extern bool EnableOperatorVariablesInLookup;
+extern bool EnableUseForeignKeyLookupInline;
 
 /*
  * Struct having parsed view of the
@@ -2206,19 +2207,25 @@ OptimizeLookup(LookupArgs *lookupArgs,
 	}
 	else
 	{
-		StringView localFieldValue = lookupArgs->localField;
+		StringView lookupJoinPipelineField = lookupArgs->localField;
 
-		StringView prefix = StringViewFindPrefix(&localFieldValue, '.');
+		/* This fix is controlled by a GUC so we can safely falback to existing path by disabling it */
+		if (EnableUseForeignKeyLookupInline)
+		{
+			lookupJoinPipelineField = lookupArgs->foreignField;
+		}
+
+		StringView prefix = StringViewFindPrefix(&lookupJoinPipelineField, '.');
 		if (prefix.length != 0)
 		{
-			localFieldValue = prefix;
+			lookupJoinPipelineField = prefix;
 		}
 
 		bool isPipelineValid = false;
 		pgbson *inlinedPipeline = NULL;
 		pgbson *nonInlinedPipeline = NULL;
 		bool canInlinePipelineCore =
-			CanInlineLookupPipeline(&lookupArgs->pipeline, &localFieldValue,
+			CanInlineLookupPipeline(&lookupArgs->pipeline, &lookupJoinPipelineField,
 									optimizationArgs->hasLet,
 									&inlinedPipeline, &nonInlinedPipeline,
 									&isPipelineValid);
