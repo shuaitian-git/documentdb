@@ -100,6 +100,9 @@ bool EnableIdIndexCustomCostFunction = DEFAULT_ENABLE_ID_INDEX_CUSTOM_COST_FUNCT
 #define DEFAULT_ENABLE_ORDER_BY_ID_ON_COST false
 bool EnableOrderByIdOnCostFunction = DEFAULT_ENABLE_ORDER_BY_ID_ON_COST;
 
+#define DEFAULT_ENABLE_COMPOSITE_PARALLEL_INDEX_SCAN false
+bool EnableCompositeParallelIndexScan = DEFAULT_ENABLE_COMPOSITE_PARALLEL_INDEX_SCAN;
+
 /* Note: this is a long term feature flag since we need to validate compatiblity
  * in mixed mode for older indexes - once this is
  * enabled by default - please move this to testing_configs.
@@ -659,6 +662,14 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable index terms that are value only."),
 		NULL, &EnableOrderByIdOnCostFunction, DEFAULT_ENABLE_ORDER_BY_ID_ON_COST,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableCompositeParallelIndexScan", newGucPrefix),
+		gettext_noop(
+			"Whether to enable parallel index scans for composite indexes."),
+		NULL, &EnableCompositeParallelIndexScan,
+		DEFAULT_ENABLE_COMPOSITE_PARALLEL_INDEX_SCAN,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

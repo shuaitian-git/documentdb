@@ -20,6 +20,7 @@
 #include <storage/lmgr.h>
 #include <optimizer/planner.h>
 #include "optimizer/pathnode.h"
+#include <optimizer/cost.h>
 #include <nodes/nodes.h>
 #include <nodes/makefuncs.h>
 #include <nodes/nodeFuncs.h>
@@ -136,6 +137,8 @@ extern bool ForceBitmapScanForLookup;
 extern bool EnableIndexOnlyScan;
 extern bool EnableCursorsOnAggregationQueryRewrite;
 extern bool EnableIdIndexCustomCostFunction;
+extern bool EnableCompositeParallelIndexScan;
+extern bool ForceParallelScanIfAvailable;
 
 planner_hook_type ExtensionPreviousPlannerHook = NULL;
 set_rel_pathlist_hook_type ExtensionPreviousSetRelPathlistHook = NULL;
@@ -580,6 +583,16 @@ ExtensionRelPathlistHookCoreNew(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		/* Finally: Add the custom scan wrapper for explain plans */
 		AddExplainCustomScanWrapper(root, rel, rte);
 	}
+
+	if (ForceParallelScanIfAvailable)
+	{
+		ListCell *cell;
+		foreach(cell, rel->pathlist)
+		{
+			Path *path = lfirst(cell);
+			path->total_cost += disable_cost;
+		}
+	}
 }
 
 
@@ -786,12 +799,22 @@ ExtensionGetRelationInfoHookCore(PlannerInfo *root, Oid relationObjectId,
 	}
 
 	/* In this path btree will be first if any */
-	if (EnableIdIndexCustomCostFunction && list_length(rel->indexlist) > 0)
+	if (list_length(rel->indexlist) > 0)
 	{
-		IndexOptInfo *firstIndex = linitial(rel->indexlist);
-		if (firstIndex->relam == BTREE_AM_OID)
+		ListCell *cell;
+		foreach(cell, rel->indexlist)
 		{
-			firstIndex->amcostestimate = documentdb_btcostestimate;
+			IndexOptInfo *firstIndex = lfirst(cell);
+			if (EnableIdIndexCustomCostFunction && firstIndex->relam == BTREE_AM_OID)
+			{
+				firstIndex->amcostestimate = documentdb_btcostestimate;
+			}
+			else if (firstIndex->ncolumns == 1 &&
+					 IsCompositeOpFamilyOidWithParallelSupport(firstIndex->relam,
+															   firstIndex->opfamily[0]))
+			{
+				firstIndex->amcanparallel = EnableCompositeParallelIndexScan;
+			}
 		}
 	}
 
