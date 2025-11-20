@@ -536,7 +536,8 @@ ExtensionRelPathlistHookCoreNew(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	bool updatedPaths = false;
 	if (indexContext.hasStreamingContinuationScan)
 	{
-		updatedPaths = UpdatePathsWithExtensionStreamingCursorPlans(root, rel, rte);
+		updatedPaths = UpdatePathsWithExtensionStreamingCursorPlans(root, rel, rte,
+																	&indexContext);
 	}
 
 	/* Not a streaming cursor scenario.

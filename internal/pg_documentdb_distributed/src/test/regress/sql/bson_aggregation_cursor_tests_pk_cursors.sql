@@ -117,3 +117,30 @@ EXECUTE drain_find_query('{ "find": "aggregation_cursor_pk", "projection": { "_i
 -- continues to work with filters
 EXECUTE drain_find_query('{ "find": "aggregation_cursor_pk", "projection": { "_id": 1 }, "filter": { "_id": { "$gt": 2, "$lt": 8 } }, "batchSize": 2 }', '{ "getMore": { "$numberLong": "534" }, "collection": "aggregation_cursor_pk", "batchSize": 2 }');
 ROLLBACK;
+
+
+-- we create a contrived scenario where we create _ids that are ~100b each and insert 1000 docs in there. This will ensure that
+-- we have many pages to scan for the _id.
+DO $$
+DECLARE i int;
+BEGIN
+FOR i IN 1..1000 LOOP
+PERFORM documentdb_api.insert_one('pkcursordb', 'aggregation_cursor_pk_sk2', FORMAT('{ "_id": "%s%s%s", "sk": "skval", "a": "aval", "c": [ "c", "d" ] }', CASE WHEN i >= 10 AND i < 100 THEN '0' WHEN i < 10 THEN '00' ELSE '' END, i, repeat('a', 100))::documentdb_core.bson);
+END LOOP;
+END;
+$$;
+DROP TABLE firstPageResponse;
+
+CREATE TEMP TABLE firstPageResponse AS
+SELECT bson_dollar_project(cursorpage, '{ "cursor.firstBatch._id": 1, "cursor.id": 1 }'), continuation, persistconnection, cursorid FROM
+    find_cursor_first_page(database => 'pkcursordb', commandSpec => '{ "find": "aggregation_cursor_pk_sk2", "projection": { "_id": 1 }, "filter": { "_id": { "$gt": "002", "$lt": "015" } }, "batchSize": 2  }', cursorId => 4294967294);
+
+SELECT continuation AS r1_continuation FROM firstPageResponse \gset
+
+-- run the query once, this also fills the buffers and validates the index qual
+EXPLAIN (VERBOSE OFF, COSTS OFF, BUFFERS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_getmore('pkcursordb',
+    '{ "getMore": { "$numberLong": "4294967294" }, "collection": "aggregation_cursor_pk_sk2", "batchSize": 20 }', :'r1_continuation');
+
+-- now rerun with buffers on (there should be no I/O but it should only load as many index pages as we want rows in the shared hit)
+EXPLAIN (VERBOSE OFF, COSTS OFF, BUFFERS ON, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_getmore('pkcursordb',
+    '{ "getMore": { "$numberLong": "4294967294" }, "collection": "aggregation_cursor_pk_sk2", "batchSize": 20 }', :'r1_continuation');

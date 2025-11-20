@@ -145,7 +145,7 @@ EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_find('pkcu
 -- the getmore should still work and use the _id index
 EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_getmore('pkcursordb',
     '{ "getMore": { "$numberLong": "4294967294" }, "collection": "aggregation_cursor_pk", "batchSize": 1 }', :'r1_continuation');
-                                                                                                                                                                                                                          QUERY PLAN                                                                                                                                                                                                                          
+                                                                                                                                                                                                                                               QUERY PLAN                                                                                                                                                                                                                                                
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiScan)
    Output: documentdb_api_internal.bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" } }'::bson, '{ "_id" : { "$gt" : { "$numberInt" : "3" }, "$lt" : { "$numberInt" : "8" } } }'::bson, '{ "now" : NOW_SYS_VARIABLE }'::bson), documentdb_api_internal.current_cursor_state(document)
@@ -154,7 +154,7 @@ EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_getmore('p
    Continuation: { "table_name" : "documents_401_40002", "value" : { "$binary" : { "base64" : "AAAAAAUA", "subType" : "00" } }, "pk" : [ 401, { "" : 5 } ] }
    ->  Index Scan using _id_ on documentdb_data.documents_401_40002 collection
          Output: shard_key_value, object_id, document
-         Index Cond: ((ROW(collection.shard_key_value, collection.object_id) > ROW('401'::bigint, '{ "" : { "$numberInt" : "5" } }'::bson)) AND (collection.object_id > '{ "" : { "$numberInt" : "3" } }'::bson) AND (collection.object_id <= '{ "" : { "$numberDouble" : "Infinity" } }'::bson) AND (collection.object_id < '{ "" : { "$numberInt" : "8" } }'::bson) AND (collection.object_id >= '{ "" : { "$numberDouble" : "-Infinity" } }'::bson))
+         Index Cond: ((collection.shard_key_value = '401'::bigint) AND (ROW(collection.shard_key_value, collection.object_id) > ROW('401'::bigint, '{ "" : { "$numberInt" : "5" } }'::bson)) AND (collection.object_id > '{ "" : { "$numberInt" : "3" } }'::bson) AND (collection.object_id <= '{ "" : { "$numberDouble" : "Infinity" } }'::bson) AND (collection.object_id < '{ "" : { "$numberInt" : "8" } }'::bson) AND (collection.object_id >= '{ "" : { "$numberDouble" : "-Infinity" } }'::bson))
          Filter: documentdb_api_internal.cursor_state(collection.document, '{ "continuation" : [ { "table_name" : "documents_401_40002", "value" : { "$binary" : { "base64" : "AAAAAAUA", "subType" : "00" } }, "pk" : [ { "$numberLong" : "401" }, { "" : { "$numberInt" : "5" } } ] } ], "getpage_batchCount" : { "$numberInt" : "2" }, "getpage_batchSizeHint" : { "$numberInt" : "16777216" }, "getpage_batchSizeAttr" : { "$numberInt" : "1" } }'::bson)
 (9 rows)
 
@@ -186,7 +186,7 @@ EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_find('pkcu
 -- the getmore should still work and use the _id index
 EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_getmore('pkcursordb',
     '{ "getMore": { "$numberLong": "4294967294" }, "collection": "aggregation_cursor_pk", "batchSize": 1 }', :'r1_continuation');
-                                                                                                                                                                                                                          QUERY PLAN                                                                                                                                                                                                                          
+                                                                                                                                                                                                                                               QUERY PLAN                                                                                                                                                                                                                                                
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiScan)
    Output: documentdb_api_internal.bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" } }'::bson, '{ "_id" : { "$gt" : { "$numberInt" : "3" }, "$lt" : { "$numberInt" : "8" } } }'::bson, '{ "now" : NOW_SYS_VARIABLE }'::bson), documentdb_api_internal.current_cursor_state(document)
@@ -195,7 +195,7 @@ EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_getmore('p
    Continuation: { "table_name" : "documents_401_40002", "value" : { "$binary" : { "base64" : "AAAAAAUA", "subType" : "00" } }, "pk" : [ 401, { "" : 5 } ] }
    ->  Index Scan using _id_ on documentdb_data.documents_401_40002 collection
          Output: shard_key_value, object_id, document
-         Index Cond: ((ROW(collection.shard_key_value, collection.object_id) > ROW('401'::bigint, '{ "" : { "$numberInt" : "5" } }'::bson)) AND (collection.object_id > '{ "" : { "$numberInt" : "3" } }'::bson) AND (collection.object_id <= '{ "" : { "$numberDouble" : "Infinity" } }'::bson) AND (collection.object_id < '{ "" : { "$numberInt" : "8" } }'::bson) AND (collection.object_id >= '{ "" : { "$numberDouble" : "-Infinity" } }'::bson))
+         Index Cond: ((collection.shard_key_value = '401'::bigint) AND (ROW(collection.shard_key_value, collection.object_id) > ROW('401'::bigint, '{ "" : { "$numberInt" : "5" } }'::bson)) AND (collection.object_id > '{ "" : { "$numberInt" : "3" } }'::bson) AND (collection.object_id <= '{ "" : { "$numberDouble" : "Infinity" } }'::bson) AND (collection.object_id < '{ "" : { "$numberInt" : "8" } }'::bson) AND (collection.object_id >= '{ "" : { "$numberDouble" : "-Infinity" } }'::bson))
          Filter: documentdb_api_internal.cursor_state(collection.document, '{ "continuation" : [ { "table_name" : "documents_401_40002", "value" : { "$binary" : { "base64" : "AAAAAAUA", "subType" : "00" } }, "pk" : [ { "$numberLong" : "401" }, { "" : { "$numberInt" : "5" } } ] } ], "getpage_batchCount" : { "$numberInt" : "2" }, "getpage_batchSizeHint" : { "$numberInt" : "16777216" }, "getpage_batchSizeAttr" : { "$numberInt" : "1" } }'::bson)
 (9 rows)
 
@@ -256,3 +256,49 @@ EXECUTE drain_find_query('{ "find": "aggregation_cursor_pk", "projection": { "_i
 (3 rows)
 
 ROLLBACK;
+-- we create a contrived scenario where we create _ids that are ~100b each and insert 1000 docs in there. This will ensure that
+-- we have many pages to scan for the _id.
+DO $$
+DECLARE i int;
+BEGIN
+FOR i IN 1..1000 LOOP
+PERFORM documentdb_api.insert_one('pkcursordb', 'aggregation_cursor_pk_sk2', FORMAT('{ "_id": "%s%s%s", "sk": "skval", "a": "aval", "c": [ "c", "d" ] }', CASE WHEN i >= 10 AND i < 100 THEN '0' WHEN i < 10 THEN '00' ELSE '' END, i, repeat('a', 100))::documentdb_core.bson);
+END LOOP;
+END;
+$$;
+NOTICE:  creating collection
+DROP TABLE firstPageResponse;
+CREATE TEMP TABLE firstPageResponse AS
+SELECT bson_dollar_project(cursorpage, '{ "cursor.firstBatch._id": 1, "cursor.id": 1 }'), continuation, persistconnection, cursorid FROM
+    find_cursor_first_page(database => 'pkcursordb', commandSpec => '{ "find": "aggregation_cursor_pk_sk2", "projection": { "_id": 1 }, "filter": { "_id": { "$gt": "002", "$lt": "015" } }, "batchSize": 2  }', cursorId => 4294967294);
+SELECT continuation AS r1_continuation FROM firstPageResponse \gset
+-- run the query once, this also fills the buffers and validates the index qual
+EXPLAIN (VERBOSE OFF, COSTS OFF, BUFFERS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_getmore('pkcursordb',
+    '{ "getMore": { "$numberLong": "4294967294" }, "collection": "aggregation_cursor_pk_sk2", "batchSize": 20 }', :'r1_continuation');
+                                                                                                                                                                                                                                                              QUERY PLAN                                                                                                                                                                                                                                                               
+---------------------------------------------------------------------
+ Custom Scan (DocumentDBApiScan) (actual rows=11 loops=1)
+   Page Row Count: 40 rows
+   Page Size Hint: 16777216 bytes
+   Continuation: { "table_name" : "documents_402_40007", "value" : { "$binary" : { "base64" : "AAAAAAMA", "subType" : "00" } }, "pk" : [ 402, { "" : "003aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+   ->  Index Scan using _id_ on documents_402_40007 collection (actual rows=11 loops=1)
+         Index Cond: ((shard_key_value = '402'::bigint) AND (ROW(shard_key_value, object_id) > ROW('402'::bigint, '{ "" : "003aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }'::bson)) AND (object_id > '{ "" : "002" }'::bson) AND (object_id < '{ "" : {  } }'::bson) AND (object_id < '{ "" : "015" }'::bson) AND (object_id >= '{ "" : "" }'::bson))
+         Filter: documentdb_api_internal.cursor_state(document, '{ "continuation" : [ { "table_name" : "documents_402_40007", "value" : { "$binary" : { "base64" : "AAAAAAMA", "subType" : "00" } }, "pk" : [ { "$numberLong" : "402" }, { "" : "003aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] } ], "getpage_batchCount" : { "$numberInt" : "40" }, "getpage_batchSizeHint" : { "$numberInt" : "16777216" }, "getpage_batchSizeAttr" : { "$numberInt" : "1" } }'::bson)
+(7 rows)
+
+-- now rerun with buffers on (there should be no I/O but it should only load as many index pages as we want rows in the shared hit)
+EXPLAIN (VERBOSE OFF, COSTS OFF, BUFFERS ON, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_getmore('pkcursordb',
+    '{ "getMore": { "$numberLong": "4294967294" }, "collection": "aggregation_cursor_pk_sk2", "batchSize": 20 }', :'r1_continuation');
+                                                                                                                                                                                                                                                              QUERY PLAN                                                                                                                                                                                                                                                               
+---------------------------------------------------------------------
+ Custom Scan (DocumentDBApiScan) (actual rows=11 loops=1)
+   Page Row Count: 40 rows
+   Page Size Hint: 16777216 bytes
+   Continuation: { "table_name" : "documents_402_40007", "value" : { "$binary" : { "base64" : "AAAAAAMA", "subType" : "00" } }, "pk" : [ 402, { "" : "003aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] }
+   Buffers: shared hit=3
+   ->  Index Scan using _id_ on documents_402_40007 collection (actual rows=11 loops=1)
+         Index Cond: ((shard_key_value = '402'::bigint) AND (ROW(shard_key_value, object_id) > ROW('402'::bigint, '{ "" : "003aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }'::bson)) AND (object_id > '{ "" : "002" }'::bson) AND (object_id < '{ "" : {  } }'::bson) AND (object_id < '{ "" : "015" }'::bson) AND (object_id >= '{ "" : "" }'::bson))
+         Filter: documentdb_api_internal.cursor_state(document, '{ "continuation" : [ { "table_name" : "documents_402_40007", "value" : { "$binary" : { "base64" : "AAAAAAMA", "subType" : "00" } }, "pk" : [ { "$numberLong" : "402" }, { "" : "003aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } ] } ], "getpage_batchCount" : { "$numberInt" : "40" }, "getpage_batchSizeHint" : { "$numberInt" : "16777216" }, "getpage_batchSizeAttr" : { "$numberInt" : "1" } }'::bson)
+         Buffers: shared hit=3
+(9 rows)
+

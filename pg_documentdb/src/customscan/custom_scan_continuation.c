@@ -617,8 +617,48 @@ GetPrimaryKeyContinuationIndexPath(PlannerInfo *root, RelOptInfo *rel,
 											 inputPath->indexclauses);
 	if (firstClause->rinfo != rowCompareRestrictInfo)
 	{
-		ereport(ERROR, (errmsg(
-							"Unexpected index clause found when resuming primary key scan")));
+		/* The first one can be shard_key_value = <value> */
+		IndexClause *secondClause = lsecond_node(IndexClause, inputPath->indexclauses);
+		if (secondClause->rinfo != rowCompareRestrictInfo)
+		{
+			ereport(ERROR, (errmsg(
+								"Unexpected index clause found when resuming primary key scan")));
+		}
+
+		/* Validate the first one is on the shard key explicitly: It must be a non rowCompareExpr
+		 * on the shard_key.
+		 */
+		if (firstClause->indexcol != 0 || firstClause->indexcols != NIL)
+		{
+			ereport(ERROR, (errmsg(
+								"Unexpected index clause on the first clause found when resuming primary key scan")));
+		}
+
+		if (IsA(firstClause->rinfo->clause, OpExpr))
+		{
+			/* Assert that we want an equality here */
+			OpExpr *clauseExpr = (OpExpr *) firstClause->rinfo->clause;
+			if (clauseExpr->opno != BigintEqualOperatorId())
+			{
+				ereport(ERROR, (errmsg(
+									"Unexpected index clause on the first clause Expecting an equality on shard key")));
+			}
+		}
+		else if (IsA(firstClause->rinfo->clause, ScalarArrayOpExpr))
+		{
+			/* Assert that we want an equality here */
+			ScalarArrayOpExpr *saop = (ScalarArrayOpExpr *) firstClause->rinfo->clause;
+			if (saop->opno != BigintEqualOperatorId())
+			{
+				ereport(ERROR, (errmsg(
+									"Unexpected index clause on the first clause Expecting an equality on shard key")));
+			}
+		}
+		else
+		{
+			ereport(ERROR, (errmsg(
+								"Unexpected index clause on the first clause Expecting an equality on shard key")));
+		}
 	}
 
 	/* Now trim restrict info clauses that are already satisfied by the index path. */
@@ -644,7 +684,8 @@ GetPrimaryKeyContinuationIndexPath(PlannerInfo *root, RelOptInfo *rel,
  */
 bool
 UpdatePathsWithExtensionStreamingCursorPlans(PlannerInfo *root, RelOptInfo *rel,
-											 RangeTblEntry *rte)
+											 RangeTblEntry *rte,
+											 ReplaceExtensionFunctionContext *context)
 {
 	/*
 	 *  Check if we have a non volatile sort key (aka order by random()).
@@ -684,11 +725,23 @@ UpdatePathsWithExtensionStreamingCursorPlans(PlannerInfo *root, RelOptInfo *rel,
 	/* first look for a continuation function in the base quals */
 	pgbson *continuation = NULL;
 	bool hasContinuation = false;
+	RestrictInfo *unshardedShardKeyRestrictInfo = NULL;
 	ListCell *cell;
 
 	foreach(cell, rel->baserestrictinfo)
 	{
 		RestrictInfo *rinfo = lfirst_node(RestrictInfo, cell);
+
+		/* Track the unsharded shard_key_value expr */
+		if (EnablePrimaryKeyCursorScan &&
+			context->inputData.isShardQuery &&
+			context->inputData.collectionId > 0 &&
+			IsOpExprShardKeyForUnshardedCollections(rinfo->clause,
+													context->inputData.collectionId))
+		{
+			unshardedShardKeyRestrictInfo = rinfo;
+		}
+
 		if (IsA(rinfo->clause, FuncExpr))
 		{
 			FuncExpr *expr = (FuncExpr *) rinfo->clause;
@@ -958,6 +1011,21 @@ UpdatePathsWithExtensionStreamingCursorPlans(PlannerInfo *root, RelOptInfo *rel,
 	 * tuples and we can't allow parallel scan to reorder tuples.
 	 */
 	rel->partial_pathlist = NIL;
+
+	/* We're responsible for trimming the shard_key_value expr here. */
+	if (EnablePrimaryKeyCursorScan && unshardedShardKeyRestrictInfo != NULL)
+	{
+		if (list_length(rel->baserestrictinfo) == 1)
+		{
+			rel->baserestrictinfo = NIL;
+		}
+		else
+		{
+			rel->baserestrictinfo = list_delete(rel->baserestrictinfo,
+												unshardedShardKeyRestrictInfo);
+		}
+	}
+
 	return true;
 }
 
