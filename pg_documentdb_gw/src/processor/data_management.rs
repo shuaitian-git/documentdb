@@ -36,7 +36,7 @@ pub async fn process_delete(
         .await?;
 
     PgResponse::new(delete_rows)
-        .transform_write_errors(connection_context)
+        .transform_write_errors(connection_context, request_context.activity_id)
         .await
 }
 
@@ -63,7 +63,7 @@ pub async fn process_insert(
         .await?;
 
     PgResponse::new(insert_rows)
-        .transform_write_errors(connection_context)
+        .transform_write_errors(connection_context, request_context.activity_id)
         .await
 }
 
@@ -89,7 +89,7 @@ pub async fn process_update(
         .await?;
 
     PgResponse::new(update_rows)
-        .transform_write_errors(connection_context)
+        .transform_write_errors(connection_context, request_context.activity_id)
         .await
 }
 
