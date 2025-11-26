@@ -29,7 +29,7 @@ sed -i '/internal/d' Makefile
 mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 
 # Get the package version from the spec file
-PACKAGE_VERSION=$(grep "^Version:" rpm/documentdb.spec | awk '{print $2}')
+PACKAGE_VERSION=$(grep "^Version:" rpm/documentdb.spec | awk '{print $2}' | tr -d '\r')
 
 # Construct the package name
 PACKAGE_NAME="postgresql${POSTGRES_VERSION}-documentdb"
