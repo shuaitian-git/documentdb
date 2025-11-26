@@ -38,7 +38,7 @@ RUN if [ -n "${TARGETARCH}" ] && ( [ "${TARGETARCH}" = "arm64" ] || [ "${TARGETA
     echo "Setting up PGDG repo for RHEL 8 (arch=${ARCH})" && \
     dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm && \
     dnf -qy module disable postgresql && \
-    dnf -y install postgresql${POSTGRES_VERSION} \
+    dnf -y install --allowerasing postgresql${POSTGRES_VERSION} \
     postgresql${POSTGRES_VERSION}-devel \
     postgresql${POSTGRES_VERSION}-server \
     postgresql${POSTGRES_VERSION}-contrib \

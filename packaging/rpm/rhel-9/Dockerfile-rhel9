@@ -66,7 +66,7 @@ RUN dnf -y install \
         clang-devel \
         llvm-devel
 
-# PostgreSQL 17+ expects LLVM tools in /usr/lib64/llvm20/bin
+# PostgreSQL 16+ with JIT enabled expects LLVM tools in /usr/lib64/llvm20/bin
 # On RHEL 9, LLVM binaries are in /usr/bin, so create a simple symlink
 RUN mkdir -p /usr/lib64/llvm20 && ln -s /usr/bin /usr/lib64/llvm20/bin
 
