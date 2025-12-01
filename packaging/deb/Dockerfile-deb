@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-${POSTGRES_VERSION}-cron \
     postgresql-${POSTGRES_VERSION}-pgvector \
     postgresql-${POSTGRES_VERSION}-postgis-3 \
-    postgresql-${POSTGRES_VERSION}-rum \
+    $(if [ "${POSTGRES_VERSION}" -lt 18 ]; then echo "postgresql-${POSTGRES_VERSION}-rum"; fi) \
     devscripts \
     debhelper \
     dpkg-dev \
@@ -69,6 +69,7 @@ COPY . /build
 COPY packaging/deb/common /build/debian
 RUN sed -i "s/POSTGRES_VERSION/${POSTGRES_VERSION}/g" /build/debian/control
 RUN sed -i "s/DOCUMENTDB_VERSION/${DOCUMENTDB_VERSION}/g" /build/debian/changelog
+RUN if [ "${POSTGRES_VERSION}" -ge 18 ]; then sed -i "s/, postgresql-${POSTGRES_VERSION}-rum//" /build/debian/control || true; fi
 
 COPY packaging/deb/packaging-entrypoint.sh /usr/local/bin/packaging-entrypoint.sh
 

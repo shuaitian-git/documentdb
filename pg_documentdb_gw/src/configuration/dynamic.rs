@@ -27,6 +27,7 @@ pub trait DynamicConfiguration: Send + Sync + Debug {
     fn topology(&self) -> RawBson;
     async fn enable_developer_explain(&self) -> bool;
     async fn max_connections(&self) -> usize;
+    async fn allow_transaction_snapshot(&self) -> bool;
 
     // Needed to downcast to concrete type
     fn as_any(&self) -> &dyn std::any::Any;

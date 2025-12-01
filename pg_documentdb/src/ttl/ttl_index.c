@@ -330,9 +330,8 @@ delete_expired_rows(PG_FUNCTION_ARGS)
 											SPI_tuptable->tupdesc, 8,
 											&isNull);
 
-				ttlIndexEntry->indexName = pstrdup(TextDatumGetCString(resultDatum));
-
 				oldContext = MemoryContextSwitchTo(priorMemoryContext);
+				ttlIndexEntry->indexName = pstrdup(TextDatumGetCString(resultDatum));
 				ttlIndexEntries = lappend(ttlIndexEntries, ttlIndexEntry);
 				MemoryContextSwitchTo(oldContext);
 			}

@@ -41,6 +41,9 @@ typedef enum IndexOptionsType
 
 	/* This is a composite index on a path */
 	IndexOptionsType_Composite,
+
+	/* The options for the unique shard path opclass */
+	IndexOptionsType_UniqueShardPath,
 } IndexOptionsType;
 
 
@@ -125,6 +128,13 @@ typedef struct
 	int path;
 } BsonGinExclusionHashOptions;
 
+
+typedef struct
+{
+	BsonGinIndexOptionsBase base;
+	bool enableCompositeHashGeneration;
+} BsonShardPathExclusionOptions;
+
 /*
  * This is the serialized post-processed structure that holds the indexing options
  * for single path text indexes (both wildcard and non-wildcard)
@@ -177,8 +187,9 @@ bool ValidateIndexForQualifierElement(bytea *indexOptions,
 bool ValidateIndexForQualifierValue(bytea *indexOptions, Datum queryValue,
 									BsonIndexStrategy
 									strategy);
-bool ValidateIndexForQualifierPathForDollarIn(bytea *indexOptions, const
-											  StringView *queryPath);
+bool ValidateIndexForQualifierPathForEquality(bytea *indexOptions, const
+											  StringView *queryPath,
+											  BsonIndexStrategy strat);
 
 Size FillSinglePathSpec(const char *prefix, void *buffer);
 void ValidateSinglePathSpec(const char *prefix);
