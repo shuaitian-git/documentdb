@@ -1,9 +1,9 @@
 /*-------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation.  All rights reserved.
  *
- * include/planner/documentdb_plan_cache.h
+ * include/infrastructure/cursor_store.h
  *
- * Common declarations for the pg_documentdb plan cache.
+ * Common declarations for the pg_documentdb cursor store.
  *
  *-------------------------------------------------------------------------
  */
