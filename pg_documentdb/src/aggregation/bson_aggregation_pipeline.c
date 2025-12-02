@@ -5301,13 +5301,9 @@ AddSumGroupAccumulator(Query *query, const bson_value_t *accumulatorValue,
 	if (canUseBsonCountAggregate &&
 		BsonValueIsNumber(accumulatorValue))
 	{
+		/* use for counting with $sum: 1 only */
 		int64_t countValue = BsonValueAsInt64(accumulatorValue);
 		useNewCountAggregate = countValue == 1;
-	}
-	else if (canUseBsonCountAggregate &&
-			 IsBsonValueEmptyDocument(accumulatorValue))
-	{
-		useNewCountAggregate = true;
 	}
 
 	if (!useNewCountAggregate)

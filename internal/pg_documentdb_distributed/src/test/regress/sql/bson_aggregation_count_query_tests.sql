@@ -58,3 +58,20 @@ SELECT documentdb_api.shard_collection('countdb', 'countcoll', '{ "_id": "hashed
 EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {"value": {"$gt": 20}, "value": {"$lt": 150} } }');
 EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate": "countcoll", "pipeline": [{"$match": {"value": {"$gt": 20}, "value": {"$lt": 150} }}, {"$count": "c"}] }');
 EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate": "countcoll", "pipeline": [{"$match": {"value": {"$gt": 20}, "value": {"$lt": 150} }}, {"$group": {"_id": null, "count": {"$sum": 1}}}] }');
+
+-- Test $sum with empty object, null, and non-numeric values (should all result in 0)
+
+-- $sum: {}
+EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF)
+    SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate" : "countcoll", "pipeline" : [{ "$match" : { "value" : { "$gt" : 50 } } }, { "$group" : { "_id" : { "$literal" : "sumEmpty" }, "cnt" : { "$sum" : {} } } }] }');
+SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate" : "countcoll", "pipeline" : [{ "$match" : { "value" : { "$gt" : 50 } } }, { "$group" : { "_id" : { "$literal" : "sumEmpty" }, "cnt" : { "$sum" : {} } } }] }');
+
+-- $sum: null
+EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF)
+    SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate" : "countcoll", "pipeline" : [{ "$match" : { "value" : { "$gt" : 50 } } }, { "$group" : { "_id" : { "$literal" : "sumNull" }, "cnt" : { "$sum" : null } } }] }');
+SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate" : "countcoll", "pipeline" : [{ "$match" : { "value" : { "$gt" : 50 } } }, { "$group" : { "_id" : { "$literal" : "sumNull" }, "cnt" : { "$sum" : null } } }] }');
+
+-- $sum: <constant non-numeric>
+EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF)
+    SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate" : "countcoll", "pipeline" : [{ "$match" : { "value" : { "$gt" : 50 } } }, { "$group" : { "_id" : { "$literal" : "sumUtf8" }, "cnt" : { "$sum" : "constant-non-numeric" } } }] }');
+SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate" : "countcoll", "pipeline" : [{ "$match" : { "value" : { "$gt" : 50 } } }, { "$group" : { "_id" : { "$literal" : "sumUtf8" }, "cnt" : { "$sum" : "constant-non-numeric" } } }] }');
