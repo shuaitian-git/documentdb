@@ -381,14 +381,16 @@ GetMultiKeyStatusByRelAm(Oid relam)
 
 
 bool
-GetIndexSupportsBackwardsScan(Oid relam)
+GetIndexSupportsBackwardsScan(Oid relam, bool *indexCanOrder)
 {
 	const BsonIndexAmEntry *amEntry = GetBsonIndexAmEntryByIndexOid(relam);
 	if (amEntry == NULL)
 	{
+		*indexCanOrder = false;
 		return false;
 	}
 
+	*indexCanOrder = amEntry->is_order_by_supported;
 	return amEntry->is_backwards_scan_supported;
 }
 

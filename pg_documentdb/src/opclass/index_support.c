@@ -2462,14 +2462,13 @@ TraverseIndexPathForCompositeIndex(struct IndexPath *indexPath, struct PlannerIn
 		EnableIndexOrderbyPushdown &&
 		list_length(root->query_pathkeys) > 0)
 	{
-		indexCanOrder = true;
 		Relation indexRel = index_open(indexPath->indexinfo->indexoid, NoLock);
 		isMultiKeyIndex = getMultiKeyStatusFunc(indexRel);
 		index_close(indexRel, NoLock);
 	}
 
 	bool indexSupportsOrderByDesc = GetIndexSupportsBackwardsScan(
-		indexPath->indexinfo->relam);
+		indexPath->indexinfo->relam, &indexCanOrder);
 
 	int32_t pathSortOrders[INDEX_MAX_KEYS] = { 0 };
 	bool equalityPrefixes[INDEX_MAX_KEYS] = { false };
@@ -4726,8 +4725,15 @@ ProcessFullScanForOrderBy(SupportRequestIndexCondition *req, List *args)
 									&sortDirection);
 
 	int32_t querySortDirection = BsonValueAsInt32(&sortElement.bsonValue);
-	bool indexSupportsReverseSort = GetIndexSupportsBackwardsScan(req->index->relam);
+	bool indexCanOrder = false;
+	bool indexSupportsReverseSort = GetIndexSupportsBackwardsScan(req->index->relam,
+																  &indexCanOrder);
 	if (querySortDirection != sortDirection && !indexSupportsReverseSort)
+	{
+		return NULL;
+	}
+
+	if (!indexCanOrder)
 	{
 		return NULL;
 	}
