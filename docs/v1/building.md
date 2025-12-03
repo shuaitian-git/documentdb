@@ -28,7 +28,7 @@ scripts/build_and_install_with_pgrx.sh -i -d pg_documentdb_gw_host/
 ### Step 3: Start PostgreSQL and the Gateway
 
 ```bash
-scripts/start_oss_server.sh -c -g
+scripts/start_oss_server.sh -c -g -r
 ```
 
 ### Step 4: Connect and Test

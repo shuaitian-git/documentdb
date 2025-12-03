@@ -131,6 +131,8 @@ fi
 
 if [ "$useDocumentdbExtendedRum" == "true" ]; then
   preloadLibraries="$preloadLibraries, pg_documentdb_extended_rum"
+else
+  preloadLibraries="$preloadLibraries, rum"
 fi
 
 source="${BASH_SOURCE[0]}"

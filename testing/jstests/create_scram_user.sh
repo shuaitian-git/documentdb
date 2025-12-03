@@ -1,9 +1,9 @@
 #!/bin/bash
 
 ################################################################################
-# SCRAM-SHA-256 User Creation for DocumentDB/pgmongo
+# SCRAM-SHA-256 User Creation for DocumentDB
 #
-# This script creates a user with a MongoDB-compatible 28-byte SCRAM-SHA-256
+# This script creates a user with a compatible 28-byte SCRAM-SHA-256
 # salt, which is required for legacy mongo shell authentication.
 ################################################################################
 
@@ -13,7 +13,7 @@ set -e # Exit on error
 # Configuration
 # ============================================================================
 
-# MongoDB endpoint configuration
+# Endpoint configuration
 MONGO_HOST="${MONGO_HOST:-localhost}"
 MONGO_PORT="${MONGO_PORT:-10260}"
 MONGO_USER="${MONGO_USER:-testuser}"
@@ -56,14 +56,26 @@ import hashlib
 import base64
 import secrets
 import sys
+import hmac
 
 def create_scram_sha256(password, iterations=4096, salt_length=28):
+    # Generate random salt
     salt = secrets.token_bytes(salt_length)
+    
+    # Normalize password (MongoDB uses SASLprep, we'll use simple UTF-8)
     password_normalized = password.encode('utf-8')
+    
+    # Generate salted password using PBKDF2
     salted_password = hashlib.pbkdf2_hmac('sha256', password_normalized, salt, iterations, dklen=32)
-    client_key = hashlib.pbkdf2_hmac('sha256', salted_password, b'Client Key', 1, dklen=32)
+    
+    # Generate client key and stored key using HMAC
+    client_key = hmac.new(salted_password, b'Client Key', hashlib.sha256).digest()
     stored_key = hashlib.sha256(client_key).digest()
-    server_key = hashlib.pbkdf2_hmac('sha256', salted_password, b'Server Key', 1, dklen=32)
+    
+    # Generate server key using HMAC
+    server_key = hmac.new(salted_password, b'Server Key', hashlib.sha256).digest()
+    
+    # Format the SCRAM hash
     scram_hash = f"SCRAM-SHA-256${iterations}:{base64.b64encode(salt).decode()}${base64.b64encode(stored_key).decode()}:{base64.b64encode(server_key).decode()}"
     return scram_hash
 
@@ -73,13 +85,13 @@ scram_hash = create_scram_sha256(password)
 
 print(f"DROP USER IF EXISTS {username};")
 print(f"CREATE USER {username} PASSWORD '{scram_hash}';")
-print(f"GRANT ALL PRIVILEGES ON DATABASE admin TO {username};")
+print(f"ALTER USER {username} CREATEDB SUPERUSER;")
 PYTHON_SCRIPT
 )
 
     # Execute the SQL (requires psql access)
     log_info "Executing SQL to create user..."
-    echo "$sql_commands" | psql -h localhost -p "$pg_port" -U postgres -d postgres
+    echo "$sql_commands" | psql -h localhost -p "$pg_port" -U documentdb -d postgres
 
     if [ $? -eq 0 ]; then
         log_info "User '$username' created successfully with 28-byte SCRAM salt"

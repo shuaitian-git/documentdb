@@ -159,5 +159,17 @@ RUN [ "bin/bash", "-c", "/tmp/install_setup/install_pgrx.sh -d /tmp/install_setu
 # Change Rust tooling to non-root user
 RUN [ "bin/bash", "-c", "chown -R documentdb:documentdb $CARGO_HOME && chown -R documentdb:documentdb $RUSTUP_HOME && chown -R documentdb:documentdb $PGRX_HOME" ]
 
+# Install legacy mongo shell for jstests
+RUN curl -JLO https://downloads.mongodb.org/linux/mongodb-shell-linux-x86_64-debian10-v6.0-latest.tgz \
+&& tar -xvzf mongodb-shell-linux-x86_64-debian10-v6.0-latest.tgz \
+&& sudo cp mongodb-linux-x86_64-debian10-6.0.0-rc5-30-g7dc5d8f/bin/mongo /usr/bin/mongo \
+&& rm mongodb-shell-linux-x86_64-debian10-v6.0-latest.tgz \
+&& rm -rf mongodb-linux-x86_64-debian10-6.0.0-rc5-30-g7dc5d8f
+
+# Install libssl1.1 for mongo
+RUN curl -JLO http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb \
+    && sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb \
+    && rm libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
+
 USER documentdb
 WORKDIR /home/documentdb

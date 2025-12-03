@@ -4,7 +4,7 @@ DocumentDB Test Runner for MongoDB JStests
 
 This script runs MongoDB's official jstests against a DocumentDB-compatible database.
 
-1. Reads a test manifest (tests.csv) that lists tests and expected outcomes
+1. Reads a test manifest (jstests_baseline_70.csv) that lists tests and expected outcomes
 2. For each test, runs it using the mongo shell with environment patching
 3. Compares actual results with expected outcomes
 4. Reports results and generates test reports
@@ -13,15 +13,16 @@ Usage:
     python3 run_tests.py [options]
 
 Options:
-    --jstests-dir DIR       Path to MongoDB jstests directory
+    --jstests-dir DIR       Path to  jstests directory
     --mongo-shell PATH      Path to mongo shell executable (default: auto-detect)
-    --connection-string URI MongoDB connection string (default: from env or localhost)
-    --manifest FILE         Path to test manifest CSV (default: ./tests.csv)
+    --connection-string URI Server connection string (default: from env or localhost)
+    --manifest FILE         Path to test manifest CSV (default: ./jstests_baseline_70.csv)
     --commonsetup FILE      Path to commonsetup.js (default: ./commonsetup.js)
     --output-dir DIR        Directory for test output logs (default: ./test-results)
     --filter PATTERN        Run only tests matching pattern (regex)
     --verbose               Enable verbose output
-    --parallel N            Run tests in parallel with N workers (default: 1)
+    --no-drop-collections   Skip dropping collections before each test
+    --no-retries            Disable retry logic for flaky tests
 """
 
 import argparse
@@ -44,9 +45,9 @@ import time
 
 class TestOutcome(Enum):
     """Expected test outcome"""
-    PASS = "pass"
-    FAIL = "fail"
-    SKIP = "skip"
+    PASS = "Pass"
+    FAIL = "Fail"
+    SKIP = "Skip"
 
 class TestResult(Enum):
     """Actual test result"""
@@ -90,15 +91,12 @@ class DocumentDBTestRunner:
         self.connection_string = args.connection_string
         self.manifest_file = Path(args.manifest)
         self.commonsetup_file = Path(args.commonsetup)
-        self.ssl_helper_file = Path(args.ssl_helper) if hasattr(args, 'ssl_helper') else Path(__file__).parent / "sslEnabledParallelShell.js"
+        self.ssl_helper_file = Path(__file__).parent / "sslEnabledParallelShell.js"
         self.output_dir = Path(args.output_dir)
         self.filter_pattern = re.compile(args.filter) if args.filter else None
         self.verbose = args.verbose
-        self.drop_collections = args.drop_collections if hasattr(args, 'drop_collections') else True
-        self.enable_retries = getattr(args, 'enable_retries', True)
-        self.check_transactions = getattr(args, 'check_transactions', False)
-        self.pg_host = getattr(args, 'pg_host', 'localhost')
-        self.pg_port = getattr(args, 'pg_port', 5432)
+        self.drop_collections = args.drop_collections
+        self.enable_retries = args.enable_retries
         
         # Parse connection string to extract components
         self._parse_connection_string()
@@ -141,7 +139,7 @@ class DocumentDBTestRunner:
         
         # Check for mongodb:// prefix
         if conn_str.startswith("mongodb://"):
-            conn_str = conn_str[10:]  # Remove mongodb://
+            conn_str = conn_str[10:]  # Remove prefix
             
             # Check for username:password@
             if "@" in conn_str:
@@ -172,7 +170,7 @@ class DocumentDBTestRunner:
                 continue
             
             test_name = row['test_name'].strip()
-            expected = TestOutcome(row['expected_outcome'].strip().lower())
+            expected = TestOutcome(row['expected_outcome'].strip())
             # If test_name starts with jstests/, construct path from repo root
             if test_name.startswith('jstests/'):
                 test_file = self.jstests_dir.parent / test_name
@@ -247,8 +245,10 @@ class DocumentDBTestRunner:
                 if result.returncode == 0:
                     return True
                 
+                # Show error details for debugging
+                error_detail = result.stderr if result.stderr else result.stdout
                 if self.verbose:
-                    print(f"  Drop failed (attempt {attempt + 1}): {result.stderr[:100]}")
+                    print(f"  Drop failed (attempt {attempt + 1}): {error_detail[:200]}")
             
             except Exception as e:
                 if self.verbose:
@@ -372,69 +372,6 @@ class DocumentDBTestRunner:
         except Exception:
             return False
     
-    def check_active_transactions(self) -> List[dict]:
-        """
-        Check for active PostgreSQL transactions that might indicate test leaks.
-        Returns list of transactions in 'idle in transaction' state.
-        """
-        if not self.check_transactions:
-            return []
-        
-        try:
-            # Try to use psycopg2 if available
-            try:
-                import psycopg2
-                conn = psycopg2.connect(
-                    host=self.pg_host,
-                    port=self.pg_port,
-                    database='postgres',
-                    user='postgres'
-                )
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT pid, state, query, state_change 
-                    FROM pg_stat_activity 
-                    WHERE state = 'idle in transaction'
-                    AND pid != pg_backend_pid()
-                """)
-                rows = cursor.fetchall()
-                cursor.close()
-                conn.close()
-                
-                return [
-                    {'pid': row[0], 'state': row[1], 'query': row[2], 'state_change': str(row[3])}
-                    for row in rows
-                ]
-            except ImportError:
-                # Fall back to psql command
-                result = subprocess.run(
-                    [
-                        'psql',
-                        '-h', self.pg_host,
-                        '-p', str(self.pg_port),
-                        '-U', 'postgres',
-                        '-d', 'postgres',
-                        '-t',  # tuples only
-                        '-A',  # unaligned
-                        '-c', "SELECT pid, state, query FROM pg_stat_activity WHERE state = 'idle in transaction'"
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    transactions = []
-                    for line in result.stdout.strip().split('\n'):
-                        parts = line.split('|')
-                        if len(parts) >= 3:
-                            transactions.append({'pid': parts[0], 'state': parts[1], 'query': parts[2]})
-                    return transactions
-                return []
-        except Exception as e:
-            if self.verbose:
-                print(f"  Warning: Could not check for active transactions: {e}")
-            return []
-    
     def run_test(self, test_case: TestCase) -> TestRun:
         """
         Run a single test case with retry logic.
@@ -515,11 +452,14 @@ class DocumentDBTestRunner:
         if not self.drop_all_collections(test_case.name):
             # FAIL IMMEDIATELY - don't run test on dirty state
             error_msg = f"CLEANUP FAILED: Could not drop collections before test '{test_case.name}'.\n"
+            error_msg += f"Connection: {self.connection_string}\n"
             error_msg += "(Assert.Fail on cleanup failure).\n"
-            error_msg += "Test isolation requires clean state - dirty state leads to flaky failures."
+            error_msg += "Test isolation requires clean state - dirty state leads to flaky failures.\n"
+            error_msg += "Please check if the gateway is running and accessible."
             
             if self.verbose:
                 print(f"  ❌ CLEANUP FAILED - Test will not run")
+                print(f"  Connection string: {self.connection_string}")
             
             return TestRun(
                 test_case=test_case,
@@ -594,16 +534,6 @@ class DocumentDBTestRunner:
             exit_code = -1
             stdout = ""
             stderr = str(e)
-        
-        # Post-test check: Look for transaction leaks
-        active_txns = self.check_active_transactions()
-        if active_txns:
-            txn_info = f"\n\nWARNING: {len(active_txns)} active transaction(s) found after test:\n"
-            for txn in active_txns[:3]:  # Show first 3
-                txn_info += f"  PID {txn.get('pid')}: {txn.get('query', '')[:80]}\n"
-            stderr += txn_info
-            if self.verbose:
-                print(f"  ⚠️  Transaction leak detected: {len(active_txns)} active")
         
         # Determine result
         if exit_code == 0:
@@ -758,7 +688,7 @@ class DocumentDBTestRunner:
                 print(f"  - {test_name}")
             print("=" * 80)
             print(f"\nThese tests were expected to fail but passed!")
-            print(f"Consider updating tests.csv to mark them as 'pass'")
+            print(f"Consider updating jstests_baseline_70.csv to mark them as 'Pass'")
         
         # Return non-zero exit code if there were unexpected results
         if self.unexpected_pass > 0 or self.unexpected_fail > 0:
@@ -771,7 +701,7 @@ class DocumentDBTestRunner:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="DocumentDB Test Runner for MongoDB JStests",
+        description="DocumentDB Test Runner for JStests",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
@@ -779,7 +709,7 @@ def main():
     parser.add_argument(
         '--jstests-dir',
         default='/tmp/mongo_r7.0.11/jstests',
-        help='Path to MongoDB jstests directory (default: MongoDB 7.0.11)'
+        help='Path to jstests directory'
     )
     parser.add_argument(
         '--mongo-shell',
@@ -789,22 +719,17 @@ def main():
         '--connection-string',
         default=os.environ.get('MONGO_CONNECTION_STRING', 
                               'mongodb://testuser:Admin100@localhost:10260/?tls=true&tlsAllowInvalidCertificates=true'),
-        help='MongoDB connection string'
+        help='Server connection string'
     )
     parser.add_argument(
         '--manifest',
-        default='tests.csv',
+        default='jstests_baseline_70.csv',
         help='Path to test manifest CSV'
     )
     parser.add_argument(
         '--commonsetup',
         default='commonsetup.js',
         help='Path to commonsetup.js'
-    )
-    parser.add_argument(
-        '--ssl-helper',
-        default='sslEnabledParallelShell.js',
-        help='Path to SSL helper JS file'
     )
     parser.add_argument(
         '--output-dir',
@@ -832,31 +757,7 @@ def main():
         dest='enable_retries',
         action='store_false',
         default=True,
-        help='Disable retry logic for flaky tests (expected-pass tests retry up to 5 times by default)'
-    )
-    parser.add_argument(
-        '--check-transactions',
-        dest='check_transactions',
-        action='store_true',
-        default=False,
-        help='Check for transaction leaks after each test (requires PostgreSQL access)'
-    )
-    parser.add_argument(
-        '--pg-host',
-        default='localhost',
-        help='PostgreSQL host for transaction leak detection (default: localhost)'
-    )
-    parser.add_argument(
-        '--pg-port',
-        type=int,
-        default=5432,
-        help='PostgreSQL port for transaction leak detection (default: 5432)'
-    )
-    parser.add_argument(
-        '--parallel',
-        type=int,
-        default=1,
-        help='Run tests in parallel with N workers (not yet implemented)'
+        help='Disable retry logic for flaky tests (expected-pass tests retry up to 3 times by default)'
     )
     
     args = parser.parse_args()
