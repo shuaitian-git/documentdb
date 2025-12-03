@@ -1310,6 +1310,9 @@ GenerateTsVectorWithOptions(pgbson *document,
 							BsonGinTextPathOptions *options)
 {
 	GenerateTermsContext context = { 0 };
+	GinEntryPathData pathData = { 0 };
+	context.pathDataState = &pathData;
+	context.getPathDataFunc = GetPathDataDefault;
 	context.options = (void *) options;
 	context.traverseOptionsFunc = &GetTextIndexTraverseOption;
 	context.generateNotFoundTerm = false;
@@ -1341,10 +1344,10 @@ GenerateTsVectorWithOptions(pgbson *document,
 
 	StringView languagePathBuffer = { 0 };
 
-	for (int i = 0; i < context.totalTermCount; i++)
+	for (int i = 0; i < pathData.terms.index; i++)
 	{
 		BsonIndexTerm term = { 0 };
-		InitializeBsonIndexTerm(DatumGetByteaP(context.terms.entries[i]), &term);
+		InitializeBsonIndexTerm(DatumGetByteaP(pathData.terms.entries[i]), &term);
 
 		if (term.element.bsonValue.value_type == BSON_TYPE_UTF8)
 		{

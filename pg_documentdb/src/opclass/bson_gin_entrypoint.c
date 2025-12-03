@@ -89,12 +89,17 @@ gin_bson_single_path_extract_value(PG_FUNCTION_ARGS)
 		(BsonGinSinglePathOptions *) PG_GET_OPCLASS_OPTIONS();
 
 	GenerateTermsContext context = { 0 };
+	GinEntryPathData pathData = { 0 };
+	pathData.termMetadata = GetIndexTermMetadata(options);
+	context.pathDataState = &pathData;
+	context.getPathDataFunc = GetPathDataDefault;
+
 	GenerateSinglePathTermsCore(bson, &context, options);
 
-	*nentries = context.totalTermCount;
+	*nentries = pathData.terms.index;
 
 	PG_FREE_IF_COPY(bson, 0);
-	PG_RETURN_POINTER(context.terms.entries);
+	PG_RETURN_POINTER(pathData.terms.entries);
 }
 
 
@@ -112,6 +117,7 @@ gin_bson_wildcard_project_extract_value(PG_FUNCTION_ARGS)
 	pgbson *bson = PG_GETARG_PGBSON_PACKED(0);
 	int32_t *nentries = (int32_t *) PG_GETARG_POINTER(1);
 	GenerateTermsContext context = { 0 };
+	GinEntryPathData pathData = { 0 };
 	if (!PG_HAS_OPCLASS_OPTIONS())
 	{
 		ereport(ERROR, (errmsg("Index does not have options")));
@@ -120,11 +126,14 @@ gin_bson_wildcard_project_extract_value(PG_FUNCTION_ARGS)
 	BsonGinWildcardProjectionPathOptions *options =
 		(BsonGinWildcardProjectionPathOptions *) PG_GET_OPCLASS_OPTIONS();
 
+	context.pathDataState = &pathData;
+	context.getPathDataFunc = GetPathDataDefault;
+	pathData.termMetadata = GetIndexTermMetadata(options);
 	GenerateWildcardPathTermsCore(bson, &context, options);
-	*nentries = context.totalTermCount;
+	*nentries = pathData.terms.index;
 
 	PG_FREE_IF_COPY(bson, 0);
-	PG_RETURN_POINTER(context.terms.entries);
+	PG_RETURN_POINTER(pathData.terms.entries);
 }
 
 
@@ -406,6 +415,7 @@ gin_bson_get_single_path_generated_terms(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext;
 	GenerateTermsContext *context;
+	GinEntryPathData *pathData;
 
 	if (SRF_IS_FIRSTCALL())
 	{
@@ -435,18 +445,25 @@ gin_bson_get_single_path_generated_terms(PG_FUNCTION_ARGS)
 		options->base.wildcardIndexTruncatedPathLimit = truncateLimit > 0 ?
 														MaxWildcardIndexKeySize : 0;
 
+		pathData = (GinEntryPathData *) palloc0(sizeof(GinEntryPathData));
+		pathData->termMetadata = GetIndexTermMetadata(options);
+		context->pathDataState = pathData;
+		context->getPathDataFunc = GetPathDataDefault;
+
 		GenerateSinglePathTermsCore(document, context, options);
-		context->index = 0;
+		pathData->terms.entryCapacity = pathData->terms.index;
+		pathData->terms.index = 0;
 		MemoryContextSwitchTo(oldcontext);
 		functionContext->user_fctx = (void *) context;
 	}
 
 	functionContext = SRF_PERCALL_SETUP();
 	context = (GenerateTermsContext *) functionContext->user_fctx;
+	pathData = context->pathDataState;
 
-	if (context->index < context->totalTermCount)
+	if (pathData->terms.index < pathData->terms.entryCapacity)
 	{
-		Datum next = context->terms.entries[context->index++];
+		Datum next = pathData->terms.entries[pathData->terms.index++];
 		BsonIndexTerm term = { 0 };
 		bytea *serializedTerm = DatumGetByteaPP(next);
 		InitializeBsonIndexTerm(serializedTerm, &term);
@@ -489,6 +506,7 @@ gin_bson_get_wildcard_project_generated_terms(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext;
 	GenerateTermsContext *context;
+	GinEntryPathData *pathData;
 
 	if (SRF_IS_FIRSTCALL())
 	{
@@ -499,6 +517,7 @@ gin_bson_get_wildcard_project_generated_terms(PG_FUNCTION_ARGS)
 		oldcontext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
 
 		context = (GenerateTermsContext *) palloc0(sizeof(GenerateTermsContext));
+		pathData = (GinEntryPathData *) palloc0(sizeof(GinEntryPathData));
 
 		const char *prefixStr = text_to_cstring(PG_GETARG_TEXT_P(1));
 		Size fieldSize = FillWildcardProjectPathSpec(prefixStr, NULL);
@@ -518,19 +537,24 @@ gin_bson_get_wildcard_project_generated_terms(PG_FUNCTION_ARGS)
 		options->base.wildcardIndexTruncatedPathLimit = truncateLimit > 0 ?
 														MaxWildcardIndexKeySize : 0;
 
+		context->pathDataState = pathData;
+		context->getPathDataFunc = GetPathDataDefault;
+		pathData->termMetadata = GetIndexTermMetadata(options);
 		GenerateWildcardPathTermsCore(document, context, options);
 
-		context->index = 0;
+		pathData->terms.entryCapacity = pathData->terms.index;
+		pathData->terms.index = 0;
 		MemoryContextSwitchTo(oldcontext);
 		functionContext->user_fctx = (void *) context;
 	}
 
 	functionContext = SRF_PERCALL_SETUP();
 	context = (GenerateTermsContext *) functionContext->user_fctx;
+	pathData = context->pathDataState;
 
-	if (context->index < context->totalTermCount)
+	if (pathData->terms.index < pathData->terms.entryCapacity)
 	{
-		Datum next = context->terms.entries[context->index++];
+		Datum next = pathData->terms.entries[pathData->terms.index++];
 		BsonIndexTerm term = { 0 };
 		bytea *serializedTerm = DatumGetByteaPP(next);
 		InitializeBsonIndexTerm(serializedTerm, &term);

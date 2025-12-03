@@ -852,6 +852,7 @@ gin_bson_get_composite_path_generated_terms(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext;
 	GenerateTermsContext *context;
+	GinEntryPathData *pathData;
 
 	bool addMetadata = PG_GETARG_BOOL(3);
 	if (SRF_IS_FIRSTCALL())
@@ -877,19 +878,26 @@ gin_bson_get_composite_path_generated_terms(PG_FUNCTION_ARGS)
 			((char *) options) + sizeof(BsonGinCompositePathOptions));
 
 		context = (GenerateTermsContext *) palloc0(sizeof(GenerateTermsContext));
-		context->terms.entries = GenerateCompositeTermsCore(document, options,
-															&context->totalTermCount);
-		context->index = 0;
+		pathData = palloc0(sizeof(GinEntryPathData));
+
+		context->pathDataState = (void *) pathData;
+		context->getPathDataFunc = GetPathDataDefault;
+		pathData->terms.entries = GenerateCompositeTermsCore(document, options,
+															 &pathData->
+															 terms.index);
+		pathData->terms.entryCapacity = pathData->terms.index;
+		pathData->terms.index = 0;
 		MemoryContextSwitchTo(oldcontext);
 		functionContext->user_fctx = (void *) context;
 	}
 
 	functionContext = SRF_PERCALL_SETUP();
 	context = (GenerateTermsContext *) functionContext->user_fctx;
+	pathData = (GinEntryPathData *) context->pathDataState;
 
-	if (context->index < context->totalTermCount)
+	if (pathData->terms.index < pathData->terms.entryCapacity)
 	{
-		Datum next = context->terms.entries[context->index++];
+		Datum next = pathData->terms.entries[pathData->terms.index++];
 		BsonIndexTerm term[INDEX_MAX_KEYS] = { 0 };
 		bytea *serializedTerm = DatumGetByteaPP(next);
 		int32_t numKeys = InitializeCompositeIndexTerm(serializedTerm, term);
@@ -1904,8 +1912,7 @@ FillCompositePathSpec(const char *prefix, void *buffer)
 
 static uint32_t
 BuildSinglePathTermsForCompositeTerms(pgbson *bson, BsonGinCompositePathOptions *options,
-									  Datum **entries, int32_t *entryCounts,
-									  int32_t *entryCapacity,
+									  GinEntrySet *entries,
 									  bool *entryHasMultiKey, bool *entryHasTruncation)
 {
 	const char *indexPaths[INDEX_MAX_KEYS] = { 0 };
@@ -1919,6 +1926,7 @@ BuildSinglePathTermsForCompositeTerms(pgbson *bson, BsonGinCompositePathOptions 
 		Size requiredSize = FillSinglePathSpec(indexPaths[i], NULL);
 
 		GenerateTermsContext context = { 0 };
+		GinEntryPathData pathData = { 0 };
 		BsonGinSinglePathOptions *singlePathOptions = palloc(
 			sizeof(BsonGinSinglePathOptions) + requiredSize + 1);
 		singlePathOptions->base.type = IndexOptionsType_SinglePath;
@@ -1935,27 +1943,29 @@ BuildSinglePathTermsForCompositeTerms(pgbson *bson, BsonGinCompositePathOptions 
 		FillSinglePathSpec(indexPaths[i], ((char *) singlePathOptions) +
 						   sizeof(BsonGinSinglePathOptions));
 
+		context.pathDataState = (void *) &pathData;
+		context.getPathDataFunc = GetPathDataDefault;
 		context.options = (void *) singlePathOptions;
 		context.traverseOptionsFunc = &GetSinglePathIndexTraverseOption;
 		context.generatePathBasedUndefinedTerms = true;
 		context.skipGeneratedPathUndefinedTermOnLiteralNull = true;
-		context.termMetadata = GetIndexTermMetadata(singlePathOptions);
 		context.skipGenerateTopLevelArrayTerm = true;
-		context.termMetadata.isDescending = sortOrders[i] < 0;
-		context.termMetadata.allowValueOnly = subMetadata.allowValueOnly;
 
-		bool addRootTerm = false;
-		GenerateTerms(bson, &context, addRootTerm);
+		pathData.termMetadata = GetIndexTermMetadata(singlePathOptions);
+		pathData.termMetadata.isDescending = sortOrders[i] < 0;
+		pathData.termMetadata.allowValueOnly = subMetadata.allowValueOnly;
 
-		entries[i] = context.terms.entries;
-		entryCounts[i] = context.totalTermCount;
-		entryCapacity[i] = context.terms.entryCapacity;
+		GenerateTermsForPath(bson, &context);
 
-		*entryHasMultiKey = *entryHasMultiKey || context.hasArrayValues;
-		*entryHasTruncation = *entryHasTruncation || context.hasTruncatedTerms;
+		entries[i].entries = pathData.terms.entries;
+		entries[i].index = pathData.terms.index;
+		entries[i].entryCapacity = pathData.terms.entryCapacity;
+
+		*entryHasMultiKey = *entryHasMultiKey || pathData.hasArrayValues;
+		*entryHasTruncation = *entryHasTruncation || pathData.hasTruncatedTerms;
 
 		/* We will have at least 1 term */
-		totalTermCount = totalTermCount * context.totalTermCount;
+		totalTermCount = totalTermCount * pathData.terms.index;
 		pfree(singlePathOptions);
 	}
 
@@ -2010,24 +2020,21 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 	uint32_t pathCount = (uint32_t) GetIndexPathsFromOptions(options,
 															 indexPaths, sortOrders);
 
-	Datum *entries[INDEX_MAX_KEYS] = { 0 };
-	int32_t entryCounts[INDEX_MAX_KEYS] = { 0 };
-	int32_t entryCapacity[INDEX_MAX_KEYS] = { 0 };
+	GinEntrySet entrySet[INDEX_MAX_KEYS] = { 0 };
 	bool entryHasMultiKey = false;
 	bool entryHasTruncation = false;
-	uint32_t totalTermCount = BuildSinglePathTermsForCompositeTerms(bson, options,
-																	entries,
-																	entryCounts,
-																	entryCapacity,
-																	&entryHasMultiKey,
-																	&entryHasTruncation);
-
-
 	IndexTermCreateMetadata overallMetadata = GetCompositeIndexTermMetadata(options);
+	uint32_t totalTermCount;
+	totalTermCount = BuildSinglePathTermsForCompositeTerms(bson, options,
+														   entrySet,
+														   &entryHasMultiKey,
+														   &entryHasTruncation);
+
 	if (pathCount == 1)
 	{
 		return AddTruncationOrMultiKeyTerms(
-			entries[0], totalTermCount, entryCapacity[0], entryHasMultiKey,
+			entrySet[0].entries, totalTermCount, entrySet[0].entryCapacity,
+			entryHasMultiKey,
 			entryHasTruncation, nentries, &overallMetadata);
 	}
 
@@ -2043,9 +2050,9 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 		int termIndex = i;
 		for (uint32_t j = 0; j < pathCount; j++)
 		{
-			int32_t currentIndex = termIndex % entryCounts[j];
-			termIndex = termIndex / entryCounts[j];
-			Datum term = entries[j][currentIndex];
+			int32_t currentIndex = termIndex % entrySet[j].index;
+			termIndex = termIndex / entrySet[j].index;
+			Datum term = entrySet[j].entries[currentIndex];
 
 			bytea *termPointer = DatumGetByteaPP(term);
 			if (IsSerializedIndexTermTruncated(termPointer))
@@ -2085,14 +2092,11 @@ GenerateCompositeExtractQueryUniqueEqual(pgbson *bson,
 	uint32_t pathCount = (uint32_t) GetIndexPathsFromOptions(options,
 															 indexPaths, sortOrders);
 
-	Datum *entries[INDEX_MAX_KEYS] = { 0 };
-	int32_t entryCounts[INDEX_MAX_KEYS] = { 0 };
-	int32_t entryCapacities[INDEX_MAX_KEYS] = { 0 };
+	GinEntrySet entrySet[INDEX_MAX_KEYS] = { 0 };
 	bool hasArrayPaths = false;
 	bool hasTruncation = false;
 	uint32_t totalTermCount = BuildSinglePathTermsForCompositeTerms(bson, options,
-																	entries, entryCounts,
-																	entryCapacities,
+																	entrySet,
 																	&hasArrayPaths,
 																	&hasTruncation);
 
@@ -2111,9 +2115,9 @@ GenerateCompositeExtractQueryUniqueEqual(pgbson *bson,
 		CompositeQueryRunData *runDataForEntry = runData;
 		for (uint32_t j = 0; j < pathCount; j++)
 		{
-			int32_t currentIndex = termIndex % entryCounts[j];
-			termIndex = termIndex / entryCounts[j];
-			Datum term = entries[j][currentIndex];
+			int32_t currentIndex = termIndex % entrySet[j].index;
+			termIndex = termIndex / entrySet[j].index;
+			Datum term = entrySet[j].entries[currentIndex];
 
 			BsonIndexTerm indexTerm;
 			InitializeBsonIndexTerm(DatumGetByteaPP(term), &indexTerm);

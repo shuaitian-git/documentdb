@@ -95,6 +95,8 @@ bool ForceIndexOnlyScanIfAvailable = DEFAULT_FORCE_INDEX_ONLY_SCAN_IF_AVAILABLE;
 #define DEFAULT_FORCE_PARALLEL_SCAN_IF_AVAILABLE false
 bool ForceParallelScanIfAvailable = DEFAULT_FORCE_PARALLEL_SCAN_IF_AVAILABLE;
 
+#define DEFAULT_DISABLE_EXTENDED_RUM_EXPLAIN_PLANS false
+bool DisableExtendedRumExplainPlans = DEFAULT_DISABLE_EXTENDED_RUM_EXPLAIN_PLANS;
 
 void
 InitializeTestConfigurations(const char *prefix, const char *newGucPrefix)
@@ -328,5 +330,13 @@ InitializeTestConfigurations(const char *prefix, const char *newGucPrefix)
 			"If a parallel plan is available, force use it in the plan."),
 		NULL, &ForceParallelScanIfAvailable,
 		DEFAULT_FORCE_PARALLEL_SCAN_IF_AVAILABLE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.disableExtendedRumExplainPlans", newGucPrefix),
+		gettext_noop(
+			"Disable extended rum explain plan overrides. Used to match default rum explains"),
+		NULL, &DisableExtendedRumExplainPlans,
+		DEFAULT_DISABLE_EXTENDED_RUM_EXPLAIN_PLANS,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }
