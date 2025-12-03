@@ -374,7 +374,6 @@ GenerateSinglePathTermsCore(pgbson *bson, GenerateTermsContext *context,
 	context->options = (void *) singlePathOptions;
 	context->traverseOptionsFunc = &GetSinglePathIndexTraverseOption;
 	context->generateNotFoundTerm = singlePathOptions->generateNotFoundTerm;
-	context->termMetadata = GetIndexTermMetadata(singlePathOptions);
 	context->useReducedWildcardTerms =
 		singlePathOptions->isWildcard && singlePathOptions->useReducedWildcardTerms;
 
@@ -396,7 +395,6 @@ GenerateWildcardPathTermsCore(pgbson *bson, GenerateTermsContext *context,
 
 	/* Wildcard indexes always do not generate the not-found term */
 	context->generateNotFoundTerm = false;
-	context->termMetadata = GetIndexTermMetadata(wildcardOptions);
 
 	bool addRootTerm = true;
 	GenerateTerms(bson, context, addRootTerm);
@@ -952,6 +950,7 @@ GinBsonExtractQueryUniqueIndexTerms(PG_FUNCTION_ARGS)
 	int32 *nentries = (int32 *) PG_GETARG_POINTER(1);
 
 	GenerateTermsContext context = { 0 };
+	GinEntryPathData pathData = { 0 };
 	if (!PG_HAS_OPCLASS_OPTIONS())
 	{
 		ereport(ERROR, (errmsg("Index does not have options")));
@@ -960,15 +959,17 @@ GinBsonExtractQueryUniqueIndexTerms(PG_FUNCTION_ARGS)
 	BsonGinSinglePathOptions *options =
 		(BsonGinSinglePathOptions *) PG_GET_OPCLASS_OPTIONS();
 	context.options = (void *) options;
+	context.pathDataState = &pathData;
+	context.getPathDataFunc = GetPathDataDefault;
 	context.traverseOptionsFunc = &GetSinglePathIndexTraverseOption;
 	context.generateNotFoundTerm = options->generateNotFoundTerm;
-	context.termMetadata = GetIndexTermMetadata(options);
+	pathData.termMetadata = GetIndexTermMetadata(options);
 
 	bool addRootTerm = false;
 	GenerateTerms(query, &context, addRootTerm);
-	*nentries = context.totalTermCount;
+	*nentries = pathData.terms.index;
 
-	return context.terms.entries;
+	return pathData.terms.entries;
 }
 
 
@@ -1050,14 +1051,14 @@ GinBsonComparePartialOrderBy(BsonIndexTerm *queryValue,
  * in its array of terms.
  */
 inline static void
-EnsureTermCapacity(GenerateTermsContext *context, int32_t required)
+EnsureTermCapacity(GinEntrySet *context, int32_t required)
 {
 	int32_t requiredTotal = context->index + required;
-	if (context->terms.entryCapacity < requiredTotal)
+	if (context->entryCapacity < requiredTotal)
 	{
-		context->terms.entries = repalloc(context->terms.entries, sizeof(Datum) *
-										  requiredTotal);
-		context->terms.entryCapacity = requiredTotal;
+		context->entries = repalloc(context->entries, sizeof(Datum) *
+									requiredTotal);
+		context->entryCapacity = requiredTotal;
 	}
 }
 
@@ -1067,11 +1068,76 @@ EnsureTermCapacity(GenerateTermsContext *context, int32_t required)
  * sufficient capacity to add the term in.
  */
 inline static void
-AddTerm(GenerateTermsContext *context, Datum term)
+AddTerm(GinEntrySet *context, Datum term)
 {
 	EnsureTermCapacity(context, 1);
-	context->terms.entries[context->index] = term;
+	context->entries[context->index] = term;
 	context->index++;
+}
+
+
+GinEntryPathData *
+GetPathDataDefault(void *state)
+{
+	return (GinEntryPathData *) state;
+}
+
+
+bool
+GenerateTermsForPath(pgbson *bson, GenerateTermsContext *context)
+{
+	bson_iter_t bsonIterator;
+	Assert(context->pathDataState != NULL);
+	Assert(context->getPathDataFunc != NULL);
+
+	/* now walk the entries and insert the terms */
+	PgbsonInitIterator(bson, &bsonIterator);
+
+	/* Initialize with minimum capacity */
+	/* provision 1 root term + 1 value term/not-found term */
+	GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState);
+	pathData->terms.entries = palloc0(sizeof(Datum) * 2);
+	pathData->terms.entryCapacity = 2;
+	pathData->hasTruncatedTerms = false;
+	pathData->hasArrayAncestors = false;
+
+	int32_t initialIndex = pathData->terms.index;
+
+	bool inArrayContext = false;
+	bool isArrayTerm = false;
+	bool isCheckForArrayTermsWithNestedDocument = false;
+	GenerateTermsCore(&bsonIterator, "", 0, inArrayContext,
+					  isArrayTerm, context,
+					  isCheckForArrayTermsWithNestedDocument);
+
+	bool hasNoTerms = pathData->terms.index == initialIndex;
+
+	/* Add the path not found term if necessary
+	 * we do this for back compat only when the index used the legacy not found term
+	 */
+	if (hasNoTerms && context->generateNotFoundTerm)
+	{
+		AddTerm(&pathData->terms, GeneratePathUndefinedTerm(context->options));
+	}
+
+	if (context->generatePathBasedUndefinedTerms)
+	{
+		if (hasNoTerms)
+		{
+			/* Add the path not exists value term */
+			AddTerm(&pathData->terms, GenerateValueUndefinedTerm(
+						&pathData->termMetadata));
+		}
+
+		if (pathData->hasArrayPartialTermExistence)
+		{
+			/* Add the path not exists value term for array ancestors */
+			AddTerm(&pathData->terms, GenerateValueMaybeUndefinedTerm(
+						&pathData->termMetadata));
+		}
+	}
+
+	return !hasNoTerms;
 }
 
 
@@ -1084,80 +1150,40 @@ AddTerm(GenerateTermsContext *context, Datum term)
 void
 GenerateTerms(pgbson *bson, GenerateTermsContext *context, bool addRootTerm)
 {
-	bson_iter_t bsonIterator;
-
-	/* now walk the entries and insert the terms */
-	PgbsonInitIterator(bson, &bsonIterator);
-
-	/* Initialize with minimum capacity */
-	/* provision 1 root term + 1 value term/not-found term */
-	context->terms.entries = palloc0(sizeof(Datum) * 2);
-	context->terms.entryCapacity = 2;
-	context->hasTruncatedTerms = false;
-	context->hasArrayAncestors = false;
-
-	int32_t initialIndex = context->index;
-
-	bool inArrayContext = false;
-	bool isArrayTerm = false;
-	bool isCheckForArrayTermsWithNestedDocument = false;
-	GenerateTermsCore(&bsonIterator, "", 0, inArrayContext,
-					  isArrayTerm, context,
-					  isCheckForArrayTermsWithNestedDocument);
-
-	bool hasNoTerms = context->index == initialIndex;
-
-	/* Add the path not found term if necessary
-	 * we do this for back compat only when the index used the legacy not found term
-	 */
-	if (hasNoTerms && context->generateNotFoundTerm)
-	{
-		AddTerm(context, GeneratePathUndefinedTerm(context->options));
-	}
-
-	if (context->generatePathBasedUndefinedTerms)
-	{
-		if (hasNoTerms)
-		{
-			/* Add the path not exists value term */
-			AddTerm(context, GenerateValueUndefinedTerm(&context->termMetadata));
-		}
-
-		if (context->hasArrayPartialTermExistence)
-		{
-			/* Add the path not exists value term for array ancestors */
-			AddTerm(context, GenerateValueMaybeUndefinedTerm(&context->termMetadata));
-		}
-	}
+	bool hasTerms = GenerateTermsForPath(bson, context);
 
 	if (addRootTerm)
 	{
 		/* GUC to preserve back-compat behavior. */
+		GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState);
 		if (!EnableGenerateNonExistsTerm)
 		{
-			AddTerm(context, GenerateRootTerm(&context->termMetadata));
+			AddTerm(&pathData->terms, GenerateRootTerm(
+						&pathData->termMetadata));
 		}
-		else if (!hasNoTerms)
+		else if (hasTerms)
 		{
-			AddTerm(context, GenerateRootExistsTerm(&context->termMetadata));
+			AddTerm(&pathData->terms, GenerateRootExistsTerm(
+						&pathData->termMetadata));
 		}
 		else
 		{
-			AddTerm(context, GenerateRootNonExistsTerm(&context->termMetadata));
+			AddTerm(&pathData->terms, GenerateRootNonExistsTerm(
+						&pathData->termMetadata));
 		}
 
-		if (context->hasTruncatedTerms)
+		if (pathData->hasTruncatedTerms)
 		{
-			AddTerm(context, GenerateRootTruncatedTerm(&context->termMetadata));
+			AddTerm(&pathData->terms, GenerateRootTruncatedTerm(
+						&pathData->termMetadata));
 		}
 
-		if (context->hasArrayAncestors)
+		if (pathData->hasArrayAncestors)
 		{
-			AddTerm(context, GenerateRootMultiKeyTerm(&context->termMetadata));
+			AddTerm(&pathData->terms, GenerateRootMultiKeyTerm(
+						&pathData->termMetadata));
 		}
 	}
-
-	context->totalTermCount = context->index;
 }
 
 
@@ -1183,7 +1209,8 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 
 	StringInfoData pathBuilderBuffer = { 0 };
 	initStringInfo(&pathBuilderBuffer);
-	EnsureTermCapacity(context, arrayCapacityEstimate);
+	GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState);
+	EnsureTermCapacity(&pathData->terms, arrayCapacityEstimate);
 
 	bool someArrayPathsHaveTerms = false;
 	bool someArrayPathsHaveNoTerms = false;
@@ -1193,7 +1220,7 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 		bool inArrayContextInner = true;
 		bool isArrayTermInner = false;
 		bool isCheckForArrayTermsWithNestedDocumentInner = false;
-		int32_t termCount = context->index;
+		int32_t termCount = pathData->terms.index;
 
 		/* For wildcard indexes if there's a match, any path that is a.0, a.2 etc
 		 * can also be reached from 'a'.
@@ -1237,7 +1264,7 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 						 inArrayContextInner, isArrayTermInner, context,
 						 isCheckForArrayTermsWithNestedDocumentInner,
 						 &pathBuilderBuffer);
-		if (context->index > termCount)
+		if (pathData->terms.index > termCount)
 		{
 			someArrayPathsHaveTerms = true;
 		}
@@ -1247,12 +1274,12 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 		}
 	}
 
-	context->hasArrayValues = true;
+	pathData->hasArrayValues = true;
 
 	/* Track that these arrays have partial term existence */
 	if (someArrayPathsHaveTerms && someArrayPathsHaveNoTerms)
 	{
-		context->hasArrayPartialTermExistence = true;
+		pathData->hasArrayPartialTermExistence = true;
 	}
 
 	if (pathBuilderBuffer.data != NULL)
@@ -1348,7 +1375,8 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 			if (inArrayContext || BSON_ITER_HOLDS_ARRAY(bsonIter))
 			{
 				/* Mark the path as having array ancestors leading to the index path */
-				context->hasArrayAncestors = true;
+				context->getPathDataFunc(context->pathDataState)->hasArrayAncestors =
+					true;
 			}
 
 			break;
@@ -1394,13 +1422,14 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 				}
 			}
 
+			GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState);
 			BsonCompressableIndexTermSerialized serializedTerm =
 				SerializeBsonIndexTermWithCompression(
-					&element, &context->termMetadata);
-			AddTerm(context, serializedTerm.indexTermDatum);
+					&element, &pathData->termMetadata);
+			AddTerm(&pathData->terms, serializedTerm.indexTermDatum);
 			if (serializedTerm.isIndexTermTruncated)
 			{
-				context->hasTruncatedTerms = true;
+				pathData->hasTruncatedTerms = true;
 			}
 
 			if (context->generateNotFoundTerm &&
@@ -1408,7 +1437,7 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 				(type == BSON_TYPE_NULL || type == BSON_TYPE_UNDEFINED))
 			{
 				/* In this case, we also generate the undefined term */
-				AddTerm(context, GeneratePathUndefinedTerm(
+				AddTerm(&pathData->terms, GeneratePathUndefinedTerm(
 							context->options));
 			}
 
@@ -1430,7 +1459,7 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 			 option == IndexTraverse_MatchAndRecurse))
 		{
 			/* Mark the path as having array ancestors leading to the index path */
-			context->hasArrayAncestors = true;
+			context->getPathDataFunc(context->pathDataState)->hasArrayAncestors = true;
 		}
 
 		/*
@@ -1473,7 +1502,8 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 				option == IndexTraverse_MatchAndRecurse)
 			{
 				/* Mark the path as having array ancestors leading to the index path */
-				context->hasArrayAncestors = true;
+				context->getPathDataFunc(context->pathDataState)->hasArrayAncestors =
+					true;
 			}
 
 			bool isPathMatchedRecursively = option == IndexTraverse_MatchAndRecurse;

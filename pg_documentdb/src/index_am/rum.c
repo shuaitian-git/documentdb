@@ -43,6 +43,7 @@ extern bool ForceUseIndexIfAvailable;
 extern bool EnableIndexOrderbyPushdown;
 extern bool EnableIndexOnlyScan;
 extern bool EnableCompositeIndexPlanner;
+extern bool DisableExtendedRumExplainPlans;
 
 extern const RumIndexArrayStateFuncs RoaringStateFuncs;
 
@@ -502,7 +503,7 @@ LoadRumRoutine(void)
 							   !missingOk,
 							   ignoreLibFileHandle);
 
-	if (explain_index_func != NULL)
+	if (explain_index_func != NULL && !DisableExtendedRumExplainPlans)
 	{
 		RumIndexAmEntry.add_explain_output = explain_index_func;
 	}
