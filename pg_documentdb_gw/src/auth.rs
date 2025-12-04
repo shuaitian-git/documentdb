@@ -214,7 +214,7 @@ async fn handle_sasl_start(
         .map_err(DocumentDBError::parse_failure())?;
 
     if mechanism != "SCRAM-SHA-256" && mechanism != "MONGODB-OIDC" {
-        return Err(DocumentDBError::unauthorized(format!(
+        return Err(DocumentDBError::authentication_failed(format!(
             "Only SCRAM-SHA-256 and MONGODB-OIDC are supported, got: {mechanism}"
         )));
     }
@@ -232,11 +232,13 @@ async fn handle_scram(
 ) -> Result<Response> {
     let payload = parse_sasl_payload(request, true)?;
 
-    let username = payload.username.ok_or(DocumentDBError::unauthorized(
-        "Username missing from SaslStart.".to_string(),
-    ))?;
+    let username = payload
+        .username
+        .ok_or(DocumentDBError::authentication_failed(
+            "Username missing from SaslStart.".to_string(),
+        ))?;
 
-    let client_nonce = payload.nonce.ok_or(DocumentDBError::unauthorized(
+    let client_nonce = payload.nonce.ok_or(DocumentDBError::authentication_failed(
         "Nonce missing from SaslStart.".to_string(),
     ))?;
 
@@ -285,7 +287,7 @@ async fn handle_oidc(
         })?;
 
     let jwt_token = payload_doc.get_str("jwt").map_err(|_| {
-        DocumentDBError::unauthorized("JWT token missing from OIDC payload".to_string())
+        DocumentDBError::authentication_failed("JWT token missing from OIDC payload".to_string())
     })?;
 
     handle_oidc_token_authentication(connection_context, jwt_token).await
@@ -319,7 +321,7 @@ async fn handle_oidc_token_authentication(
         .try_get(0)?;
 
     if authentication_result.trim() != oid {
-        return Err(DocumentDBError::unauthorized(
+        return Err(DocumentDBError::authentication_failed(
             "Token validation failed".to_string(),
         ));
     }
@@ -361,7 +363,7 @@ async fn handle_oidc_token_authentication(
 fn parse_and_validate_jwt_token(token_string: &str) -> Result<(String, u64)> {
     let token_parts: Vec<&str> = token_string.split('.').collect();
     if token_parts.len() != 3 {
-        return Err(DocumentDBError::unauthorized(
+        return Err(DocumentDBError::authentication_failed(
             "Invalid JWT token format.".to_string(),
         ));
     }
@@ -369,22 +371,29 @@ fn parse_and_validate_jwt_token(token_string: &str) -> Result<(String, u64)> {
     let payload_part = token_parts[1];
     let payload_bytes = general_purpose::URL_SAFE_NO_PAD
         .decode(payload_part)
-        .map_err(|_| DocumentDBError::unauthorized("Invalid JWT token encoding.".to_string()))?;
+        .map_err(|_| {
+            DocumentDBError::authentication_failed("Invalid JWT token encoding.".to_string())
+        })?;
 
-    let payload_json: Value = serde_json::from_slice(&payload_bytes)
-        .map_err(|_| DocumentDBError::unauthorized("Invalid JWT token payload.".to_string()))?;
+    let payload_json: Value = serde_json::from_slice(&payload_bytes).map_err(|_| {
+        DocumentDBError::authentication_failed("Invalid JWT token payload.".to_string())
+    })?;
 
     let oid = payload_json
         .get("oid")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| DocumentDBError::unauthorized("Token does not contain OID.".to_string()))?
+        .ok_or_else(|| {
+            DocumentDBError::authentication_failed("Token does not contain OID.".to_string())
+        })?
         .to_string();
 
     let aud = payload_json
         .get("aud")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            DocumentDBError::unauthorized("Token does not contain audience claim.".to_string())
+            DocumentDBError::authentication_failed(
+                "Token does not contain audience claim.".to_string(),
+            )
         })?
         .to_string();
 
@@ -392,13 +401,15 @@ fn parse_and_validate_jwt_token(token_string: &str) -> Result<(String, u64)> {
         .get("exp")
         .and_then(|v| v.as_i64())
         .ok_or_else(|| {
-            DocumentDBError::unauthorized("Token does not contain expiry time.".to_string())
+            DocumentDBError::authentication_failed(
+                "Token does not contain expiry time.".to_string(),
+            )
         })?;
 
     let valid_audiences = ["https://ossrdbms-aad.database.windows.net"];
     if !valid_audiences.contains(&aud.as_str()) {
-        return Err(DocumentDBError::unauthorized(
-            "Invalid audience claim.".to_string(),
+        return Err(DocumentDBError::authentication_failed(
+            "The audience claim provided in the token is not valid.".to_string(),
         ));
     }
 
@@ -406,8 +417,8 @@ fn parse_and_validate_jwt_token(token_string: &str) -> Result<(String, u64)> {
     let now = std::time::SystemTime::now();
 
     if exp_datetime < now {
-        return Err(DocumentDBError::reauthentication_required(
-            "Token has expired.".to_string(),
+        return Err(DocumentDBError::authentication_failed(
+            "The token provided is expired.".to_string(),
         ));
     }
 
@@ -431,7 +442,7 @@ async fn handle_sasl_continue(
         // Only validate mechanism if it's present - it's optional in SaslContinue
         if let Ok(mechanism) = mechanism_result {
             if mechanism == "MONGODB-OIDC" {
-                return Err(DocumentDBError::unauthorized(
+                return Err(DocumentDBError::authentication_failed(
                     "Auth mechanism MONGODB-OIDC is not supported in SaslContinue".to_string(),
                 ));
             }
@@ -441,17 +452,18 @@ async fn handle_sasl_continue(
 
         // Username is not always provided by saslcontinue
 
-        let client_nonce = payload.nonce.ok_or(DocumentDBError::unauthorized(
+        let client_nonce = payload.nonce.ok_or(DocumentDBError::authentication_failed(
             "Nonce missing from SaslContinue.".to_string(),
         ))?;
-        let proof = payload.proof.ok_or(DocumentDBError::unauthorized(
+        let proof = payload.proof.ok_or(DocumentDBError::authentication_failed(
             "Proof missing from SaslContinue.".to_string(),
         ))?;
-        let channel_binding = payload
-            .channel_binding
-            .ok_or(DocumentDBError::unauthorized(
-                "Channel binding missing from SaslContinue.".to_string(),
-            ))?;
+        let channel_binding =
+            payload
+                .channel_binding
+                .ok_or(DocumentDBError::authentication_failed(
+                    "Channel binding missing from SaslContinue.".to_string(),
+                ))?;
         let username = payload
             .username
             .or(connection_context.auth_state.username.as_deref())
@@ -460,7 +472,7 @@ async fn handle_sasl_continue(
             ))?;
 
         if client_nonce != first_state.nonce {
-            return Err(DocumentDBError::unauthorized(
+            return Err(DocumentDBError::authentication_failed(
                 "Nonce did not match expected nonce.".to_string(),
             ));
         }
@@ -500,7 +512,9 @@ async fn handle_sasl_continue(
             .map_err(DocumentDBError::pg_response_invalid)?
             != 1
         {
-            return Err(DocumentDBError::unauthorized("Invalid key".to_string()));
+            return Err(DocumentDBError::authentication_failed(
+                "Invalid key".to_string(),
+            ));
         }
 
         let server_signature = scram_sha256_doc
@@ -526,7 +540,7 @@ async fn handle_sasl_continue(
             "done": true
         })))
     } else {
-        Err(DocumentDBError::unauthorized(
+        Err(DocumentDBError::authentication_failed(
             "SaslContinue called without SaslStart state.".to_string(),
         ))
     }
@@ -582,7 +596,7 @@ fn parse_sasl_payload<'a, 'b: 'a>(
             "p" => proof = Some(v),
             "c" => channel_binding = Some(v),
             _ => {
-                return Err(DocumentDBError::unauthorized(
+                return Err(DocumentDBError::authentication_failed(
                     "Sasl payload was invalid.".to_string(),
                 ))
             }
@@ -610,7 +624,7 @@ async fn get_salt_and_iteration(
             .to_lowercase()
             .starts_with(&blocked_prefix.to_lowercase())
         {
-            return Err(DocumentDBError::unauthorized(
+            return Err(DocumentDBError::authentication_failed(
                 "Username is invalid.".to_string(),
             ));
         }

@@ -47,11 +47,15 @@ impl DocumentDBError {
     }
 
     pub fn sasl_payload_invalid() -> Self {
-        DocumentDBError::unauthorized("Sasl payload invalid.".to_string())
+        DocumentDBError::authentication_failed("Sasl payload invalid.".to_string())
     }
 
     pub fn unauthorized(msg: String) -> Self {
         DocumentDBError::DocumentDBError(ErrorCode::Unauthorized, msg, Backtrace::capture())
+    }
+
+    pub fn authentication_failed(msg: String) -> Self {
+        DocumentDBError::DocumentDBError(ErrorCode::AuthenticationFailed, msg, Backtrace::capture())
     }
 
     pub fn bad_value(msg: String) -> Self {
