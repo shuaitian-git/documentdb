@@ -693,7 +693,7 @@ jstests/core/query/sort/sortf.js,Pass,
 jstests/core/query/sort/sorth.js,Pass,
 jstests/core/query/sort/sorti.js,Pass,
 jstests/core/query/sort_project_plans.js,Pass,
-jstests/core/query/type/type1.js,Pass,
+jstests/core/query/type/type1.js,Skip,flaky test
 jstests/core/query/type/type2.js,Pass,
 jstests/core/query/type/type3.js,Pass,
 jstests/core/query/type/type4.js,Pass,

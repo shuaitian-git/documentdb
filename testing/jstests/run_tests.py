@@ -109,7 +109,6 @@ class DocumentDBTestRunner:
         self.passed = 0
         self.failed = 0
         self.skipped = 0
-        self.errors = 0
         self.unexpected_pass = 0
         self.unexpected_fail = 0
         self.unexpected_failures = []  # List of test names that unexpectedly failed
@@ -127,13 +126,9 @@ class DocumentDBTestRunner:
         raise RuntimeError("Could not find legacy mongo shell. Please specify with --mongo-shell")
     
     def _parse_connection_string(self):
-        """Parse connection string to extract host, port, username, password"""
-        # Simple parsing for host:port format
-        # Format: mongodb://username:password@host:port or just host:port
+        """Parse connection string to extract username and password"""
         self.username = None
         self.password = None
-        self.host = "localhost"
-        self.port = "27017"
         
         conn_str = self.connection_string
         
@@ -143,16 +138,9 @@ class DocumentDBTestRunner:
             
             # Check for username:password@
             if "@" in conn_str:
-                auth, host_port = conn_str.split("@", 1)
+                auth, _ = conn_str.split("@", 1)
                 if ":" in auth:
                     self.username, self.password = auth.split(":", 1)
-                conn_str = host_port
-        
-        # Parse host:port
-        if ":" in conn_str:
-            self.host, self.port = conn_str.split(":", 1)
-        else:
-            self.host = conn_str
     
     def load_tests(self) -> List[TestCase]:
         """Load test cases from the manifest CSV"""
@@ -192,12 +180,6 @@ class DocumentDBTestRunner:
     def drop_all_collections(self, test_name: str, max_retries: int = 3) -> bool:
         """
         Drop all collections from all databases (except admin, config, local).
-        
-        CRITICAL:
-        - Simple drop loop (no inline verification - that caused issues)
-        - Retry on failure via ExecuteShellCommandWithRetry
-        - Assert.Fail if drop command fails (we return False, caller fails test)
-        - Rely on synchronous shell command (no explicit waits)
         """
         if not self.drop_collections:
             return True
@@ -206,15 +188,13 @@ class DocumentDBTestRunner:
         drop_script = """
         var dbs = db.getMongo().getDBNames();
         for(var i in dbs) {
-            if (dbs[i] == 'config' || dbs[i] == 'admin' || dbs[i] == 'local') {
+            if (dbs[i] == 'config') {
                 continue;
             }
             var database = db.getMongo().getDB(dbs[i]);
             var colls = database.getCollectionNames();
             for(var j in colls) {
-                if (!colls[j].startsWith('system.')) {
-                    database.getCollection(colls[j]).drop();
-                }
+                database.getCollection(colls[j]).drop();
             }
         }
         """
@@ -257,120 +237,6 @@ class DocumentDBTestRunner:
         # ALL RETRIES FAILED
         return False
     
-    def verify_collections_dropped(self) -> tuple[bool, str]:
-        """
-        Verify that all non-system collections were actually dropped.
-        Returns (success, error_message).
-        
-        This provides extra assurance that cleanup completed, which is important
-        for diagnosing flaky test failures.
-        """
-        verify_script = """
-        var dbs = db.getMongo().getDBNames();
-        var foundCollections = [];
-        for(var i in dbs) {
-            var dbName = dbs[i];
-            if (dbName == 'admin' || dbName == 'config' || dbName == 'local') {
-                continue;
-            }
-            var database = db.getMongo().getDB(dbName);
-            var colls = database.getCollectionNames();
-            for(var j in colls) {
-                if (!colls[j].startsWith('system.')) {
-                    foundCollections.push(dbName + '.' + colls[j]);
-                }
-            }
-        }
-        if (foundCollections.length > 0) {
-            print('LEFTOVER_COLLECTIONS:' + foundCollections.join(','));
-            quit(1);
-        }
-        """
-        
-        cmd = [
-            self.mongo_shell,
-            self.connection_string,
-            '--tls',
-            '--tlsAllowInvalidCertificates',
-            '--eval', verify_script
-        ]
-        
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode != 0:
-                # Found leftover collections
-                error_lines = result.stdout.split('\n')
-                for line in error_lines:
-                    if 'LEFTOVER_COLLECTIONS:' in line:
-                        colls = line.split(':', 1)[1]
-                        return False, f"Found leftover collections: {colls}"
-                return False, f"Verification failed: {result.stderr[:100]}"
-            return True, ""
-        except Exception as e:
-            return False, f"Verification exception: {str(e)[:100]}"
-    
-    def force_close_connections(self) -> bool:
-        """
-        Force close all idle connections to prevent connection leaks.
-        This helps with test isolation during long runs.
-        """
-        close_script = """
-        // Close this connection cleanly
-        db.adminCommand({serverStatus: 1});
-        """
-        
-        cmd = [
-            self.mongo_shell,
-            self.connection_string,
-            '--tls',
-            '--tlsAllowInvalidCertificates',
-            '--eval', close_script
-        ]
-        
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            return result.returncode == 0
-        except Exception:
-            return False
-    
-    def log_test_name_to_server(self, test_name: str) -> bool:
-        """
-        Log test name to server by running a dummy command.
-        This helps isolate connection failures from test failures.
-        """
-        # Escape special characters in test name for JavaScript string
-        escaped_name = test_name.replace('\\', '\\\\').replace("'", "\\'")
-        
-        log_script = f"db.runCommand({{'TESTCASE: {escaped_name}':1}})"
-        
-        cmd = [
-            self.mongo_shell,
-            self.connection_string,
-            '--tls',
-            '--tlsAllowInvalidCertificates',
-            '--eval', log_script
-        ]
-        
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            return result.returncode == 0 or 'command not found' in result.stdout.lower()
-        except Exception:
-            return False
     
     def run_test(self, test_case: TestCase) -> TestRun:
         """
@@ -418,7 +284,7 @@ class DocumentDBTestRunner:
             if attempt > 1:
                 if self.verbose:
                     print(f"  Retry attempt {attempt}/{max_attempts}")
-                # Small delay between retries
+                # delay between retries
                 time.sleep(1)
             
             # Run the test (single attempt)
@@ -429,7 +295,6 @@ class DocumentDBTestRunner:
             if test_run.matches_expectation:
                 return test_run
             
-            # If this is not the last attempt, continue retrying
             if attempt < max_attempts:
                 continue
             
@@ -438,7 +303,7 @@ class DocumentDBTestRunner:
             test_run.stderr = f"Failed after {max_attempts} attempts"
             return test_run
         
-        # Should never reach here, but return last run just in case
+        # Should never reach here
         return test_run
     
     def _run_test_single_attempt(self, test_case: TestCase) -> TestRun:
@@ -453,9 +318,7 @@ class DocumentDBTestRunner:
             # FAIL IMMEDIATELY - don't run test on dirty state
             error_msg = f"CLEANUP FAILED: Could not drop collections before test '{test_case.name}'.\n"
             error_msg += f"Connection: {self.connection_string}\n"
-            error_msg += "(Assert.Fail on cleanup failure).\n"
-            error_msg += "Test isolation requires clean state - dirty state leads to flaky failures.\n"
-            error_msg += "Please check if the gateway is running and accessible."
+            error_msg += "(Assert.Fail on cleanup failure)."
             
             if self.verbose:
                 print(f"  ❌ CLEANUP FAILED - Test will not run")
@@ -472,7 +335,6 @@ class DocumentDBTestRunner:
             )
         
         # Drop succeeded
-        # No verification, no waits - just proceed to run the test
         
         # Get test name without extension for JS_TEST_NAME environment variable
         test_name_no_ext = Path(test_case.name).stem
@@ -580,7 +442,7 @@ class DocumentDBTestRunner:
                 self.passed += 1
             else:  # Expected fail
                 symbol = "✓"
-                color = "\033[0;32m"  # Green (expected to fail)
+                color = "\033[0;36m"  # Cyan (expected to fail)
                 self.passed += 1
         else:
             symbol = "✗"
@@ -757,7 +619,7 @@ def main():
         dest='enable_retries',
         action='store_false',
         default=True,
-        help='Disable retry logic for flaky tests (expected-pass tests retry up to 3 times by default)'
+        help='Disable retry logic'
     )
     
     args = parser.parse_args()
