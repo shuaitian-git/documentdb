@@ -116,6 +116,9 @@ bool UseNewUniqueHashEqualityFunction = DEFAULT_USE_NEW_UNIQUE_HASH_EQUALITY_FUN
 #define DEFAULT_ENABLE_COMPOSITE_UNIQUE_HASH true
 bool EnableCompositeUniqueHash = DEFAULT_ENABLE_COMPOSITE_UNIQUE_HASH;
 
+#define DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENERATION true
+bool RumUseNewCompositeTermGeneration = DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENERATION;
+
 /*
  * SECTION: Planner feature flags
  */

@@ -61,7 +61,8 @@ static QTNode * RewriteQueryTree(QTNode *node, bool *rewrote);
 static IndexTraverseOption GetTextIndexTraverseOption(void *contextOptions,
 													  const char *currentPath, uint32_t
 													  currentPathLength,
-													  bson_type_t bsonType);
+													  bson_type_t bsonType,
+													  int32_t *pathIndex);
 
 static Oid ExtractTsConfigFromLanguage(const StringView *stringView,
 									   bool isCreateIndex);
@@ -789,10 +790,11 @@ FormatTraverseOptionForText(IndexTraverseOption pathOption, bson_type_t bsonType
 static IndexTraverseOption
 GetTextIndexTraverseOption(void *contextOptions,
 						   const char *currentPath, uint32_t currentPathLength,
-						   bson_type_t bsonType)
+						   bson_type_t bsonType, int32_t *pathIndex)
 {
 	BsonGinTextPathOptions *indexOpts = (BsonGinTextPathOptions *) contextOptions;
 
+	*pathIndex = 0;
 	if (indexOpts->isWildcard)
 	{
 		/* Root wildcard */
@@ -1311,14 +1313,12 @@ GenerateTsVectorWithOptions(pgbson *document,
 {
 	GenerateTermsContext context = { 0 };
 	GinEntryPathData pathData = { 0 };
-	context.pathDataState = &pathData;
-	context.getPathDataFunc = GetPathDataDefault;
 	context.options = (void *) options;
 	context.traverseOptionsFunc = &GetTextIndexTraverseOption;
 	context.generateNotFoundTerm = false;
 
 	bool addRootTerm = false;
-	GenerateTerms(document, &context, addRootTerm);
+	GenerateTerms(document, &context, &pathData, addRootTerm);
 
 	/* Phase 2: Generate TSVector */
 

@@ -79,17 +79,17 @@ bool GinBsonElemMatchConsistent(bool *checkArray, Pointer *extraData, int32_t nu
 typedef enum IndexTraverseOption
 {
 	/* The path is invalid and no terms should be generated in that tree. */
-	IndexTraverse_Invalid,
+	IndexTraverse_Invalid = 0,
 
 	/* The path may have valid descendants that could generate terms on the index */
 	/* do not consider the path, but recurse down nested objects and arrays for terms */
-	IndexTraverse_Recurse,
+	IndexTraverse_Recurse = 0x1,
 
 	/* the path is a match and should be added to the index. */
-	IndexTraverse_Match,
+	IndexTraverse_Match = 0x2,
 
 	/* The path is a match and child paths are also matches */
-	IndexTraverse_MatchAndRecurse,
+	IndexTraverse_MatchAndRecurse = 0x3,
 } IndexTraverseOption;
 
 
@@ -97,13 +97,15 @@ typedef enum IndexTraverseOption
 IndexTraverseOption GetSinglePathIndexTraverseOption(void *contextOptions,
 													 const char *currentPath,
 													 uint32_t currentPathLength,
-													 bson_type_t bsonType);
+													 bson_type_t bsonType,
+													 int32_t *pathIndex);
 IndexTraverseOption GetWildcardProjectionPathIndexTraverseOption(void *contextOptions,
 																 const char *currentPath,
 																 uint32_t
 																 currentPathLength,
 																 bson_type_t
-																 bsonType);
+																 bsonType,
+																 int32_t *pathIndex);
 IndexTraverseOption GetSinglePathIndexTraverseOptionCore(const char *indexPath,
 														 uint32_t indexPathLength,
 														 const char *currentPath,
@@ -117,7 +119,8 @@ IndexTraverseOption GetSinglePathIndexTraverseOptionCore(const char *indexPath,
 typedef IndexTraverseOption (*GetIndexTraverseOptionFunc)(void *contextOptions, const
 														  char *currentPath, uint32_t
 														  currentPathLength,
-														  bson_type_t valueType);
+														  bson_type_t valueType,
+														  int32_t *pathIndex);
 
 
 typedef struct GinEntrySet
@@ -145,6 +148,9 @@ typedef struct GinEntryPathData
 	 * that do not have terms, this is marked as true.
 	 */
 	bool hasArrayPartialTermExistence;
+
+	/* OUTPUT: The core terms count - without any metadata post-term generation */
+	int32_t coreTermsCount;
 
 	/* OUTPUT: Whether a root truncation term has already been created for this document */
 	bool hasTruncatedTerms;
@@ -193,19 +199,24 @@ typedef struct
 	/* Path specific data (per path info) */
 	void *pathDataState;
 
-	GinEntryPathData *(*getPathDataFunc)(void *pathDataState);
+	GinEntryPathData *(*getPathDataFunc)(void *pathDataState, int index);
+
+	int maxPaths;
 } GenerateTermsContext;
 
 
 /* Exports for the core index processing layer. */
 void GenerateSinglePathTermsCore(pgbson *bson, GenerateTermsContext *context,
+								 GinEntryPathData *pathData,
 								 BsonGinSinglePathOptions *singlePathOptions);
 
 void GenerateWildcardPathTermsCore(pgbson *bson, GenerateTermsContext *context,
+								   GinEntryPathData *pathData,
 								   BsonGinWildcardProjectionPathOptions *wildcardOptions);
 
-bool GenerateTermsForPath(pgbson *bson, GenerateTermsContext *context);
-void GenerateTerms(pgbson *bson, GenerateTermsContext *context, bool addRootTerm);
+void GenerateTermsForPath(pgbson *bson, GenerateTermsContext *context);
+void GenerateTerms(pgbson *bson, GenerateTermsContext *context,
+				   GinEntryPathData *pathData, bool addRootTerm);
 
 Datum *GinBsonExtractQueryUniqueIndexTerms(PG_FUNCTION_ARGS);
 Datum *GinBsonExtractQueryOrderBy(PG_FUNCTION_ARGS);
@@ -220,6 +231,4 @@ IndexTraverseOption GetCompositePathIndexTraverseOption(BsonIndexStrategy strate
 														currentPathLength,
 														const bson_value_t *bsonValue,
 														int32_t *compositeIndexCol);
-
-GinEntryPathData * GetPathDataDefault(void *state);
 #endif

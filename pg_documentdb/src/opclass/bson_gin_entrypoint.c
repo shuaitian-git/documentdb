@@ -91,10 +91,7 @@ gin_bson_single_path_extract_value(PG_FUNCTION_ARGS)
 	GenerateTermsContext context = { 0 };
 	GinEntryPathData pathData = { 0 };
 	pathData.termMetadata = GetIndexTermMetadata(options);
-	context.pathDataState = &pathData;
-	context.getPathDataFunc = GetPathDataDefault;
-
-	GenerateSinglePathTermsCore(bson, &context, options);
+	GenerateSinglePathTermsCore(bson, &context, &pathData, options);
 
 	*nentries = pathData.terms.index;
 
@@ -126,10 +123,8 @@ gin_bson_wildcard_project_extract_value(PG_FUNCTION_ARGS)
 	BsonGinWildcardProjectionPathOptions *options =
 		(BsonGinWildcardProjectionPathOptions *) PG_GET_OPCLASS_OPTIONS();
 
-	context.pathDataState = &pathData;
-	context.getPathDataFunc = GetPathDataDefault;
 	pathData.termMetadata = GetIndexTermMetadata(options);
-	GenerateWildcardPathTermsCore(bson, &context, options);
+	GenerateWildcardPathTermsCore(bson, &context, &pathData, options);
 	*nentries = pathData.terms.index;
 
 	PG_FREE_IF_COPY(bson, 0);
@@ -447,10 +442,8 @@ gin_bson_get_single_path_generated_terms(PG_FUNCTION_ARGS)
 
 		pathData = (GinEntryPathData *) palloc0(sizeof(GinEntryPathData));
 		pathData->termMetadata = GetIndexTermMetadata(options);
-		context->pathDataState = pathData;
-		context->getPathDataFunc = GetPathDataDefault;
 
-		GenerateSinglePathTermsCore(document, context, options);
+		GenerateSinglePathTermsCore(document, context, pathData, options);
 		pathData->terms.entryCapacity = pathData->terms.index;
 		pathData->terms.index = 0;
 		MemoryContextSwitchTo(oldcontext);
@@ -537,10 +530,8 @@ gin_bson_get_wildcard_project_generated_terms(PG_FUNCTION_ARGS)
 		options->base.wildcardIndexTruncatedPathLimit = truncateLimit > 0 ?
 														MaxWildcardIndexKeySize : 0;
 
-		context->pathDataState = pathData;
-		context->getPathDataFunc = GetPathDataDefault;
 		pathData->termMetadata = GetIndexTermMetadata(options);
-		GenerateWildcardPathTermsCore(document, context, options);
+		GenerateWildcardPathTermsCore(document, context, pathData, options);
 
 		pathData->terms.entryCapacity = pathData->terms.index;
 		pathData->terms.index = 0;
@@ -985,11 +976,13 @@ ValidateIndexForQualifierElement(bytea *indexOptions, pgbsonelement *filterEleme
 				}
 			}
 
+			int32_t pathIndexInnerIgnore = 0;
 			traverse = GetSinglePathIndexTraverseOption(options,
 														filterElement->path,
 														filterElement->pathLength,
 														filterElement->bsonValue.
-														value_type);
+														value_type,
+														&pathIndexInnerIgnore);
 			break;
 		}
 
@@ -1022,12 +1015,14 @@ ValidateIndexForQualifierElement(bytea *indexOptions, pgbsonelement *filterEleme
 
 		case IndexOptionsType_Wildcard:
 		{
+			int32_t pathIndexInnerIgnore = 0;
 			traverse = GetWildcardProjectionPathIndexTraverseOption(options,
 																	filterElement->path,
 																	filterElement->
 																	pathLength,
 																	filterElement->
-																	bsonValue.value_type);
+																	bsonValue.value_type,
+																	&pathIndexInnerIgnore);
 			break;
 		}
 
@@ -1098,10 +1093,12 @@ ValidateIndexForQualifierPathForEquality(bytea *indexOptions, const StringView *
 				}
 			}
 
+			int32_t pathIndexInnerIgnore;
 			traverse = GetSinglePathIndexTraverseOption(options,
 														queryPath->string,
 														queryPath->length,
-														BSON_TYPE_EOD);
+														BSON_TYPE_EOD,
+														&pathIndexInnerIgnore);
 			break;
 		}
 
@@ -1116,10 +1113,12 @@ ValidateIndexForQualifierPathForEquality(bytea *indexOptions, const StringView *
 
 		case IndexOptionsType_Wildcard:
 		{
+			int32_t pathIndexInnerIgnore = 0;
 			traverse = GetWildcardProjectionPathIndexTraverseOption(options,
 																	queryPath->string,
 																	queryPath->length,
-																	BSON_TYPE_EOD);
+																	BSON_TYPE_EOD,
+																	&pathIndexInnerIgnore);
 			break;
 		}
 
@@ -1261,11 +1260,13 @@ pg_attribute_no_sanitize_alignment() IndexTraverseOption
 GetWildcardProjectionPathIndexTraverseOption(void *contextOptions, const
 											 char *currentPath, uint32_t
 											 currentPathLength,
-											 bson_type_t bsonType)
+											 bson_type_t bsonType,
+											 int32_t *pathIndex)
 {
 	BsonGinWildcardProjectionPathOptions *option =
 		(BsonGinWildcardProjectionPathOptions *) contextOptions;
 
+	*pathIndex = 0;
 	uint32_t pathCount;
 	const char *pathSpecBytes;
 	Get_Index_Path_Option(option, pathSpec, pathSpecBytes, pathCount);
@@ -1322,12 +1323,14 @@ GetWildcardProjectionPathIndexTraverseOption(void *contextOptions, const
 IndexTraverseOption
 GetSinglePathIndexTraverseOption(void *contextOptions,
 								 const char *currentPath, uint32_t currentPathLength,
-								 bson_type_t bsonType)
+								 bson_type_t bsonType, int32_t *pathIndex)
 {
 	BsonGinSinglePathOptions *option = (BsonGinSinglePathOptions *) contextOptions;
 	uint32_t indexPathLength;
 	const char *indexPath;
 	Get_Index_Path_Option(option, path, indexPath, indexPathLength);
+
+	*pathIndex = 0;
 	return GetSinglePathIndexTraverseOptionCore(indexPath, indexPathLength,
 												currentPath, currentPathLength,
 												option->isWildcard);

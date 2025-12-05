@@ -49,6 +49,11 @@ SELECT * FROM multi_key_tests.gin_bson_get_composite_path_generated_terms('{ "a"
 SELECT * FROM multi_key_tests.gin_bson_get_composite_path_generated_terms('{ "a": [ { "b": [ 1, 2 ] }, { "b": [ 3, 4 ] } ], "c": { "d": [ 2, 3 ] } }', '[ "a.b", "c.d" ]', 2000, false);
 SELECT * FROM multi_key_tests.gin_bson_get_composite_path_generated_terms('{ "a": [ { "b": [ 1, 2 ] }, { "b": [ 3, 4 ] } ], "c": [ { "d": 2 }, { "d": 3 } ] }', '[ "a.b", "c.d" ]', 2000, false);
 
+-- when one path has some terms and another doesn't generates the right type of null terms.
+-- here a.b has "some paths" existing, and "a.c" has none
+SELECT * FROM multi_key_tests.gin_bson_get_composite_path_generated_terms('{ "a": [ { "b": 2 }, { "d": 2 } ] }', '[ "a.b", "a.c" ]', 2000, false);
+SELECT * FROM multi_key_tests.gin_bson_get_composite_path_generated_terms('{ "a": [ { "b": 2 }, { "d": 2, "c": 5 } ] }', '[ "a.b", "a.c" ]', 2000, false);
+
 -- now test query path pushdown
 SELECT documentdb_api_internal.create_indexes_non_concurrently('mkey_db', '{ "createIndexes": "mkey_coll", "indexes": [ { "key": { "a.b": 1, "a.c": 1 }, "name": "a_b_c_1", "enableOrderedIndex": 1 } ] }');
 

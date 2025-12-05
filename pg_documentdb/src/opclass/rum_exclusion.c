@@ -66,9 +66,11 @@ static pgbson * GetShardKeyAndDocument(HeapTupleHeader input, int64_t *shardKey)
 static IndexTraverseOption GetExclusionIndexTraverseOption(void *contextOptions,
 														   const char *currentPath,
 														   uint32_t currentPathLength,
-														   bson_type_t bsonType);
+														   bson_type_t bsonType,
+														   int32_t *pathIndex);
 static void GenerateTermsForExclusion(pgbson *document, int64_t shardKey,
 									  GenerateTermsContext *context,
+									  GinEntryPathData *pathData,
 									  bool generateRootTerm);
 static void ValidateExclusionPathSpec(const char *prefix);
 static bool ProcessUniqueShardDocumentKeysNew(pgbson *uniqueShardDocument,
@@ -170,11 +172,9 @@ gin_bson_exclusion_extract_value(PG_FUNCTION_ARGS)
 	GenerateTermsContext context = { 0 };
 	GinEntryPathData pathData = { 0 };
 	context.options = options;
-	context.pathDataState = &pathData;
-	context.getPathDataFunc = GetPathDataDefault;
 	pathData.termMetadata = GetIndexTermMetadata(options);
 	bool generateRootTerm = true;
-	GenerateTermsForExclusion(document, shardKey, &context, generateRootTerm);
+	GenerateTermsForExclusion(document, shardKey, &context, &pathData, generateRootTerm);
 	*nentries = pathData.terms.index;
 
 	PG_FREE_IF_COPY(input, 0);
@@ -214,11 +214,9 @@ gin_bson_exclusion_extract_query(PG_FUNCTION_ARGS)
 	GenerateTermsContext context = { 0 };
 	GinEntryPathData pathData = { 0 };
 	context.options = options;
-	context.pathDataState = &pathData;
-	context.getPathDataFunc = GetPathDataDefault;
 	bool generateRootTerm = false;
 	pathData.termMetadata = GetIndexTermMetadata(options);
-	GenerateTermsForExclusion(document, shardKey, &context, generateRootTerm);
+	GenerateTermsForExclusion(document, shardKey, &context, &pathData, generateRootTerm);
 	*nentries = pathData.terms.index;
 
 	PG_FREE_IF_COPY(input, 0);
@@ -356,13 +354,11 @@ generate_unique_shard_document(PG_FUNCTION_ARGS)
 		GenerateTermsContext context = { 0 };
 		GinEntryPathData pathData = { 0 };
 		context.options = singlePathOptions;
-		context.pathDataState = &pathData;
-		context.getPathDataFunc = GetPathDataDefault;
 		bool generateRootTerm = false;
 		pathData.termMetadata = GetIndexTermMetadata(singlePathOptions);
 		context.traverseOptionsFunc = &GetSinglePathIndexTraverseOption;
 		context.generateNotFoundTerm = singlePathOptions->generateNotFoundTerm;
-		GenerateTerms(document, &context, generateRootTerm);
+		GenerateTerms(document, &context, &pathData, generateRootTerm);
 
 		if (indexColumn >= INDEX_MAX_KEYS)
 		{
@@ -1016,13 +1012,14 @@ static IndexTraverseOption
 GetExclusionIndexTraverseOption(void *contextOptions,
 								const char *currentPath,
 								uint32_t currentPathLength,
-								bson_type_t bsonType)
+								bson_type_t bsonType, int32_t *pathIndex)
 {
 	BsonGinExclusionHashOptions *option = (BsonGinExclusionHashOptions *) contextOptions;
 	const char *indexPath;
 	uint32_t indexPathLength;
 	Get_Index_Path_Option(option, path, indexPath, indexPathLength);
 	bool isWildcard = false;
+	*pathIndex = 0;
 	return GetSinglePathIndexTraverseOptionCore(indexPath, indexPathLength,
 												currentPath, currentPathLength,
 												isWildcard);
@@ -1039,14 +1036,14 @@ static void
 GenerateTermsForExclusion(pgbson *document,
 						  int64_t shardKey,
 						  GenerateTermsContext *context,
+						  GinEntryPathData *pathData,
 						  bool generateRootTerm)
 {
 	context->traverseOptionsFunc = &GetExclusionIndexTraverseOption;
 	context->generateNotFoundTerm = true;
-	GenerateTerms(document, context, generateRootTerm);
+	GenerateTerms(document, context, pathData, generateRootTerm);
 
 	/* Now walk the generated terms and replace them with the hash */
-	GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState);
 	for (int i = 0; i < pathData->terms.index; i++)
 	{
 		Datum entry = pathData->terms.entries[i];
