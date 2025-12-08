@@ -10,9 +10,8 @@ use std::{backtrace::Backtrace, fmt::Display, io};
 
 use bson::raw::ValueAccessError;
 use deadpool_postgres::{BuildError, CreatePoolError, PoolError};
-use openssl::error::ErrorStack;
-
 use documentdb_macros::documentdb_error_code_enum;
+use openssl::error::ErrorStack;
 
 use crate::responses::constant::pg_returned_invalid_response_message;
 
