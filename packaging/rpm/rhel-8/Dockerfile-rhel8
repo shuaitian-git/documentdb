@@ -59,7 +59,14 @@ RUN dnf -y install \
         libcurl-devel \
         libuuid-devel \
         lz4-devel \
-        bzip2-devel
+        bzip2-devel \
+        llvm-toolset \
+        clang-devel \
+        llvm-devel
+
+# PostgreSQL 16+ with JIT enabled expects LLVM tools in /usr/lib64/llvm20/bin
+# On RHEL 8, LLVM binaries are in /usr/bin, so create a simple symlink
+RUN mkdir -p /usr/lib64/llvm20 && ln -s /usr/bin /usr/lib64/llvm20/bin
 
 RUN rpmdev-setuptree
 
