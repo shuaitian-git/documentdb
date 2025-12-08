@@ -78,7 +78,7 @@ impl PgResponse {
     /// If 'writeErrors' is present, it transforms each error by potentially mapping them to the known DocumentDB error codes.
     pub async fn transform_write_errors(
         self,
-        context: &ConnectionContext,
+        connection_context: &ConnectionContext,
         activity_id: &str,
     ) -> Result<Response> {
         if let Ok(Some(_)) = self.as_raw_document()?.get("writeErrors") {
@@ -89,7 +89,8 @@ impl PgResponse {
             })?;
 
             for value in write_errors {
-                self.transform_error(context, value, activity_id).await?;
+                self.transform_error(connection_context, value, activity_id)
+                    .await?;
             }
             let raw = RawDocumentBuf::from_document(&response)?;
             return Ok(Response::Raw(RawResponse(raw)));
@@ -100,10 +101,10 @@ impl PgResponse {
     async fn transform_error(
         &self,
         context: &ConnectionContext,
-        bson: &mut Bson,
+        error_bson: &mut Bson,
         activity_id: &str,
     ) -> Result<()> {
-        let doc = bson
+        let doc = error_bson
             .as_document_mut()
             .ok_or(DocumentDBError::internal_error(
                 "Failed to convert BSON write error into BSON document.".to_string(),
