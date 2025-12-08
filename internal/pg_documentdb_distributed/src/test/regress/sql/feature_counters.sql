@@ -3,6 +3,14 @@ SET citus.next_shard_id TO 6750000;
 SET documentdb.next_collection_id TO 67500;
 SET documentdb.next_collection_index_id TO 67500;
 
+-- Delete all other indexes from previous tests to reduce flakiness
+WITH deleted AS (
+  DELETE FROM documentdb_api_catalog.collection_indexes
+  WHERE collection_id != 67500
+  RETURNING 1
+) SELECT true FROM deleted UNION ALL SELECT true LIMIT 1;
+
+
 -- Reset the counters by making a call to the counter and discarding the results
 select count(*)*0 as count from documentdb_api_internal.command_feature_counter_stats(true);
 
@@ -218,11 +226,16 @@ SELECT bson_dollar_unwind(cursorpage, '$cursor.firstBatch') FROM documentdb_api.
 SELECT * FROM documentdb_distributed_test_helpers.get_collection_indexes('db', 'feature_usage_ttlcoll') ORDER BY collection_id, index_id;
 
 -- 4. Call ttl purge procedure with a batch size of 2
+SET documentdb.repeatPurgeIndexesForTTLTask to off;
 CALL documentdb_api_internal.delete_expired_rows(3);
 CALL documentdb_api_internal.delete_expired_rows(3);
 CALL documentdb_api_internal.delete_expired_rows(3);
 
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
+SET documentdb.TTLSlowBatchDeleteThresholdInMS to 0; /* 0 makes all batches slow*/
+CALL documentdb_api_internal.delete_expired_rows(300);
+SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true); /* 8 shards each for 2 indexes*/
+RESET documentdb.TTLSlowBatchDeleteThresholdInMS;
 
 -- Feature counter for _internalInhibitOptimization
 SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "feature_usage_inhibit", "pipeline": [ { "$addFields": { "e": {  "f": "$a.b" } } }, { "$_internalInhibitOptimization": 1 }, { "$replaceWith": "$e" } ], "cursor": {} }');

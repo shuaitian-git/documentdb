@@ -19,13 +19,13 @@
 #include <port/atomics.h>
 
 #define MAX_FEATURE_NAME_LENGTH 255
-#define MAX_FEATURE_COUNT 349
+#define MAX_FEATURE_COUNT 351
 
 /* Internal features that are not exposed */
 #define INTERNAL_FEATURE_TYPE MAX_FEATURE_COUNT
 
 /*
- * IMP: Keep this alphabetically sorted while adding new feature types. Sorting is done for better reability.
+ * IMP: Keep this alphabetically sorted while adding new feature types. Sorting is done for better readability.
  * #CodeSync: Keep this in sync with FeatureMapping array in feature_counter.c
  *            For each FeatureType enum a FeatureMapping entry should exist.
  *
@@ -406,6 +406,8 @@ typedef enum
 
 	/* Feature usage stats */
 	FEATURE_USAGE_TTL_PURGER_CALLS,
+	FEATURE_USAGE_TTL_SATURATED_BATCHES,
+	FEATURE_USAGE_TTL_SLOW_BATCHES,
 
 	/* Feature mapping region - User CRUD*/
 	FEATURE_USER_CREATE,
