@@ -178,7 +178,17 @@ typedef struct
 typedef struct
 {
 	BsonGinIndexOptionsBase base;
+
+	/* Offset into the string containing
+	 * the composite path spec.
+	 */
 	int compositePathSpec;
+
+	/*
+	 * The path index containing a wildcard
+	 * path (or -1 if there isn't).
+	 */
+	int wildcardPathIndex;
 } BsonGinCompositePathOptions;
 
 bool ValidateIndexForQualifierElement(bytea *indexOptions,
@@ -217,6 +227,7 @@ const char * GetCompositeFirstIndexPath(void *contextOptions);
 const char * GetFirstPathFromIndexOptionsIfApplicable(bytea *indexOptions,
 													  bool *isWildcardIndex);
 bool PathHasArrayIndexElements(const StringView *path);
+bool SubPathHasArrayIndexElements(const StringView *path, StringView subPath);
 
 struct PlannerInfo;
 bool TraverseIndexPathForCompositeIndex(struct IndexPath *indexPath, struct

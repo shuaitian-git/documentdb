@@ -375,7 +375,7 @@ GenerateSinglePathTermsCore(pgbson *bson, GenerateTermsContext *context,
 	context->options = (void *) singlePathOptions;
 	context->traverseOptionsFunc = &GetSinglePathIndexTraverseOption;
 	context->generateNotFoundTerm = singlePathOptions->generateNotFoundTerm;
-	context->useReducedWildcardTerms =
+	pathData->useReducedWildcardTerms =
 		singlePathOptions->isWildcard && singlePathOptions->useReducedWildcardTerms;
 
 	bool addRootTerm = true;
@@ -1107,8 +1107,10 @@ GenerateTermsForPath(pgbson *bson, GenerateTermsContext *context)
 		pathData->terms.entries = palloc0(sizeof(Datum) * 2);
 		pathData->terms.entryCapacity = 2;
 		pathData->terms.index = 0;
+		pathData->coreTermsCount = 0;
 		pathData->hasTruncatedTerms = false;
 		pathData->hasArrayAncestors = false;
+		pathData->hasArrayValues = false;
 	}
 
 	bool inArrayContext = false;
@@ -1133,7 +1135,7 @@ GenerateTermsForPath(pgbson *bson, GenerateTermsContext *context)
 			AddTerm(&pathData->terms, GeneratePathUndefinedTerm(context->options));
 		}
 
-		if (context->generatePathBasedUndefinedTerms)
+		if (pathData->generatePathBasedUndefinedTerms)
 		{
 			if (hasNoTerms)
 			{
@@ -1225,9 +1227,17 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 
 	StringInfoData pathBuilderBuffer = { 0 };
 	initStringInfo(&pathBuilderBuffer);
+	bool useReducedWildcardTerms = true;
 	for (int i = 0; i < context->maxPaths; i++)
 	{
 		GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState, i);
+
+		/* TODO: Handle wildcard and non-wildcard composite indexes:
+		 * in the scenario where we have { a.$**: 1, b: 1, c: 1}
+		 * we need this to only apply to the wildcard term being generated.
+		 */
+		useReducedWildcardTerms = useReducedWildcardTerms &&
+								  pathData->useReducedWildcardTerms;
 		EnsureTermCapacity(&pathData->terms, arrayCapacityEstimate);
 	}
 
@@ -1253,7 +1263,7 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 		 * the child array, we still need the parent array path
 		 * i.e. for a [ [ { b: 10 } ] ] we need to generate a.0.b
 		 */
-		if (context->useReducedWildcardTerms &&
+		if (useReducedWildcardTerms &&
 			isPathMatchedRecursively && !inArrayContext)
 		{
 			if (BSON_ITER_HOLDS_ARRAY(&containerIter))
@@ -1462,6 +1472,17 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 
 			GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState,
 																  pathIndex);
+			if (pathData->skipGenerateTopLevelDocumentTerm &&
+				element.bsonValue.value_type == BSON_TYPE_DOCUMENT &&
+				option == IndexTraverse_MatchAndRecurse)
+			{
+				/* Skip the top level document term */
+				if (!IsBsonValueEmptyDocument(&element.bsonValue))
+				{
+					break;
+				}
+			}
+
 			BsonCompressableIndexTermSerialized serializedTerm =
 				SerializeBsonIndexTermWithCompression(
 					&element, &pathData->termMetadata);

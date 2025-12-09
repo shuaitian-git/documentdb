@@ -149,6 +149,17 @@ typedef struct GinEntryPathData
 	 */
 	bool hasArrayPartialTermExistence;
 
+	/* Whether or not to generate path based undefined terms (used in composite indexes) */
+	bool generatePathBasedUndefinedTerms;
+
+	/* Whether or not to skip generating the top level document term */
+	bool skipGenerateTopLevelDocumentTerm;
+
+	/*
+	 * Whether or not to use the reduced wildcard term generation support.
+	 */
+	bool useReducedWildcardTerms;
+
 	/* OUTPUT: The core terms count - without any metadata post-term generation */
 	int32_t coreTermsCount;
 
@@ -187,14 +198,6 @@ typedef struct
 
 	/* Whether or not to skip generating the top level array term */
 	bool skipGenerateTopLevelArrayTerm;
-
-	/* Whether or not to generate path based undefined terms (used in composite indexes) */
-	bool generatePathBasedUndefinedTerms;
-
-	/*
-	 * Whether or not to use the reduced wildcard term generation support.
-	 */
-	bool useReducedWildcardTerms;
 
 	/* Path specific data (per path info) */
 	void *pathDataState;
