@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use bson::{RawDocument, RawDocumentBuf};
-use tokio_postgres::{types::Type, Row};
+use tokio_postgres::{error::SqlState, types::Type, Row};
 
 use crate::{
     auth::AuthState,
@@ -946,7 +946,19 @@ impl PgDataClient for DocumentDBDataClient {
                 Timeout::transaction(request_info.max_time_ms),
                 request_tracker,
             )
-            .await?;
+            .await
+            .map_err(|e| {
+                if let DocumentDBError::PostgresError(pg_error, _) = &e {
+                    if let Some(code) = pg_error.code() {
+                        if code == &SqlState::DUPLICATE_OBJECT {
+                            return DocumentDBError::duplicate_user(
+                                "The specified user already exists.".to_string(),
+                            );
+                        }
+                    }
+                }
+                e
+            })?;
 
         Ok(Response::Pg(PgResponse::new(create_user_rows)))
     }
@@ -970,7 +982,19 @@ impl PgDataClient for DocumentDBDataClient {
                 Timeout::transaction(request_info.max_time_ms),
                 request_tracker,
             )
-            .await?;
+            .await
+            .map_err(|e| {
+                if let DocumentDBError::PostgresError(pg_error, _) = &e {
+                    if let Some(code) = pg_error.code() {
+                        if code == &SqlState::UNDEFINED_OBJECT {
+                            return DocumentDBError::user_not_found(
+                                "The specified user does not exist.".to_string(),
+                            );
+                        }
+                    }
+                }
+                e
+            })?;
 
         Ok(Response::Pg(PgResponse::new(drop_user_rows)))
     }
@@ -994,7 +1018,19 @@ impl PgDataClient for DocumentDBDataClient {
                 Timeout::transaction(request_info.max_time_ms),
                 request_tracker,
             )
-            .await?;
+            .await
+            .map_err(|e| {
+                if let DocumentDBError::PostgresError(pg_error, _) = &e {
+                    if let Some(code) = pg_error.code() {
+                        if code == &SqlState::UNDEFINED_OBJECT {
+                            return DocumentDBError::user_not_found(
+                                "The specified user does not exist.".to_string(),
+                            );
+                        }
+                    }
+                }
+                e
+            })?;
 
         Ok(Response::Pg(PgResponse::new(update_user_rows)))
     }
@@ -1136,7 +1172,19 @@ impl PgDataClient for DocumentDBDataClient {
                 Timeout::command(request_info.max_time_ms),
                 request_tracker,
             )
-            .await?;
+            .await
+            .map_err(|e| {
+                if let DocumentDBError::PostgresError(pg_error, _) = &e {
+                    if let Some(code) = pg_error.code() {
+                        if code == &SqlState::DUPLICATE_OBJECT {
+                            return DocumentDBError::duplicate_role(
+                                "The specified role already exists.".to_string(),
+                            );
+                        }
+                    }
+                }
+                e
+            })?;
         Ok(Response::Pg(PgResponse::new(create_role_rows)))
     }
 
@@ -1159,7 +1207,19 @@ impl PgDataClient for DocumentDBDataClient {
                 Timeout::command(request_info.max_time_ms),
                 request_tracker,
             )
-            .await?;
+            .await
+            .map_err(|e| {
+                if let DocumentDBError::PostgresError(pg_error, _) = &e {
+                    if let Some(code) = pg_error.code() {
+                        if code == &SqlState::UNDEFINED_OBJECT {
+                            return DocumentDBError::role_not_found(
+                                "The specified role does not exist.".to_string(),
+                            );
+                        }
+                    }
+                }
+                e
+            })?;
         Ok(Response::Pg(PgResponse::new(update_role_rows)))
     }
 
@@ -1182,7 +1242,19 @@ impl PgDataClient for DocumentDBDataClient {
                 Timeout::command(request_info.max_time_ms),
                 request_tracker,
             )
-            .await?;
+            .await
+            .map_err(|e| {
+                if let DocumentDBError::PostgresError(pg_error, _) = &e {
+                    if let Some(code) = pg_error.code() {
+                        if code == &SqlState::UNDEFINED_OBJECT {
+                            return DocumentDBError::role_not_found(
+                                "The specified role does not exist.".to_string(),
+                            );
+                        }
+                    }
+                }
+                e
+            })?;
         Ok(Response::Pg(PgResponse::new(drop_role_rows)))
     }
 

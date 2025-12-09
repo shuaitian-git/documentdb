@@ -69,6 +69,22 @@ impl DocumentDBError {
         DocumentDBError::DocumentDBError(ErrorCode::TypeMismatch, msg, Backtrace::capture())
     }
 
+    pub fn user_not_found(msg: String) -> Self {
+        DocumentDBError::DocumentDBError(ErrorCode::UserNotFound, msg, Backtrace::capture())
+    }
+
+    pub fn role_not_found(msg: String) -> Self {
+        DocumentDBError::DocumentDBError(ErrorCode::RoleNotFound, msg, Backtrace::capture())
+    }
+
+    pub fn duplicate_user(msg: String) -> Self {
+        DocumentDBError::DocumentDBError(ErrorCode::Location51003, msg, Backtrace::capture())
+    }
+
+    pub fn duplicate_role(msg: String) -> Self {
+        DocumentDBError::DocumentDBError(ErrorCode::Location51002, msg, Backtrace::capture())
+    }
+
     pub fn reauthentication_required(msg: String) -> Self {
         DocumentDBError::DocumentDBError(
             ErrorCode::ReauthenticationRequired,
