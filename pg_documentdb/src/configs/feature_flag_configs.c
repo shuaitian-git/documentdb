@@ -119,6 +119,9 @@ bool EnableCompositeUniqueHash = DEFAULT_ENABLE_COMPOSITE_UNIQUE_HASH;
 #define DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENERATION true
 bool RumUseNewCompositeTermGeneration = DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENERATION;
 
+#define DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX false
+bool EnableCompositeWildcardIndex = DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX;
+
 /*
  * SECTION: Planner feature flags
  */
@@ -725,6 +728,13 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether to enable new unique hash equality implementation."),
 		NULL, &EnableCompositeUniqueHash,
 		DEFAULT_ENABLE_COMPOSITE_UNIQUE_HASH,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableCompositeWildcardIndex", newGucPrefix),
+		gettext_noop(
+			"Whether to enable composite wildcard index support"),
+		NULL, &EnableCompositeWildcardIndex, DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

@@ -70,9 +70,10 @@ typedef enum IndexPriorityOrdering
 {
 	IndexPriorityOrdering_PrimaryKey = 0,
 	IndexPriorityOrdering_Composite = 1,
-	IndexPriorityOrdering_Regular = 2,
-	IndexPriorityOrdering_Wildcard = 3,
-	IndexPriorityOrdering_Other = 4
+	IndexPriorityOrdering_Composite_Wildcard = 2,
+	IndexPriorityOrdering_Regular = 3,
+	IndexPriorityOrdering_Wildcard = 4,
+	IndexPriorityOrdering_Other = 5
 } IndexPriorityOrdering;
 
 typedef struct ReplaceDocumentDbCollectionContext
@@ -649,8 +650,12 @@ GetIndexOptInfoSortOrder(const IndexOptInfo *info, int *pathCount)
 	/* If it is composite op class it's the next priority. Since composite indexes have a single column, we just get the first column for the opclass. */
 	if (IsCompositeOpFamilyOid(amOid, firstOpClassOid))
 	{
-		*pathCount = GetCompositeOpClassPathCount(info->opclassoptions[0]);
-		return IndexPriorityOrdering_Composite;
+		/* Weight single path composite before wildcard */
+		BsonGinCompositePathOptions *options =
+			(BsonGinCompositePathOptions *) info->opclassoptions[0];
+		*pathCount = GetCompositeOpClassPathCount(options);
+		return options->wildcardPathIndex >= 0 ?
+			   IndexPriorityOrdering_Composite_Wildcard : IndexPriorityOrdering_Composite;
 	}
 
 	/* Wildcard indexes should go after exact path indexes. */

@@ -1173,9 +1173,11 @@ GetIndexTermMetadata(void *indexOptions)
 	{
 		StringView pathPrefix = { 0 };
 		bool isWildcard = false;
+		bool hasWildcardPath = false;
 		bool isWildcardProjection = false;
 		bool allowValueOnly = false;
 		int32_t truncationLimit = options->indexTermTruncateLimit;
+		uint32_t wildcardIndexTruncatedPathLimit = UINT32_MAX;
 		if (options->type == IndexOptionsType_SinglePath)
 		{
 			/* For single path indexes, we can elide the index path prefix */
@@ -1195,9 +1197,12 @@ GetIndexTermMetadata(void *indexOptions)
 		}
 		else if (options->type == IndexOptionsType_Composite)
 		{
+			BsonGinCompositePathOptions *compositeOptions =
+				(BsonGinCompositePathOptions *) options;
+			hasWildcardPath = compositeOptions->wildcardPathIndex >= 0;
 			pathPrefix.string = "$";
 			pathPrefix.length = 1;
-			allowValueOnly = EnableValueOnlyIndexTerms;
+			allowValueOnly = EnableValueOnlyIndexTerms && !hasWildcardPath;
 			if (allowValueOnly)
 			{
 				/* Since we lose one character on valueOnly scenarios for the path,
@@ -1218,8 +1223,7 @@ GetIndexTermMetadata(void *indexOptions)
 								"Index version V1 is not supported by hashed, text or 2d sphere indexes")));
 		}
 
-		uint32_t wildcardIndexTruncatedPathLimit = UINT32_MAX;
-		if (isWildcard)
+		if (isWildcard || hasWildcardPath)
 		{
 			wildcardIndexTruncatedPathLimit = options->wildcardIndexTruncatedPathLimit ==
 											  0 ?
