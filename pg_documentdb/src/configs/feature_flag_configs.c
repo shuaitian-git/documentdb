@@ -731,6 +731,14 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		psprintf("%s.enableRumNewCompositeTermGeneration", newGucPrefix),
+		gettext_noop(
+			"Whether to enable the new term generation for composite terms."),
+		NULL, &RumUseNewCompositeTermGeneration,
+		DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENERATION,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		psprintf("%s.enableCompositeWildcardIndex", newGucPrefix),
 		gettext_noop(
 			"Whether to enable composite wildcard index support"),

@@ -1228,9 +1228,11 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 	StringInfoData pathBuilderBuffer = { 0 };
 	initStringInfo(&pathBuilderBuffer);
 	bool useReducedWildcardTerms = true;
+	int32_t termCount[INDEX_MAX_KEYS] = { 0 };
 	for (int i = 0; i < context->maxPaths; i++)
 	{
 		GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState, i);
+		termCount[i] = pathData->terms.index;
 
 		/* TODO: Handle wildcard and non-wildcard composite indexes:
 		 * in the scenario where we have { a.$**: 1, b: 1, c: 1}
@@ -1249,12 +1251,6 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 		bool inArrayContextInner = true;
 		bool isArrayTermInner = false;
 		bool isCheckForArrayTermsWithNestedDocumentInner = false;
-		int32_t termCount[INDEX_MAX_KEYS] = { 0 };
-		for (int i = 0; i < context->maxPaths; i++)
-		{
-			termCount[i] = context->getPathDataFunc(context->pathDataState,
-													i)->terms.index;
-		}
 
 		/* For wildcard indexes if there's a match, any path that is a.0, a.2 etc
 		 * can also be reached from 'a'.
@@ -1300,8 +1296,9 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 						 &pathBuilderBuffer);
 		for (int i = 0; i < context->maxPaths; i++)
 		{
-			if (context->getPathDataFunc(context->pathDataState, i)->terms.index >
-				termCount[i])
+			GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState,
+																  i);
+			if (pathData->terms.index > termCount[i])
 			{
 				someArrayPathsHaveTerms[i] = true;
 			}
@@ -1309,6 +1306,10 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 			{
 				someArrayPathsHaveNoTerms[i] = true;
 			}
+
+			/* Reset for next iteration of array */
+			termCount[i] = context->getPathDataFunc(context->pathDataState,
+													i)->terms.index;
 		}
 	}
 
@@ -1331,6 +1332,14 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 	{
 		pfree(pathBuilderBuffer.data);
 	}
+}
+
+
+static void
+NotifyHasArrayAncestors(GenerateTermsContext *context, int pathIndex)
+{
+	context->getPathDataFunc(context->pathDataState,
+							 pathIndex)->hasArrayAncestors = true;
 }
 
 
@@ -1422,9 +1431,7 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 			if (inArrayContext || BSON_ITER_HOLDS_ARRAY(bsonIter))
 			{
 				/* Mark the path as having array ancestors leading to the index path */
-				context->getPathDataFunc(context->pathDataState,
-										 pathIndex)->hasArrayAncestors =
-					true;
+				NotifyHasArrayAncestors(context, pathIndex);
 			}
 
 			break;
@@ -1519,8 +1526,7 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 			 option == IndexTraverse_MatchAndRecurse))
 		{
 			/* Mark the path as having array ancestors leading to the index path */
-			context->getPathDataFunc(context->pathDataState,
-									 pathIndex)->hasArrayAncestors = true;
+			NotifyHasArrayAncestors(context, pathIndex);
 		}
 
 		/*
@@ -1563,9 +1569,7 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 				option == IndexTraverse_MatchAndRecurse)
 			{
 				/* Mark the path as having array ancestors leading to the index path */
-				context->getPathDataFunc(context->pathDataState,
-										 pathIndex)->hasArrayAncestors =
-					true;
+				NotifyHasArrayAncestors(context, pathIndex);
 			}
 
 			bool isPathMatchedRecursively = option == IndexTraverse_MatchAndRecurse;

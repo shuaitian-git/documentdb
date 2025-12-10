@@ -202,6 +202,7 @@ typedef struct
 	/* Path specific data (per path info) */
 	void *pathDataState;
 
+	/* Get the index term path data struct for the given path index */
 	GinEntryPathData *(*getPathDataFunc)(void *pathDataState, int index);
 
 	int maxPaths;
