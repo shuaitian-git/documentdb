@@ -2016,7 +2016,7 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 
 		argTypes[4] = TEXTOID;
 		argValues[4] = CStringGetTextDatum("");
-		argNulls[4] = 'n';
+		argNulls[4] = ' ';
 	}
 
 	/* set shard key value filter, if any */

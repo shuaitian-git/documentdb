@@ -568,3 +568,67 @@ SELECT documentdb_api.insert_one('db','lookup_movies','{ "_id": 3, "title": "Cel
 
 SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "lookup_movies", "pipeline": [ { "$lookup": { "from": "lookup_directors", "localField": "director", "foreignField": "name", "as": "director_info" } }, { "$unwind": { "path": "$director_info", "preserveNullAndEmptyArrays": true } }, { "$match": { "title": "Celestial Rift" } } ], "cursor": {} }');
 EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "lookup_movies", "pipeline": [ { "$lookup": { "from": "lookup_directors", "localField": "director", "foreignField": "name", "as": "director_info" } }, { "$unwind": { "path": "$director_info", "preserveNullAndEmptyArrays": true } }, { "$match": { "title": "Celestial Rift" } } ], "cursor": {} }');
+
+-- $in: [] with bson_dollar_project_find
+SELECT documentdb_api.insert_one('db', 'collTestEmptyIn', '{"_id": 1, "name": "sheep", "sound": "baa"}');
+SELECT documentdb_api.insert_one('db', 'collTestEmptyIn', '{"_id": 2, "name": "duck", "sound": "quack"}');
+SELECT documentdb_api.insert_one('db', 'collTestEmptyIn', '{"_id": 3, "sound": "quack"}');
+
+-- unsharded
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": { "$in": [] }
+  },                     
+  "projection": { "name": true }
+}');
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": { "$in": [] },
+    "name": "sheep"
+  },                     
+  "projection": { "name": true }
+}');
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": 2,
+    "name": {"$in": [] }
+  },                     
+  "projection": { "sound": true }
+}');
+
+-- sharded
+SELECT documentdb_api.shard_collection('db', 'collTestEmptyIn', '{"name": "hashed"}', false);
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": { "$in": [] }
+  },                     
+  "projection": { "name": true }
+}');
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": { "$in": [] },
+    "name": "sheep"
+  },                     
+  "projection": { "name": true }
+}');
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": 2,
+    "name": {"$in": [] }
+  },                     
+  "projection": { "sound": true }
+}');
+
+-- drop collection
+SELECT documentdb_api.drop_collection('db', 'collTestEmptyIn')

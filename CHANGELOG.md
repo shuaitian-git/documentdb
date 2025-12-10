@@ -9,6 +9,7 @@
 * Fix use-after-free segmentation fault in `$let` *[Bugfix]* 
 * Short-circuit in `$switch` at parse time *[Perf]*
 * Enable ordered indexes by default. Can be turned off by specifying "storageEngine": {"enableOrderedIndex": false} for a single index or by turning off the `documentdb.defaultUseCompositeOpClass` GUC.
+* Fix NULL document crash from `$in: []` optimization on sharded collections.
 
 ### documentdb v0.108-0 (Unreleased) ###
 * Top-level `let` variables and `$$NOW` supported by default.
