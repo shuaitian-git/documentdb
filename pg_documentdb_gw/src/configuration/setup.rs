@@ -37,6 +37,7 @@ pub struct DocumentDBSetupConfiguration {
     pub allow_transaction_snapshot: Option<bool>,
     pub transaction_timeout_secs: Option<u64>,
     pub cursor_timeout_secs: Option<u64>,
+    pub long_cursor_timeout_secs: Option<u64>,
     pub certificate_options: CertificateOptions,
 
     #[serde(default)]
@@ -93,7 +94,11 @@ impl SetupConfiguration for DocumentDBSetupConfiguration {
     }
 
     fn cursor_timeout_secs(&self) -> u64 {
-        self.cursor_timeout_secs.unwrap_or(600)
+        self.cursor_timeout_secs.unwrap_or(60)
+    }
+
+    fn long_cursor_timeout_secs(&self) -> u64 {
+        self.long_cursor_timeout_secs.unwrap_or(600)
     }
 
     fn transaction_timeout_secs(&self) -> u64 {

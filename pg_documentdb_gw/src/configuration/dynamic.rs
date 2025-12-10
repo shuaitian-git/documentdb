@@ -83,6 +83,10 @@ pub trait DynamicConfiguration: Send + Sync + Debug {
             .unwrap_or(Version::Seven)
     }
 
+    async fn enable_long_cursor_timeout(&self) -> bool {
+        self.get_bool("enableLongCursorTimeout", false).await
+    }
+
     async fn system_connection_budget(&self) -> usize {
         let min_system_connections = (postgres::SYSTEM_REQUESTS_MAX_CONNECTIONS
             + postgres::AUTHENTICATION_MAX_CONNECTIONS) as i32;
