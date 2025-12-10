@@ -301,6 +301,7 @@ async fn handle_oidc_token_authentication(
 
     let authentication_token_row = connection_context
         .service_context
+        .connection_pool_manager()
         .authentication_connection()
         .await?
         .query(
@@ -487,6 +488,7 @@ async fn handle_sasl_continue(
 
         let scram_sha256_row = connection_context
             .service_context
+            .connection_pool_manager()
             .authentication_connection()
             .await?
             .query(
@@ -632,6 +634,7 @@ async fn get_salt_and_iteration(
 
     let results = connection_context
         .service_context
+        .connection_pool_manager()
         .authentication_connection()
         .await?
         .query(
@@ -677,6 +680,7 @@ async fn get_salt_and_iteration(
 pub async fn get_user_oid(connection_context: &ConnectionContext, username: &str) -> Result<u32> {
     let user_oid_rows = connection_context
         .service_context
+        .connection_pool_manager()
         .authentication_connection()
         .await?
         .query(

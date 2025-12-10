@@ -6,6 +6,9 @@
  *-------------------------------------------------------------------------
  */
 
+pub mod rbac_utils;
+pub mod validation_utils;
+
 use std::{
     backtrace::Backtrace,
     env,
@@ -20,12 +23,14 @@ use documentdb_gateway::{
         SetupConfiguration,
     },
     error::Result,
-    postgres::{create_query_catalog, ConnectionPool, DocumentDBDataClient, QueryCatalog},
+    postgres::{
+        create_query_catalog, ConnectionPool, DocumentDBDataClient, QueryCatalog,
+        AUTHENTICATION_MAX_CONNECTIONS, SYSTEM_REQUESTS_MAX_CONNECTIONS,
+    },
     run_gateway,
     service::TlsProvider,
-    startup::{get_service_context, AUTHENTICATION_MAX_CONNECTIONS},
+    startup::get_service_context,
 };
-
 use mongodb::{
     options::{AuthMechanism, ClientOptions, Credential, ServerAddress, Tls, TlsOptions},
     Client, Database,
@@ -33,9 +38,6 @@ use mongodb::{
 use simple_logger::SimpleLogger;
 use tokio_postgres::{error::SqlState, NoTls};
 use tokio_util::sync::CancellationToken;
-
-pub mod rbac_utils;
-pub mod validation_utils;
 
 static INIT: Once = Once::new();
 
@@ -79,7 +81,7 @@ async fn run(setup_config: DocumentDBSetupConfiguration) {
             &postgres_system_user,
             None,
             format!("{}-SystemRequests", setup_config.application_name()),
-            5,
+            SYSTEM_REQUESTS_MAX_CONNECTIONS,
         )
         .expect("Failed to create system pool"),
     );
@@ -117,7 +119,7 @@ async fn run(setup_config: DocumentDBSetupConfiguration) {
         .unwrap();
 }
 
-pub fn configuration() -> DocumentDBSetupConfiguration {
+pub fn setup_configuration() -> DocumentDBSetupConfiguration {
     DocumentDBSetupConfiguration {
         node_host_name: "localhost".to_string(),
         blocked_role_prefixes: Vec::new(),
@@ -170,7 +172,7 @@ pub fn get_client_insecure() -> Client {
 
 #[allow(dead_code)]
 pub async fn initialize_with_logger() -> Client {
-    initialize_full(configuration()).await;
+    initialize_full(setup_configuration()).await;
     get_client()
 }
 
@@ -182,7 +184,7 @@ pub async fn initialize_with_config(config: DocumentDBSetupConfiguration) -> Cli
 
 #[allow(dead_code)]
 pub async fn initialize() -> Client {
-    initialize_full(configuration()).await;
+    initialize_full(setup_configuration()).await;
     get_client()
 }
 

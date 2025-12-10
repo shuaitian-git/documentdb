@@ -14,6 +14,7 @@ pub enum EventId {
     Default = 1,
     Probe = 2000,
     RequestTrace = 2001,
+    ConnectionPool = 2002,
 }
 
 impl EventId {

@@ -17,7 +17,7 @@ use crate::{
     context::{ConnectionContext, Cursor, RequestContext, ServiceContext},
     error::{DocumentDBError, Result},
     explain::Verbosity,
-    postgres::{connection::InnerConnection, PgDataClient},
+    postgres::{PgDataClient, PoolConnection},
     responses::{PgResponse, Response},
 };
 
@@ -28,13 +28,13 @@ pub struct DocumentDBDataClient {
 }
 
 impl DocumentDBDataClient {
-    async fn pull_inner_connection(&self) -> Result<InnerConnection> {
+    async fn acquire_pool_connection(&self) -> Result<PoolConnection> {
         self.connection_pool
             .as_ref()
             .ok_or(DocumentDBError::internal_error(
                 "Acquiring connection to postgres on unauthorized data client".to_string(),
             ))?
-            .get_inner_connection()
+            .acquire_connection()
             .await
     }
 }
@@ -52,7 +52,12 @@ impl PgDataClient for DocumentDBDataClient {
             .ok_or(DocumentDBError::internal_error(
                 "Password is missing on pg data pool acquisition".to_string(),
             ))?;
-        let connection_pool = Some(service_context.get_data_pool(user, pass).await?);
+        let connection_pool = Some(
+            service_context
+                .connection_pool_manager()
+                .get_data_pool(user, pass)
+                .await?,
+        );
 
         Ok(DocumentDBDataClient { connection_pool })
     }
@@ -64,9 +69,9 @@ impl PgDataClient for DocumentDBDataClient {
     }
 
     async fn pull_connection_with_transaction(&self, in_transaction: bool) -> Result<Connection> {
-        let inner_connection = self.pull_inner_connection().await?;
+        let pool_connection = self.acquire_pool_connection().await?;
 
-        Ok(Connection::new(inner_connection, in_transaction))
+        Ok(Connection::new(pool_connection, in_transaction))
     }
 
     async fn execute_aggregate(
@@ -374,8 +379,8 @@ impl PgDataClient for DocumentDBDataClient {
             Verbosity::AllShardsQueryPlan
             | Verbosity::AllShardsExecution
             | Verbosity::AllPlansExecution => {
-                let mut inner_connection = self.pull_inner_connection().await?;
-                let transaction = inner_connection.transaction().await?;
+                let mut pool_connection = self.acquire_pool_connection().await?;
+                let transaction = pool_connection.transaction().await?;
                 let explain_config_query = match verbosity {
                     Verbosity::AllPlansExecution => connection_context
                         .service_context
