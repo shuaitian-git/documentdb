@@ -49,13 +49,28 @@ typedef enum RumIndexTransformOperation
 } RumIndexTransformOperation;
 
 
+/*
+ * State that is used in generating terms for
+ * the composite indexes.
+ */
 typedef struct CompositeTermGenerateState
 {
+	/* The set of index paths for a composite index */
 	const char *indexPaths[INDEX_MAX_KEYS];
+
+	/* The sort orders for each of the paths above. */
 	int8_t sortOrders[INDEX_MAX_KEYS];
+
+	/* the path term metadata per path declared above. */
 	GinEntryPathData pathData[INDEX_MAX_KEYS];
+
+	/* The options on a per path basis for single path terms */
 	BsonGinSinglePathOptions *pathOptions[INDEX_MAX_KEYS];
+
+	/* The current status for index paths per path */
 	IndexTraverseOption matchStatus[INDEX_MAX_KEYS];
+
+	/* The total number of actual paths */
 	uint32_t pathCount;
 } CompositeTermGenerateState;
 
@@ -2268,6 +2283,7 @@ GetCompositePathGenerateTraverseOption(void *contextOptions,
 			&pathIndexInnerIgnore);
 		if (state->matchStatus[i] >= IndexTraverse_Match)
 		{
+			/* TODO: Revisit this with wildcard term generation */
 			*pathIndex = i;
 		}
 
