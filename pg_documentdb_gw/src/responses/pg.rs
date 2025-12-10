@@ -316,11 +316,25 @@ impl PgResponse {
                     error_message,
                 ))
             }
-            SqlState::INTERNAL_ERROR => Some((
-                ErrorCode::InternalError as i32,
-                Some(format!("{:?}", SqlState::INTERNAL_ERROR)),
-                msg,
-            )),
+            SqlState::INTERNAL_ERROR => {
+                if msg.contains("tsquery stack too small") {
+                    // When the search terms have more than 32 nested levels, tsquery raises the PG internal error with message "tsquery stack too small".
+                    // This can happen in find commands or $match aggregation stages with $text filter.
+                    let error_message = "$text query is exceeding the maximum allowed depth(32), please simplify the query";
+                    log::error!(activity_id = activity_id; "{error_message}");
+                    Some((
+                        ErrorCode::BadValue as i32,
+                        Some(format!("{:?}", SqlState::INTERNAL_ERROR)),
+                        error_message,
+                    ))
+                } else {
+                    Some((
+                        ErrorCode::InternalError as i32,
+                        Some(format!("{:?}", SqlState::INTERNAL_ERROR)),
+                        msg,
+                    ))
+                }
+            }
             SqlState::INVALID_TEXT_REPRESENTATION => Some((
                 ErrorCode::BadValue as i32,
                 Some(format!("{:?}", SqlState::INVALID_TEXT_REPRESENTATION)),
