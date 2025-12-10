@@ -10,6 +10,10 @@
 
 #include "schema/background_index_queue--0.109-0.sql"
 
+#include "udfs/aggregation/bson_aggregation_redact--0.109-0.sql"
+#include "udfs/projection/bson_projection--0.109-0.sql"
+#include "udfs/projection/bson_expression--0.109-0.sql"
+#include "udfs/query/bson_query_match--0.109-0.sql"
 
 -- fix the return of gin_bson_compare which was created incorrectly.
 UPDATE pg_proc SET prorettype = 'integer'::regtype WHERE proname = 'gin_bson_compare' AND pronamespace = 'documentdb_api_catalog'::regnamespace;

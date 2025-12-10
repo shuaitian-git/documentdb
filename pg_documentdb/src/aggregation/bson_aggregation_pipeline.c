@@ -2598,7 +2598,7 @@ HandleSimpleProjectionStage(const bson_value_t *existingValue, Query *query,
 		args = list_make4(currentProjection,
 						  addFieldsProcessed,
 						  context->variableSpec ? context->variableSpec :
-						  (Expr *) makeNullConst(BsonTypeId(), -1, InvalidOid),
+						  (Expr *) MakeBsonConst(PgbsonInitEmpty()),
 						  collationConst);
 		functionOid = functionOidWithLetAndCollation();
 	}
@@ -3590,7 +3590,7 @@ HandleProjectFind(const bson_value_t *existingValue, const bson_value_t *queryVa
 						  projectProcessed,
 						  MakeBsonConst(queryDoc),
 						  context->variableSpec ? context->variableSpec :
-						  (Expr *) makeNullConst(BsonTypeId(), -1, InvalidOid),
+						  (Expr *) MakeBsonConst(PgbsonInitEmpty()),
 						  collationConst);
 		funcOid = BsonDollarProjectFindWithLetAndCollationFunctionOid();
 	}

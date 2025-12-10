@@ -2774,7 +2774,7 @@ EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_pipeline('
 
 ROLLBACK;
 -- project
-SELECT documentdb_api_internal.bson_dollar_project(document, '{ "newField": { "$eq": ["$a", "CAT"] } }', NULL, 'en-u-ks-level1') FROM documentdb_api.collection('db', 'coll_agg_proj');
+SELECT documentdb_api_internal.bson_dollar_project(document, '{ "newField": { "$eq": ["$a", "CAT"] } }', '{}', 'en-u-ks-level1') FROM documentdb_api.collection('db', 'coll_agg_proj');
                   bson_dollar_project                   
 ---------------------------------------------------------------------
  { "_id" : { "$numberInt" : "1" }, "newField" : true }
@@ -2785,7 +2785,7 @@ SELECT documentdb_api_internal.bson_dollar_project(document, '{ "newField": { "$
  { "_id" : "bat", "newField" : false }
 (6 rows)
 
-SELECT documentdb_api_internal.bson_dollar_project(document, '{ "newField": { "$eq": ["$a", "DOG"] } }', NULL, 'en-u-ks-level1') FROM documentdb_api.collection('db', 'coll_agg_proj');
+SELECT documentdb_api_internal.bson_dollar_project(document, '{ "newField": { "$eq": ["$a", "DOG"] } }', '{}', 'en-u-ks-level1') FROM documentdb_api.collection('db', 'coll_agg_proj');
                   bson_dollar_project                   
 ---------------------------------------------------------------------
  { "_id" : { "$numberInt" : "1" }, "newField" : false }
@@ -3722,7 +3722,7 @@ ROLLBACK;
 SET documentdb.enableLetAndCollationForQueryMatch TO off;
 SET documentdb.enableVariablesSupportForWriteCommands TO off;
 SET documentdb_core.enableCollation TO off;
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{"a": "CAT"}', NULL, 'en-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{"a": "CAT"}', '{}', 'en-u-ks-level1');
 NOTICE:  using bson_query_match implementation
  bson_query_match 
 ---------------------------------------------------------------------
@@ -3733,133 +3733,133 @@ NOTICE:  using bson_query_match implementation
 SET documentdb_core.enableCollation TO on;
 SET documentdb.enableLetAndCollationForQueryMatch TO on;
 -- query match: _id tests
-SELECT documentdb_api_internal.bson_query_match('{"_id": "cat"}', '{"_id": "CAT"}', NULL, 'en-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"_id": "cat"}', '{"_id": "CAT"}', '{}', 'en-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"_id": "cat"}', '{"_id": "CAT"}', NULL, 'en-u-ks-level2');
+SELECT documentdb_api_internal.bson_query_match('{"_id": "cat"}', '{"_id": "CAT"}', '{}', 'en-u-ks-level2');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"_id": "cat"}', '{"_id": "CAT"}', NULL, 'en-US-u-ks-level2');
+SELECT documentdb_api_internal.bson_query_match('{"_id": "cat"}', '{"_id": "CAT"}', '{}', 'en-US-u-ks-level2');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- query match: $eq
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{"a": "CAT"}', NULL, 'en-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{"a": "CAT"}', '{}', 'en-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$eq" : "CAT"} }', NULL, 'de-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$eq" : "CAT"} }', '{}', 'de-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$eq" : "càt"} }', NULL, 'fr-u-ks-level3');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$eq" : "càt"} }', '{}', 'fr-u-ks-level3');
  bson_query_match 
 ---------------------------------------------------------------------
  f
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat", "b": "dog"}', '{"a": "CAT", "b": "DOG"}', NULL, 'en-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat", "b": "dog"}', '{"a": "CAT", "b": "DOG"}', '{}', 'en-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat", "b": "dog"}', '{"a": "CAT", "b": "DOG"}', NULL, 'sv-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat", "b": "dog"}', '{"a": "CAT", "b": "DOG"}', '{}', 'sv-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- query match: $ne
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$ne" : "CAT"} }', NULL, 'de-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$ne" : "CAT"} }', '{}', 'de-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  f
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$ne" : "càt"} }', NULL, 'fr-u-ks-level3');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$ne" : "càt"} }', '{}', 'fr-u-ks-level3');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat", "b": "dog"}', '{"a": "CAT", "b": "DOG"}', NULL, 'en-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat", "b": "dog"}', '{"a": "CAT", "b": "DOG"}', '{}', 'en-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat", "b": "dog"}', '{"a": "CAT", "b": "DOG"}', NULL, 'sv-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat", "b": "dog"}', '{"a": "CAT", "b": "DOG"}', '{}', 'sv-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- query match: $gt/$gte
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$gt" : "CAT"} }', NULL, 'de-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$gt" : "CAT"} }', '{}', 'de-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  f
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$gte" : "CAT"} }', NULL, 'en-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$gte" : "CAT"} }', '{}', 'en-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- query match: $lt/$lte
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$lte" : "CAT"} }', NULL, 'de-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$lte" : "CAT"} }', '{}', 'de-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$lte" : "càt"} }', NULL, 'fr-u-ks-level3');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$lte" : "càt"} }', '{}', 'fr-u-ks-level3');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$lte" : "càt"} }', NULL, 'fr-CA-u-ks-level3');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$lte" : "càt"} }', '{}', 'fr-CA-u-ks-level3');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- query match: $in
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$in" : ["CAT", "DOG"]} }', NULL, 'de-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$in" : ["CAT", "DOG"]} }', '{}', 'de-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$in" : ["càt", "dòg"]} }', NULL, 'fr-u-ks-level3');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$in" : ["càt", "dòg"]} }', '{}', 'fr-u-ks-level3');
  bson_query_match 
 ---------------------------------------------------------------------
  f
 (1 row)
 
 -- query match: $nin
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$nin" : ["CAT", "DOG"]} }', NULL, 'en-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$nin" : ["CAT", "DOG"]} }', '{}', 'en-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  f
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$nin" : ["càt", "dòg"]} }', NULL, 'fr-u-ks-level3');
+SELECT documentdb_api_internal.bson_query_match('{"a": "cat"}', '{ "a": {"$nin" : ["càt", "dòg"]} }', '{}', 'fr-u-ks-level3');
  bson_query_match 
 ---------------------------------------------------------------------
  t
@@ -3901,13 +3901,13 @@ SELECT documentdb_api.shard_collection('db', 'coll_qm_sharded', '{ "_id": "hashe
 
 -- we expect the query to be distributed: shard key value is collation-aware
 BEGIN;
-SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": "CAT" }', NULL, 'en-u-ks-level1');
+SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": "CAT" }', '{}', 'en-u-ks-level1');
             document            
 ---------------------------------------------------------------------
  { "_id" : "cat", "a" : "cat" }
 (1 row)
 
-EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": "CAT" }', NULL, 'en-u-ks-level1');
+EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": "CAT" }', '{}', 'en-u-ks-level1');
                                                                    QUERY PLAN                                                                   
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -3922,13 +3922,13 @@ EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_q
 ROLLBACK;
 -- we do not expect the query to be distributed: shard key value is not collation-aware
 BEGIN;
-SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 3 }', NULL, 'en-u-ks-level1');
+SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 3 }', '{}', 'en-u-ks-level1');
                       document                       
 ---------------------------------------------------------------------
  { "_id" : { "$numberInt" : "3" }, "a" : "peacock" }
 (1 row)
 
-EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 3 }', NULL, 'en-u-ks-level1');
+EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 3 }', '{}', 'en-u-ks-level1');
                                                                                      QUERY PLAN                                                                                     
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -3976,13 +3976,13 @@ SELECT documentdb_api.shard_collection('db', 'coll_qm_sharded', '{ "_id": "hashe
 
 -- we expect the query to be distributed: shard key filter values is collation-aware
 BEGIN;
-SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": "CAT", "a": "CAT" }', NULL, 'en-u-ks-level1');
+SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": "CAT", "a": "CAT" }', '{}', 'en-u-ks-level1');
             document            
 ---------------------------------------------------------------------
  { "_id" : "cAt", "a" : "cAt" }
 (1 row)
 
-EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": "CAT", "a": "CAT" }', NULL, 'en-u-ks-level1');
+EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": "CAT", "a": "CAT" }', '{}', 'en-u-ks-level1');
                                                                                                                                  QUERY PLAN                                                                                                                                  
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -3996,12 +3996,12 @@ EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_q
 
 ROLLBACK;
 BEGIN;
-SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$and": [{"_id": "cat", "a": "1"}, {"_id": 3, "a": 3}] }', NULL, 'en-u-ks-level1');
+SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$and": [{"_id": "cat", "a": "1"}, {"_id": 3, "a": 3}] }', '{}', 'en-u-ks-level1');
  document 
 ---------------------------------------------------------------------
 (0 rows)
 
-EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$and": [{"_id": "cat", "a": "1"}, {"_id": 3, "a": 3}] }', NULL, 'en-u-ks-level1');
+EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$and": [{"_id": "cat", "a": "1"}, {"_id": 3, "a": 3}] }', '{}', 'en-u-ks-level1');
                                                                                                                                                                                                                                                                              QUERY PLAN                                                                                                                                                                                                                                                                              
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -4018,14 +4018,14 @@ EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_q
 
 ROLLBACK;
 BEGIN;
-SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$or": [{"_id": "CAT", "a": "CAT"}, {"_id": 3, "a": "dog"}] }', NULL, 'en-u-ks-level1');
+SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$or": [{"_id": "CAT", "a": "CAT"}, {"_id": 3, "a": "dog"}] }', '{}', 'en-u-ks-level1');
                     document                     
 ---------------------------------------------------------------------
  { "_id" : { "$numberInt" : "3" }, "a" : "doG" }
  { "_id" : "cAt", "a" : "cAt" }
 (2 rows)
 
-EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$or": [{"_id": "cat", "a": "CAT"}, {"_id": 3, "a": "dog"}] }', NULL, 'en-u-ks-level1');
+EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$or": [{"_id": "cat", "a": "CAT"}, {"_id": 3, "a": "dog"}] }', '{}', 'en-u-ks-level1');
                                                                                                                                                                                                                                                                        QUERY PLAN                                                                                                                                                                                                                                                                        
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -4040,12 +4040,12 @@ EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_q
 ROLLBACK;
 -- we do not expect the query to be distributed
 BEGIN;
-SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 1, "a": "CAT" }', NULL, 'en-u-ks-level1');
+SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 1, "a": "CAT" }', '{}', 'en-u-ks-level1');
  document 
 ---------------------------------------------------------------------
 (0 rows)
 
-EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 1, "a": "CAT" }', NULL, 'en-u-ks-level1');
+EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 1, "a": "CAT" }', '{}', 'en-u-ks-level1');
                                                                                                                                           QUERY PLAN                                                                                                                                          
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -4059,12 +4059,12 @@ EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_q
 
 ROLLBACK;
 BEGIN;
-SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 3, "a": 4 }', NULL, 'en-u-ks-level1');
+SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 3, "a": 4 }', '{}', 'en-u-ks-level1');
  document 
 ---------------------------------------------------------------------
 (0 rows)
 
-EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 3, "a": 4 }', NULL, 'en-u-ks-level1');
+EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{ "_id": 3, "a": 4 }', '{}', 'en-u-ks-level1');
                                                                                                                                                   QUERY PLAN                                                                                                                                                   
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -4079,13 +4079,13 @@ EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_q
 
 ROLLBACK;
 BEGIN;
-SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$or": [{"_id": 3, "a": "dog"}, {"_id": 3, "a": 3}] }', NULL, 'en-u-ks-level1');
+SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$or": [{"_id": 3, "a": "dog"}, {"_id": 3, "a": 3}] }', '{}', 'en-u-ks-level1');
                     document                     
 ---------------------------------------------------------------------
  { "_id" : { "$numberInt" : "3" }, "a" : "doG" }
 (1 row)
 
-EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$or": [{"_id": 3, "a": "dog"}, {"_id": 3, "a": 3}] }', NULL, 'en-u-ks-level1');
+EXPLAIN (COSTS OFF) SELECT document from documentdb_api.collection('db', 'coll_qm_sharded') WHERE documentdb_api_internal.bson_query_match(document, '{"$or": [{"_id": 3, "a": "dog"}, {"_id": 3, "a": 3}] }', '{}', 'en-u-ks-level1');
                                                                                                                                                                                                                 QUERY PLAN                                                                                                                                                                                                                 
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -4434,13 +4434,13 @@ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_pipeline('db', '{ "agg
 
 ROLLBACK;
 -- nested arrays
-SELECT documentdb_api_internal.bson_query_match('{"a": ["cat"]}', '{ "a": {"$in" : [["CAT"], "DOG"]} }', NULL, 'de-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": ["cat"]}', '{ "a": {"$in" : [["CAT"], "DOG"]} }', '{}', 'de-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": ["cat"]}', '{ "a": {"$in" : [["CAT"], ["DOG"]] } }', NULL, 'de-u-ks-level3');
+SELECT documentdb_api_internal.bson_query_match('{"a": ["cat"]}', '{ "a": {"$in" : [["CAT"], ["DOG"]] } }', '{}', 'de-u-ks-level3');
  bson_query_match 
 ---------------------------------------------------------------------
  f
@@ -4484,13 +4484,13 @@ SELECT document FROM bson_aggregation_find('db', '{ "find": "nested_arrays", "fi
 (1 row)
 
 -- nested documents
-SELECT documentdb_api_internal.bson_query_match('{"a": {"b": "cat"}}', '{ "a": {"b": "CAT"} }', NULL, 'en-u-ks-level1');
+SELECT documentdb_api_internal.bson_query_match('{"a": {"b": "cat"}}', '{ "a": {"b": "CAT"} }', '{}', 'en-u-ks-level1');
  bson_query_match 
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT documentdb_api_internal.bson_query_match('{"a": {"b": {"c": "cat"}}}', '{ "a": {"b": {"c": "CAT"}} }', NULL, 'en-u-ks-level2');
+SELECT documentdb_api_internal.bson_query_match('{"a": {"b": {"c": "cat"}}}', '{ "a": {"b": {"c": "CAT"}} }', '{}', 'en-u-ks-level2');
  bson_query_match 
 ---------------------------------------------------------------------
  t
@@ -5332,6 +5332,392 @@ EXPLAIN (VERBOSE ON, COSTS OFF) SELECT document FROM bson_aggregation_find('db',
 (20 rows)
 
 SELECT documentdb_api.drop_collection('db', 'coll_find_positional');
+ drop_collection 
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- $in: []
+SELECT documentdb_api.insert_one('db', 'collTest', '{"_id": 1, "name": "cat", "sound": "meow"}');
+NOTICE:  creating collection
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db', 'collTest', '{"_id": 2, "name": "dog", "sound": "woof"}');
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db', 'collTest', '{"_id": 3, "sound": "moo"}');
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db', 'collTest', '{"_id": 4, "name": "sheep", "sound": "baa"}');
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db', 'collTest', '{"_id": 5, "name": "duck"}');
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+-- unsharded
+-- $in: [] with bson_dollar_add_fields
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] }}}, { "$addFields": { "newField": "animal" } } ], 
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- with variableSpec and collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] }}}, { "$addFields": { "newField": "animal" } } ], 
+  "let": { "varRef": "lion"},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] }}}, { "$addFields": { "newField": "animal" } } ], 
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"sound": "moo", "_id": { "$in": [] }}}, { "$addFields": { "newField": "$$varRef" } } ], 
+  "let": { "varRef": "lion"},
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- $in: [] with bson_dollar_redact
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] }}}, { "$redact": { "$cond": [ { "$eq": [ "$sound", "meow" ] }, "$$KEEP", "$$PRUNE" ] } } ], 
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- $in: [] with bson_dollar_redact; with variableSpec and collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"owner": { "$in": [] }}}, { "$redact": { "$cond": [ { "$eq": [ "$sound", "meow" ] }, "$$KEEP", "$$PRUNE" ] } } ], 
+  "let": { "varRef": "lion"},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"sound": { "$in": [] }}}, { "$redact": { "$cond": [ { "$eq": [ "$sound", "meow" ] }, "$$KEEP", "$$PRUNE" ] } } ], 
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] }}}, { "$redact": { "$cond": [ { "$eq": [ "$sound", "meow" ] }, "$$KEEP", "$$PRUNE" ] } } ], 
+  "let": { "varRef": "lion"},
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- projection via bson_dollar_project (no let/collation)
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"name": { "$in": [] }}}, { "$project": { "_id": 0, "sound": 1 } } ], 
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- projection via bson_dollar_project with let variables
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] } }}, { "$project": { "_id": 0, "name": 1, "varEcho": "$$varRef" } } ], 
+  "let": { "varRef": "lion"},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- projection via bson_dollar_project with collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] } }}, { "$project": { "_id": 0, "name": 1 } } ], 
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- projection via bson_dollar_project with let variables and collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] } }}, { "$project": { "_id": 0, "name": 1, "varEcho": "$$varRef" } } ], 
+  "let": { "varRef": "lion"},
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- replaceRoot via bson_dollar_replace_root (no let/collation)
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"name": {"$in": [] } }}, { "$replaceRoot": { "newRoot": { "animal": "$name", "call": "$sound" } } } ], 
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- replaceRoot via bson_dollar_replace_root with let variables
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"name": {"$in": [] } }}, { "$replaceRoot": { "newRoot": { "animal": "$$varRef", "call": "$sound" } } } ], 
+  "let": { "varRef": "lion"},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- replaceRoot via bson_dollar_replace_root with collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"name": {"$in": [] } }}, { "$replaceRoot": { "newRoot": { "animal": "$name", "call": "$sound" } } } ], 
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- replaceRoot via bson_dollar_replace_root with let variables and collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"name": {"$in": [] } }}, { "$replaceRoot": { "newRoot": { "animal": "$$varRef", "call": "$sound" } } } ], 
+  "let": { "varRef": "lion"},
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- bson_dollar_project_find with let variables and collation
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTest",
+  "filter": {
+    "_id": { "$in": [] }
+  },
+  "projection": { "name": true },
+  "let": { "varRef": "lion" },
+  "collation": { "locale": "en", "strength" : 1 }
+}');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- sharded
+SELECT documentdb_api.shard_collection('db', 'collTest', '{"name": "hashed"}', false);
+ shard_collection 
+---------------------------------------------------------------------
+ 
+(1 row)
+
+-- $in: [] with bson_dollar_add_fields
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] }}}, { "$addFields": { "newField": "animal" } } ], 
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- with variableSpec and collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] }}}, { "$addFields": { "newField": "animal" } } ], 
+  "let": { "varRef": "lion"},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] }}}, { "$addFields": { "newField": "animal" } } ], 
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"sound": "moo", "_id": { "$in": [] }}}, { "$addFields": { "newField": "$$varRef" } } ], 
+  "let": { "varRef": "lion"},
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- $in: [] with bson_dollar_redact
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] }}}, { "$redact": { "$cond": [ { "$eq": [ "$sound", "meow" ] }, "$$KEEP", "$$PRUNE" ] } } ], 
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- $in: [] with bson_dollar_redact; with variableSpec and collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"owner": { "$in": [] }}}, { "$redact": { "$cond": [ { "$eq": [ "$sound", "meow" ] }, "$$KEEP", "$$PRUNE" ] } } ], 
+  "let": { "varRef": "lion"},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"sound": { "$in": [] }}}, { "$redact": { "$cond": [ { "$eq": [ "$sound", "meow" ] }, "$$KEEP", "$$PRUNE" ] } } ], 
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] }}}, { "$redact": { "$cond": [ { "$eq": [ "$sound", "meow" ] }, "$$KEEP", "$$PRUNE" ] } } ], 
+  "let": { "varRef": "lion"},
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- projection via bson_dollar_project (no let/collation)
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"name": { "$in": [] }}}, { "$project": { "_id": 0, "sound": 1 } } ], 
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- projection via bson_dollar_project with let variables
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] } }}, { "$project": { "_id": 0, "name": 1, "varEcho": "$$varRef" } } ], 
+  "let": { "varRef": "lion"},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- projection via bson_dollar_project with collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] } }}, { "$project": { "_id": 0, "name": 1 } } ], 
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- projection via bson_dollar_project with let variables and collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"_id": { "$in": [] } }}, { "$project": { "_id": 0, "name": 1, "varEcho": "$$varRef" } } ], 
+  "let": { "varRef": "lion"},
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- replaceRoot via bson_dollar_replace_root (no let/collation)
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"name": {"$in": [] } }}, { "$replaceRoot": { "newRoot": { "animal": "$name", "call": "$sound" } } } ], 
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- replaceRoot via bson_dollar_replace_root with let variables
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"name": {"$in": [] } }}, { "$replaceRoot": { "newRoot": { "animal": "$$varRef", "call": "$sound" } } } ], 
+  "let": { "varRef": "lion"},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- replaceRoot via bson_dollar_replace_root with collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"name": {"$in": [] } }}, { "$replaceRoot": { "newRoot": { "animal": "$name", "call": "$sound" } } } ], 
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- replaceRoot via bson_dollar_replace_root with let variables and collation
+SELECT document FROM bson_aggregation_pipeline('db', '{ 
+  "aggregate": "collTest", 
+  "pipeline": [ {"$match": {"name": {"$in": [] } }}, { "$replaceRoot": { "newRoot": { "animal": "$$varRef", "call": "$sound" } } } ], 
+  "let": { "varRef": "lion"},
+  "collation": { "locale": "en", "strength" : 1},
+  "cursor": {} }');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- bson_dollar_project_find with let variables and collation
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTest",
+  "filter": {
+    "_id": { "$in": [] }
+  },
+  "projection": { "name": true },
+  "let": { "varRef": "lion" },
+  "collation": { "locale": "en", "strength" : 1 }
+}');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT documentdb_api.drop_collection('db', 'collTest');
  drop_collection 
 ---------------------------------------------------------------------
  t
