@@ -145,6 +145,7 @@ impl ConnectionContext {
             ))?;
 
         self.service_context
+            .connection_pool_manager()
             .allocate_data_pool(username, password)
             .await
     }

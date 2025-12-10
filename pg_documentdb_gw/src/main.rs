@@ -11,14 +11,14 @@ use std::{env, path::PathBuf, sync::Arc};
 
 use documentdb_gateway::{
     configuration::{DocumentDBSetupConfiguration, PgConfiguration, SetupConfiguration},
-    postgres::{create_query_catalog, DocumentDBDataClient},
+    postgres::{
+        create_query_catalog, DocumentDBDataClient, AUTHENTICATION_MAX_CONNECTIONS,
+        SYSTEM_REQUESTS_MAX_CONNECTIONS,
+    },
     run_gateway,
     service::TlsProvider,
     shutdown_controller::SHUTDOWN_CONTROLLER,
-    startup::{
-        create_postgres_object, get_service_context, get_system_connection_pool,
-        AUTHENTICATION_MAX_CONNECTIONS, SYSTEM_REQUESTS_MAX_CONNECTIONS,
-    },
+    startup::{create_postgres_object, get_service_context, get_system_connection_pool},
 };
 
 use tokio::signal;

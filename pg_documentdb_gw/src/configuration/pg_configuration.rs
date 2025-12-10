@@ -6,21 +6,22 @@
  *-------------------------------------------------------------------------
  */
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::time::{Duration, Instant};
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use bson::{rawbson, RawBson};
 use serde::Deserialize;
-use tokio::sync::RwLock;
+use tokio::{
+    sync::RwLock,
+    time::{Duration, Instant},
+};
 
-use super::dynamic::{DynamicConfiguration, POSTGRES_RECOVERY_KEY};
-use super::SetupConfiguration;
-use crate::error::{DocumentDBError, Result};
-use crate::postgres::{Connection, ConnectionPool};
-use crate::requests::request_tracker::RequestTracker;
-use crate::QueryCatalog;
+use crate::{
+    configuration::{dynamic::POSTGRES_RECOVERY_KEY, DynamicConfiguration, SetupConfiguration},
+    error::{DocumentDBError, Result},
+    postgres::{Connection, ConnectionPool, QueryCatalog},
+    requests::request_tracker::RequestTracker,
+};
 
 #[derive(Debug, Deserialize, Default, Clone)]
 #[serde(rename_all = "PascalCase")]
@@ -135,13 +136,13 @@ impl PgConfiguration {
                 match configuration
                     .inner
                     .system_requests_pool
-                    .get_inner_connection()
+                    .acquire_connection()
                     .await
                 {
                     Ok(inner_conn) => {
-                        let conn = Connection::new(inner_conn, false);
+                        let connection = Connection::new(inner_conn, false);
                         if let Err(e) = configuration
-                            .reload_configuration_with_connection(&conn)
+                            .reload_configuration_with_connection(&connection)
                             .await
                         {
                             log::error!("Failed to refresh configuration: {e}");
@@ -163,7 +164,7 @@ impl PgConfiguration {
         system_requests_pool: &Arc<ConnectionPool>,
         settings_prefixes: Vec<String>,
     ) -> Result<Arc<Self>> {
-        let conn = Connection::new(system_requests_pool.get_inner_connection().await?, false);
+        let connection = Connection::new(system_requests_pool.acquire_connection().await?, false);
         let dynamic_config_file = setup_configuration.dynamic_configuration_file();
 
         let inner = PgConfigurationInner {
@@ -173,7 +174,7 @@ impl PgConfiguration {
             system_requests_pool: system_requests_pool.clone(),
         };
 
-        let values = RwLock::new(inner.load_configurations(&conn).await?);
+        let values = RwLock::new(inner.load_configurations(&connection).await?);
 
         let configuration = Arc::new(PgConfiguration {
             inner,
