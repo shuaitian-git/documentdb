@@ -29,6 +29,7 @@ pub struct CursorStoreEntry {
     pub db: String,
     pub collection: String,
     pub timestamp: Instant,
+    pub is_long_timeout: bool,
     pub session_id: Option<Vec<u8>>,
 }
 
@@ -43,15 +44,20 @@ impl CursorStore {
         let cursors: Arc<RwLock<HashMap<(i64, String), CursorStoreEntry>>> =
             Arc::new(RwLock::new(HashMap::new()));
         let cursor_timeout = Duration::from_secs(config.cursor_timeout_secs());
+        let long_cursor_timeout = Duration::from_secs(config.long_cursor_timeout_secs());
+        let min_timeout = Duration::min(cursor_timeout, long_cursor_timeout);
 
         let cursors_clone = cursors.clone();
         let reaper = if use_reaper {
             Some(tokio::spawn(async move {
-                let mut interval = tokio::time::interval(cursor_timeout / 10);
+                let mut interval = tokio::time::interval(min_timeout / 10);
                 loop {
                     interval.tick().await;
                     let mut cursors = cursors_clone.write().await;
-                    cursors.retain(|_, v| v.timestamp.elapsed() < cursor_timeout)
+                    cursors.retain(|_, v| match v.is_long_timeout {
+                        true => v.timestamp.elapsed() < long_cursor_timeout,
+                        _ => v.timestamp.elapsed() < cursor_timeout,
+                    })
                 }
             }))
         } else {

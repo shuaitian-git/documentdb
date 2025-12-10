@@ -27,6 +27,12 @@ pub async fn save_cursor(
 ) -> Result<()> {
     if let Some((persist, cursor)) = response.get_cursor()? {
         let connection = if persist { Some(connection) } else { None };
+        let is_long_timeout = connection_context
+            .service_context
+            .dynamic_configuration()
+            .enable_long_cursor_timeout()
+            .await
+            && connection.is_none();
         connection_context
             .add_cursor(
                 connection,
@@ -34,6 +40,7 @@ pub async fn save_cursor(
                 connection_context.auth_state.username()?,
                 request_info.db()?,
                 request_info.collection()?,
+                is_long_timeout,
                 request_info.session_id.map(|v| v.to_vec()),
             )
             .await;
@@ -130,6 +137,7 @@ pub async fn process_get_more(
         db,
         collection,
         session_id,
+        mut is_long_timeout,
         ..
     } = connection_context
         .get_cursor(id, connection_context.auth_state.username()?)
@@ -149,6 +157,13 @@ pub async fn process_get_more(
         )
         .await?;
 
+    is_long_timeout = is_long_timeout
+        && connection_context
+            .service_context
+            .dynamic_configuration()
+            .enable_long_cursor_timeout()
+            .await;
+
     if let Some(row) = results.first() {
         let continuation: Option<PgDocument> = row.try_get(1)?;
         if let Some(continuation) = continuation {
@@ -162,6 +177,7 @@ pub async fn process_get_more(
                     connection_context.auth_state.username()?,
                     &db,
                     &collection,
+                    is_long_timeout,
                     session_id,
                 )
                 .await;
