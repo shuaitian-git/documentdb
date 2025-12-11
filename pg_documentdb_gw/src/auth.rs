@@ -15,7 +15,7 @@ use crate::{
     processor,
     protocol::OK_SUCCEEDED,
     requests::{request_tracker::RequestTracker, Request, RequestType},
-    responses::{RawResponse, Response},
+    responses::{PgResponse, RawResponse, Response},
 };
 use base64::{engine::general_purpose, Engine as _};
 use bson::{rawdoc, spec::BinarySubtype};
@@ -25,8 +25,7 @@ use tokio::{
     sync::RwLock,
     time::{sleep, Duration},
 };
-use tokio_postgres::types::Type;
-
+use tokio_postgres::{error::SqlState, types::Type};
 const NONCE_LENGTH: usize = 2;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -299,11 +298,13 @@ async fn handle_oidc_token_authentication(
 ) -> Result<Response> {
     let (oid, seconds_until_expiry) = parse_and_validate_jwt_token(token_string)?;
 
-    let authentication_token_row = connection_context
+    let connection = connection_context
         .service_context
         .connection_pool_manager()
         .authentication_connection()
-        .await?
+        .await?;
+
+    let authentication_token_row = match connection
         .query(
             connection_context
                 .service_context
@@ -314,7 +315,60 @@ async fn handle_oidc_token_authentication(
             None,
             &mut RequestTracker::new(),
         )
-        .await?;
+        .await
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            match e {
+                DocumentDBError::PostgresError(pge_error, _) => match pge_error.as_db_error() {
+                    Some(db_error) => {
+                        log::error!(
+                                activity_id = connection_context.connection_id.to_string().as_str();
+                                "Backend error during authentication: PostgresError({:?}, {:?})",
+                                db_error.code(),
+                                db_error.hint());
+
+                        if let Some((extension_error_code, _)) =
+                            PgResponse::from_known_external_error_code(db_error.code())
+                        {
+                            if extension_error_code == ErrorCode::CommandNotSupported as i32 {
+                                return Err(DocumentDBError::authentication_failed(
+                                    "The authentication mechanism provided is not supported in the service.".to_string(),
+                                ));
+                            }
+                        }
+
+                        return match *db_error.code() {
+                            SqlState::INVALID_PASSWORD => {
+                                Err(DocumentDBError::authentication_failed(
+                                    "The token provided is not valid.".to_string(),
+                                ))
+                            }
+                            SqlState::UNDEFINED_OBJECT => {
+                                Err(DocumentDBError::authentication_failed(
+                                    "External identity is not present in the system.".to_string(),
+                                ))
+                            }
+                            // All other errors are returned as InternalError in authentication code path.
+                            _ => Err(DocumentDBError::authentication_failed(
+                                "Internal Error.".to_string(),
+                            )),
+                        };
+                    }
+                    None => {
+                        log::error!(
+                            activity_id = connection_context.connection_id.to_string().as_str();
+                            "DbError not found in PostgresError, which is unexpected."
+                        );
+                        return Err(DocumentDBError::authentication_failed(
+                            "Internal Error.".to_string(),
+                        ));
+                    }
+                },
+                _ => return Err(e),
+            }
+        }
+    };
 
     let authentication_result: String = authentication_token_row
         .first()
