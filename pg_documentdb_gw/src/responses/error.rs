@@ -8,20 +8,18 @@
 
 use std::error::Error;
 
-use bson::raw::ValueAccessErrorKind;
-use bson::RawDocumentBuf;
+use bson::{raw::ValueAccessErrorKind, RawDocumentBuf};
 use deadpool_postgres::PoolError;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::error::SqlState;
 
-use crate::context::ConnectionContext;
-use crate::error::{DocumentDBError, ErrorCode, Result};
-use crate::protocol::OK_FAILED;
-use crate::responses::constant::{
-    bson_serialize_error_message, documentdb_error_message, value_access_error_message,
+use crate::{
+    context::ConnectionContext,
+    error::{DocumentDBError, ErrorCode},
+    protocol::OK_FAILED,
+    responses::constant::{documentdb_error_message, value_access_error_message},
+    responses::pg::PgResponse,
 };
-
-use super::pg::PgResponse;
 
 /// Display and Debug trait are not implemented explicitly to avoid logging PII mistakenly.
 #[derive(Clone, Serialize, Deserialize)]
@@ -51,9 +49,14 @@ impl CommandError {
         }
     }
 
-    pub fn to_raw_document_buf(&self) -> Result<RawDocumentBuf> {
-        bson::to_raw_document_buf(self)
-            .map_err(|e| DocumentDBError::internal_error(bson_serialize_error_message(e)))
+    pub fn to_raw_document_buf(&self) -> RawDocumentBuf {
+        // The key names used here must match with the field names expected by the driver sdk on errors.
+        let mut doc = RawDocumentBuf::new();
+        doc.append("ok", self.ok);
+        doc.append("code", self.code);
+        doc.append("codeName", self.code_name.clone());
+        doc.append("errmsg", self.message.clone());
+        doc
     }
 
     fn internal(msg: String) -> Self {
