@@ -667,6 +667,30 @@ CompositeIndexSupportsIndexOnlyScan(const IndexPath *indexPath)
 		return false;
 	}
 
+	if (indexPath->indexinfo->opclassoptions != NULL)
+	{
+		BsonGinIndexOptionsBase *options =
+			(BsonGinIndexOptionsBase *) indexPath->indexinfo->opclassoptions[0];
+		if (options->type != IndexOptionsType_Composite)
+		{
+			return false;
+		}
+
+		BsonGinCompositePathOptions *compositeOptions =
+			(BsonGinCompositePathOptions *) options;
+		if (compositeOptions->wildcardPathIndex >= 0)
+		{
+			/* Wildcard indexes don't support index only scans for now.
+			 * This is because wildcard indexes don't index documents and so we don't have full
+			 * fidelity recreation of index terms.
+			 * We can technically do better if the filter ranges don't overlap with nulls, arrays
+			 * and documents but that needs to be considered as part of the cost function +
+			 * order by integration.
+			 */
+			return false;
+		}
+	}
+
 	Relation indexRelation = index_open(indexPath->indexinfo->indexoid, NoLock);
 	bool multiKeyStatus = getMultiKeyStatusFunc(indexRelation);
 	bool hasTruncatedTerms = getTruncationStatusFunc(indexRelation);
