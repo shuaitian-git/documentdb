@@ -479,7 +479,7 @@ async fn log_and_write_error(
     activity_id: &str,
 ) -> Result<CommandError> {
     let command_error = CommandError::from_error(connection_context, e, activity_id).await;
-    let response = command_error.to_raw_document_buf()?;
+    let response = command_error.to_raw_document_buf();
 
     responses::writer::write_and_flush(header, &response, stream).await?;
 
