@@ -9,7 +9,7 @@
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use bson::RawDocumentBuf;
@@ -105,7 +105,7 @@ impl ConnectionContext {
         username: &str,
         db: &str,
         collection: &str,
-        is_long_timeout: bool,
+        cursor_timeout: Duration,
         session_id: Option<Vec<u8>>,
     ) {
         let key = (cursor.cursor_id, username.to_string());
@@ -115,7 +115,7 @@ impl ConnectionContext {
             db: db.to_string(),
             collection: collection.to_string(),
             timestamp: Instant::now(),
-            is_long_timeout,
+            cursor_timeout,
             session_id,
         };
 

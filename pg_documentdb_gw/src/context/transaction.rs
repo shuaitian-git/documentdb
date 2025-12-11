@@ -10,7 +10,7 @@ use tokio::{sync::RwLock, task::JoinHandle};
 use tokio_postgres::IsolationLevel;
 
 use crate::{
-    configuration::SetupConfiguration,
+    configuration::DynamicConfiguration,
     error::{DocumentDBError, ErrorCode, Result},
     postgres::{self, Connection, PgDataClient},
 };
@@ -40,7 +40,7 @@ pub struct Transaction {
 
 impl Transaction {
     pub async fn start(
-        config: &dyn SetupConfiguration,
+        config: Arc<dyn DynamicConfiguration>,
         request: &RequestTransactionInfo,
         conn: Arc<Connection>,
         isolation_level: IsolationLevel,
@@ -224,7 +224,7 @@ impl TransactionStore {
             }
 
             let transaction = Transaction::start(
-                connection_context.service_context.setup_configuration(),
+                connection_context.service_context.dynamic_configuration(),
                 transaction_info,
                 Arc::new(
                     pg_data_client

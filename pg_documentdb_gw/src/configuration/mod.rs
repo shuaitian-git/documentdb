@@ -26,12 +26,6 @@ use std::fmt::Debug;
 /// Implementors of this trait are expected to provide various configuration
 /// parameters required for the application to function correctly.
 pub trait SetupConfiguration: DynClone + Send + Sync + Debug {
-    /// Returns the timeout duration (in seconds) for database cursors.
-    fn cursor_timeout_secs(&self) -> u64;
-
-    /// Returns the timeout duration (in seconds) for database cursors with long timeout.
-    fn long_cursor_timeout_secs(&self) -> u64;
-
     /// Returns the file path to the dynamic configuration file.
     fn dynamic_configuration_file(&self) -> String;
 
