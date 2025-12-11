@@ -168,3 +168,16 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF)
     SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_sharded", "pipeline" : [{ "$match" : {"shardKey": {"$eq": 5 } } }, { "$count": "c" } ]}');
 
 ROLLBACK;
+
+-- test index only scan is not enabled for wildcard indexes
+set documentdb.enableCompositeWildcardIndex to on;
+SELECT documentdb_api.insert_one('idx_only_scan_db', 'compwildcard2', '{ "a": { "b": 1, "c": 5 }}');
+SELECT documentdb_api.insert_one('idx_only_scan_db', 'compwildcard2', '{ "a": { "b": 1, "c": 6 }}');
+SELECT documentdb_api.insert_one('idx_only_scan_db', 'compwildcard2', '{ "a": { "b": 2, "c": 6 }}');
+SELECT documentdb_api.insert_one('idx_only_scan_db', 'compwildcard2', '{ "a": { "b": 2, "c": 7 }}');
+SELECT documentdb_api.insert_one('idx_only_scan_db', 'compwildcard2', '{ "a": { "b": 3, "c": 7 }}');
+SELECT documentdb_api_internal.create_indexes_non_concurrently('idx_only_scan_db', '{ "createIndexes": "compwildcard2", "indexes": [ { "key": { "$**": 1 }, "name": "$**_1", "enableOrderedIndex": true }]}', TRUE);
+
+set documentdb.forceIndexOnlyScanIfAvailable to on;
+EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF)
+    SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{ "count" : "compwildcard2", "query" : { "a.b": { "$gt": 2 } } }');
