@@ -243,6 +243,17 @@ impl DynamicConfiguration for PgConfiguration {
         ret
     }
 
+    async fn get_u64(&self, key: &str, default: u64) -> u64 {
+        let ret = self
+            .values
+            .read()
+            .await
+            .get(key)
+            .map(|v| v.parse::<u64>().unwrap_or(default))
+            .unwrap_or(default);
+        ret
+    }
+
     async fn equals_value(&self, key: &str, value: &str) -> bool {
         let ret = self
             .values
