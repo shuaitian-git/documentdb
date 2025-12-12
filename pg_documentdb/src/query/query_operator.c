@@ -276,7 +276,7 @@ bson_query_match(PG_FUNCTION_ARGS)
 	}
 	else if (useQueryMatchWithLetAndCollation && PG_NARGS() == 4)
 	{
-		/* TODO: Can remove NULL checks after v1.110 when function is always strict */
+		/* TODO: Remove after v0.110 when function has only STRICT forms */
 		if (PG_ARGISNULL(0) && PG_ARGISNULL(1))
 		{
 			PG_RETURN_NULL();

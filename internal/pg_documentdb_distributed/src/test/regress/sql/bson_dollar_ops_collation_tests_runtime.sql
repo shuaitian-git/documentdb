@@ -1209,6 +1209,13 @@ SELECT documentdb_api_internal.delete_worker(
 SELECT document from documentdb_api.collection('db', 'coll_delete_sort');
 ROLLBACK;
 
+-- $in: []
+BEGIN;
+SELECT document from documentdb_api.collection('db', 'coll_delete');
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": {"_id": {"$in": []} }, "limit": 0, "collation": { "locale": "en", "strength" : 1}}]}');
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": {"_id": {"$in": []} }, "limit": 1, "collation": { "locale": "en", "strength" : 1}}]}');
+ROLLBACK;
+
 -- delete on sharded collection
 SELECT documentdb_api.shard_collection('db', 'coll_delete', '{ "a": "hashed" }', false);
 
@@ -1293,6 +1300,13 @@ BEGIN;
 SET LOCAL documentdb.enableNowSystemVariable='off';
 SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": {"_id": "DoG" }, "limit": 1, "collation": { "locale": "en", "strength" : 3}}]}');
 EXPLAIN (VERBOSE ON, COSTS OFF) SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": {"_id": "DoG" }, "limit": 1, "collation": { "locale": "en", "strength" : 3}}]}');
+ROLLBACK;
+
+-- $in: []
+BEGIN;
+SELECT document from documentdb_api.collection('db', 'coll_delete');
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": {"_id": {"$in": []} }, "limit": 0, "collation": { "locale": "en", "strength" : 1}}]}');
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": {"_id": {"$in": []} }, "limit": 1, "collation": { "locale": "en", "strength" : 1}}]}');
 ROLLBACK;
 
 SELECT documentdb_api.drop_collection('db', 'coll_delete');

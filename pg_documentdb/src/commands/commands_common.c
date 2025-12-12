@@ -184,14 +184,15 @@ FindShardKeyValueForDocumentId(MongoCollection *collection, const bson_value_t *
 
 	Oid *argTypes = palloc0(argCount * sizeof(Oid));
 	Datum *argValues = palloc0(argCount * sizeof(Datum));
+
 	char *argNulls = palloc0(argCount * sizeof(char));
+	memset(argNulls, ' ', argCount);
 
 	Oid bsonTypeId = BsonTypeId();
 
 	/* set the query spec */
 	argTypes[0] = bsonTypeId;
 	argValues[0] = PointerGetDatum(PgbsonInitFromDocumentBsonValue(queryDoc));
-	argNulls[0] = ' ';
 
 	if (applyVariableSpec || applyCollation)
 	{
@@ -199,13 +200,11 @@ FindShardKeyValueForDocumentId(MongoCollection *collection, const bson_value_t *
 		argTypes[1] = bsonTypeId;
 		argValues[1] = applyVariableSpec ? PointerGetDatum(variableSpecBson) :
 					   PointerGetDatum(PgbsonInitEmpty());
-		argNulls[1] = ' ';
 
 		/* set the collation string */
 		argTypes[2] = TEXTOID;
 		argValues[2] = applyCollation ? CStringGetTextDatum(collationString) :
 					   CStringGetTextDatum("");
-		argNulls[2] = ' ';
 	}
 
 	/* set _id filter */
@@ -219,7 +218,6 @@ FindShardKeyValueForDocumentId(MongoCollection *collection, const bson_value_t *
 		argTypes[idArgIndex] = BYTEAOID;
 		argValues[idArgIndex] = PointerGetDatum(CastPgbsonToBytea(PgbsonWriterGetPgbson(
 																	  &writer)));
-		argNulls[idArgIndex] = ' ';
 	}
 
 	/* set the orderby _id filter */
@@ -232,7 +230,6 @@ FindShardKeyValueForDocumentId(MongoCollection *collection, const bson_value_t *
 
 		argTypes[idOrderByIndex] = bsonTypeId;
 		argValues[idOrderByIndex] = PointerGetDatum(PgbsonWriterGetPgbson(&writer));
-		argNulls[idOrderByIndex] = ' ';
 	}
 
 	bool readOnly = false;

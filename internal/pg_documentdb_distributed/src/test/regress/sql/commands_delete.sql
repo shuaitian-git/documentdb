@@ -478,6 +478,13 @@ SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q
 SELECT document from documentdb_api.collection('db', 'coll_delete');
 ROLLBACK;
 
+-- $in: []
+BEGIN;
+SELECT document from documentdb_api.collection('db', 'coll_delete');
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": { "$expr": {"$in": [] } }, "limit": 0}], "let": {"varRef": 2} }');
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": { "$expr": {"$in": [] } }, "limit": 1}], "let": {"varRef": 2} }');
+ROLLBACK;
+
 -- sharded collection
 SELECT documentdb_api.shard_collection('db', 'coll_delete', '{ "a": "hashed" }', false);
 
@@ -503,6 +510,13 @@ BEGIN;
 SELECT document from documentdb_api.collection('db', 'coll_delete');
 SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": { "$expr": {"$lt": ["$a", "$$varRef1"] } }, "limit": 0}, { "q": { "$expr": {"$lte": ["$a", "$$varRef2"] } }, "limit": 0}, { "q": { "$expr": {"$lte": ["$_id", "$$varRef1"] } }, "limit": 0}], "ordered": true, "let": {"varRef1": 2, "varRef2": "kangaroo"}} ');
 SELECT document from documentdb_api.collection('db', 'coll_delete');
+ROLLBACK;
+
+-- $in: []
+BEGIN;
+SELECT document from documentdb_api.collection('db', 'coll_delete');
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": { "$expr": {"$in": [] } }, "limit": 0}], "let": {"varRef": 2} }');
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": { "$expr": {"$in": [] } }, "limit": 1}], "let": {"varRef": 2} }');
 ROLLBACK;
 
 RESET documentdb.enableVariablesSupportForWriteCommands;
