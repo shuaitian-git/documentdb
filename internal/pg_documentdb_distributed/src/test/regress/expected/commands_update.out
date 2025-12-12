@@ -2431,6 +2431,29 @@ SELECT document FROM documentdb_api.collection('db', 'coll_update');
 (3 rows)
 
 ROLLBACK;
+-- $in: []
+BEGIN;
+SELECT document FROM documentdb_api.collection('db', 'coll_update');
+                       document                       
+---------------------------------------------------------------------
+ { "_id" : { "$numberInt" : "1" }, "a" : "kofi" }
+ { "_id" : { "$numberInt" : "2" }, "a" : "ama" }
+ { "_id" : { "$numberInt" : "3" }, "a" : "$$varRef" }
+(3 rows)
+
+SELECT documentdb_api.update('db', '{ "update": "coll_update", "updates": [ { "q": {"$expr": {"$in": [] } }, "u": [{"$addFields": {"addFields": "$$varRef"}}], "multi": true}], "let": {"varRef": 2} }');
+                                                                                                                                                                             update                                                                                                                                                                             
+---------------------------------------------------------------------
+ ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""654573597"" }, ""errmsg"" : ""The expression $in requires exactly 2 arguments, but 0 arguments were actually provided."" } ] }",f)
+(1 row)
+
+SELECT documentdb_api.update('db', '{ "update": "coll_update", "updates": [ { "q": {"$expr": {"$in": [] } }, "u": [{"$addFields": {"addFields": "$$varRef"}}], "multi": true}], "let": {"varRef": 2} }');
+                                                                                                                                                                             update                                                                                                                                                                             
+---------------------------------------------------------------------
+ ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""654573597"" }, ""errmsg"" : ""The expression $in requires exactly 2 arguments, but 0 arguments were actually provided."" } ] }",f)
+(1 row)
+
+ROLLBACK;
 -- let support: sharded collection
 SELECT documentdb_api.shard_collection('db', 'coll_update', '{ "a": "hashed" }', false);
  shard_collection 
@@ -2673,3 +2696,26 @@ select documentdb_api.update('db', '{"update":"upShardTest", "updates":[{"q":{"_
  ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""1"" } }",t)
 (1 row)
 
+-- $in: []
+BEGIN;
+SELECT document FROM documentdb_api.collection('db', 'coll_update');
+                       document                       
+---------------------------------------------------------------------
+ { "_id" : { "$numberInt" : "1" }, "a" : "kofi" }
+ { "_id" : { "$numberInt" : "2" }, "a" : "ama" }
+ { "_id" : { "$numberInt" : "3" }, "a" : "$$varRef" }
+(3 rows)
+
+SELECT documentdb_api.update('db', '{ "update": "coll_update", "updates": [ { "q": {"$expr": {"$in": [] } }, "u": [{"$addFields": {"addFields": "$$varRef"}}], "multi": true}], "let": {"varRef": 2} }');
+                                                                                                                                                                             update                                                                                                                                                                             
+---------------------------------------------------------------------
+ ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""654573597"" }, ""errmsg"" : ""The expression $in requires exactly 2 arguments, but 0 arguments were actually provided."" } ] }",f)
+(1 row)
+
+SELECT documentdb_api.update('db', '{ "update": "coll_update", "updates": [ { "q": {"$expr": {"$in": [] } }, "u": [{"$addFields": {"addFields": "$$varRef"}}], "multi": true}], "let": {"varRef": 2} }');
+                                                                                                                                                                             update                                                                                                                                                                             
+---------------------------------------------------------------------
+ ("{ ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""nModified"" : { ""$numberInt"" : ""0"" }, ""n"" : { ""$numberInt"" : ""0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""654573597"" }, ""errmsg"" : ""The expression $in requires exactly 2 arguments, but 0 arguments were actually provided."" } ] }",f)
+(1 row)
+
+ROLLBACK;

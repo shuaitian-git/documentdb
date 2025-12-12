@@ -4921,6 +4921,30 @@ SELECT document from documentdb_api.collection('db', 'coll_delete_sort');
 (1 row)
 
 ROLLBACK;
+-- $in: []
+BEGIN;
+SELECT document from documentdb_api.collection('db', 'coll_delete');
+            document            
+---------------------------------------------------------------------
+ { "_id" : "dog", "a" : "dog" }
+ { "_id" : "DOG", "a" : "DOG" }
+ { "_id" : "cat", "a" : "cat" }
+ { "_id" : "CAT", "a" : "CAT" }
+(4 rows)
+
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": {"_id": {"$in": []} }, "limit": 0, "collation": { "locale": "en", "strength" : 1}}]}');
+                                         delete                                         
+---------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""0"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" } }",t)
+(1 row)
+
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": {"_id": {"$in": []} }, "limit": 1, "collation": { "locale": "en", "strength" : 1}}]}');
+                                         delete                                         
+---------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""0"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" } }",t)
+(1 row)
+
+ROLLBACK;
 -- delete on sharded collection
 SELECT documentdb_api.shard_collection('db', 'coll_delete', '{ "a": "hashed" }', false);
  shard_collection 
@@ -5170,6 +5194,30 @@ EXPLAIN (VERBOSE ON, COSTS OFF) SELECT documentdb_api.delete('db', '{ "delete": 
  Result
    Output: delete('db'::text, '{ "delete" : "coll_delete", "deletes" : [ { "q" : { "_id" : "DoG" }, "limit" : { "$numberInt" : "1" }, "collation" : { "locale" : "en", "strength" : { "$numberInt" : "3" } } } ] }'::bson, NULL::bsonsequence, NULL::text)
 (2 rows)
+
+ROLLBACK;
+-- $in: []
+BEGIN;
+SELECT document from documentdb_api.collection('db', 'coll_delete');
+            document            
+---------------------------------------------------------------------
+ { "_id" : "cat", "a" : "cat" }
+ { "_id" : "CAT", "a" : "CAT" }
+ { "_id" : "dog", "a" : "dog" }
+ { "_id" : "DOG", "a" : "DOG" }
+(4 rows)
+
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": {"_id": {"$in": []} }, "limit": 0, "collation": { "locale": "en", "strength" : 1}}]}');
+                                         delete                                         
+---------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""0"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" } }",t)
+(1 row)
+
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": {"_id": {"$in": []} }, "limit": 1, "collation": { "locale": "en", "strength" : 1}}]}');
+                                                                                                                                           delete                                                                                                                                           
+---------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""0"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""1088"" }, ""errmsg"" : ""delete query with limit 1 must include either _id or shard key filter"" } ] }",f)
+(1 row)
 
 ROLLBACK;
 SELECT documentdb_api.drop_collection('db', 'coll_delete');

@@ -192,7 +192,7 @@ PG_FUNCTION_INFO_V1(bson_dollar_project_geonear);
 Datum
 bson_dollar_project(PG_FUNCTION_ARGS)
 {
-	/* TODO: Remove after v1.110 when function has only STRICT forms */
+	/* TODO: Remove after v0.110 when function has only STRICT forms */
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
 	{
 		PG_RETURN_NULL();
@@ -548,7 +548,7 @@ GetProjectionStateForBsonProject(bson_iter_t *projectionSpecIter,
 Datum
 bson_dollar_add_fields(PG_FUNCTION_ARGS)
 {
-	/* TODO: Remove after v1.110 when function has only STRICT forms */
+	/* TODO: Remove after v0.110 when function has only STRICT forms */
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
 	{
 		PG_RETURN_NULL();
@@ -781,7 +781,7 @@ bson_dollar_set(PG_FUNCTION_ARGS)
 Datum
 bson_dollar_replace_root(PG_FUNCTION_ARGS)
 {
-	/* TODO: Remove after v1.110 when function has only STRICT forms */
+	/* TODO: Remove after v0.110 when function has only STRICT forms */
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
 	{
 		PG_RETURN_NULL();
@@ -1235,7 +1235,7 @@ GetProjectionStateForBsonUnset(const bson_value_t *unsetValue, bool forceProject
 Datum
 bson_dollar_redact(PG_FUNCTION_ARGS)
 {
-	/* TODO: Remove after v1.110 when function has only STRICT forms */
+	/* TODO: Remove after v0.110 when function has only STRICT forms */
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
 	{
 		PG_RETURN_NULL();

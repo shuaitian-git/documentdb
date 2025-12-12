@@ -940,13 +940,14 @@ DeleteAllMatchingDocuments(MongoCollection *collection, pgbson *queryDoc,
 
 	Datum *argValues = palloc0(sizeof(Datum) * argCount);
 	Oid *argTypes = palloc0(sizeof(Oid) * argCount);
+
 	char *argNulls = palloc0(sizeof(char) * argCount);
+	memset(argNulls, ' ', argCount);
 
 	/* assign query value */
 	Oid bsonTypeId = BsonTypeId();
 	argTypes[0] = bsonTypeId;
 	argValues[0] = PointerGetDatum(queryDoc);
-	argNulls[0] = ' ';
 
 	if (applyVariableSpec || applyCollation)
 	{
@@ -954,13 +955,11 @@ DeleteAllMatchingDocuments(MongoCollection *collection, pgbson *queryDoc,
 		argTypes[1] = bsonTypeId;
 		argValues[1] = applyVariableSpec ? PointerGetDatum(variableSpecBson) :
 					   PointerGetDatum(PgbsonInitEmpty());
-		argNulls[1] = ' ';
 
 		/* set the collation string */
 		argTypes[2] = TEXTOID;
 		argValues[2] = applyCollation ? CStringGetTextDatum(collationString) :
 					   CStringGetTextDatum("");
-		argNulls[2] = ' ';
 	}
 
 	/* set shard key value */
@@ -968,7 +967,6 @@ DeleteAllMatchingDocuments(MongoCollection *collection, pgbson *queryDoc,
 	{
 		argTypes[shardKeyArgIndex] = INT8OID;
 		argValues[shardKeyArgIndex] = Int64GetDatum(shardKeyHash);
-		argNulls[shardKeyArgIndex] = ' ';
 	}
 
 	/* set object id value */
@@ -976,7 +974,6 @@ DeleteAllMatchingDocuments(MongoCollection *collection, pgbson *queryDoc,
 	{
 		argTypes[objectIdArgIndex] = BYTEAOID;
 		argValues[objectIdArgIndex] = PointerGetDatum(CastPgbsonToBytea(objectIdFilter));
-		argNulls[objectIdArgIndex] = ' ';
 	}
 
 	bool readOnly = false;

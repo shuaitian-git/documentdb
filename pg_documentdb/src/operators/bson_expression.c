@@ -577,7 +577,7 @@ PG_FUNCTION_INFO_V1(bson_expression_map);
 Datum
 bson_expression_get(PG_FUNCTION_ARGS)
 {
-	/* TODO: Remove after v1.110 when function has only STRICT forms */
+	/* TODO: Remove after v0.110 when function has only STRICT forms */
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
 	{
 		PG_RETURN_NULL();
@@ -679,7 +679,7 @@ bson_expression_get(PG_FUNCTION_ARGS)
 Datum
 bson_expression_partition_get(PG_FUNCTION_ARGS)
 {
-	/* TODO: Remove after v1.110 when function has only STRICT forms */
+	/* TODO: Remove after v0.110 when function has only STRICT forms */
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
 	{
 		PG_RETURN_NULL();
