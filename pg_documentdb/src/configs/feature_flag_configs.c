@@ -166,6 +166,9 @@ bool EnableUpdateBsonDocument = DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT;
 #define DEFAULT_ENABLE_NEW_COUNT_AGGREGATES true
 bool EnableNewCountAggregates = DEFAULT_ENABLE_NEW_COUNT_AGGREGATES;
 
+#define DEFAULT_ENABLE_EXTENDED_EXPLAIN_ON_ANALYZEOFF true
+bool EnableExtendedExplainOnAnalyzeOff = DEFAULT_ENABLE_EXTENDED_EXPLAIN_ON_ANALYZEOFF;
+
 
 /*
  * SECTION: Aggregation & Query feature flags
@@ -712,6 +715,14 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable new count aggregate optimizations."),
 		NULL, &EnableNewCountAggregates, DEFAULT_ENABLE_NEW_COUNT_AGGREGATES,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableExtendedExplainOnAnalyzeOff", newGucPrefix),
+		gettext_noop(
+			"Whether to enable logging extended explain on explain with analyze off."),
+		NULL, &EnableExtendedExplainOnAnalyzeOff,
+		DEFAULT_ENABLE_EXTENDED_EXPLAIN_ON_ANALYZEOFF,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
