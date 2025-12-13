@@ -1032,6 +1032,7 @@ EXPLAIN(analyze on, verbose on, costs off, timing off, summary off) SELECT ctid 
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=100 loops=1)
          Output: ctid
          indexName: ttl_index
+         indexKey: {"ttl": 1}
          isMultiKey: true
          indexBounds: ["ttl": [{ "$date" : { "$numberLong" : "-9223372036854775808" } }, { "$date" : "2025-08-06T21:22:45Z" })]
          innerScanLoops: 4 loops
@@ -1040,7 +1041,7 @@ EXPLAIN(analyze on, verbose on, costs off, timing off, summary off) SELECT ctid 
          ->  Index Scan using ttl_index on documentdb_data.documents_20006_2000105 (actual rows=100 loops=1)
                Output: ctid
                Index Cond: (documents_20006_2000105.document @< '{ "ttl" : { "$date" : { "$numberLong" : "1754515365000" } } }'::bson)
-(13 rows)
+(14 rows)
 
 END;
 --  Shard collection
@@ -1078,6 +1079,7 @@ EXPLAIN(analyze on, verbose on, costs off, timing off, summary off) SELECT ctid 
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=100 loops=1)
          Output: ctid
          indexName: ttl_index
+         indexKey: {"ttl": 1}
          isMultiKey: false
          indexBounds: ["ttl": [{ "$date" : { "$numberLong" : "-9223372036854775808" } }, { "$date" : "2022-07-15T15:47:10.775Z" })]
          innerScanLoops: 1 loops
@@ -1086,7 +1088,7 @@ EXPLAIN(analyze on, verbose on, costs off, timing off, summary off) SELECT ctid 
          ->  Index Scan using ttl_index on documentdb_data.documents_20006_2000124 (actual rows=100 loops=1)
                Output: ctid
                Index Cond: (documents_20006_2000124.document @< '{ "ttl" : { "$date" : { "$numberLong" : "1657900030775" } } }'::bson)
-(13 rows)
+(14 rows)
 
 END;
 BEGIN;
@@ -1101,6 +1103,7 @@ EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT ctid FROM documen
  Limit (actual rows=100 loops=1)
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=100 loops=1)
          indexName: ttl_index
+         indexKey: {"ttl": 1}
          isMultiKey: false
          indexBounds: ["ttl": [{ "$date" : { "$numberLong" : "-9223372036854775808" } }, { "$date" : "2022-07-15T15:47:10.775Z" })]
          innerScanLoops: 1 loops
@@ -1108,7 +1111,7 @@ EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT ctid FROM documen
          scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 1216)]
          ->  Index Scan using ttl_index on documents_20006_2000122 (actual rows=100 loops=1)
                Index Cond: (document @< '{ "ttl" : { "$date" : { "$numberLong" : "1657900030775" } } }'::bson)
-(10 rows)
+(11 rows)
 
 END;
 SELECT count(*) from ( SELECT shard_key_value, object_id, document  from documentdb_api.collection('db', 'ttlCompositeOrderedScan') order by object_id) as a;
@@ -1152,6 +1155,7 @@ EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF)
  Limit (actual rows=100 loops=1)
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=100 loops=1)
          indexName: ttl_index
+         indexKey: {"ttl": 1}
          isMultiKey: false
          indexBounds: ["ttl": [{ "$date" : { "$numberLong" : "-9223372036854775808" } }, { "$date" : "2022-07-15T15:47:10.775Z" })]
          isBackwardScan: true
@@ -1161,6 +1165,6 @@ EXPLAIN(COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF)
          ->  Index Scan using ttl_index on documents_20006_2000122 (actual rows=100 loops=1)
                Index Cond: (document @< '{ "ttl" : { "$date" : { "$numberLong" : "1657900030775" } } }'::bson)
                Order By: (document OPERATOR(documentdb_api_internal.<>-|) '{ "ttl" : { "$numberInt" : "-1" } }'::bson)
-(12 rows)
+(13 rows)
 
 END;

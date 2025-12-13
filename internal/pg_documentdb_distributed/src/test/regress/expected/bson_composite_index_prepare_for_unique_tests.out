@@ -77,6 +77,7 @@ EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) select docu
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=99 loops=1)
                Output: document
                indexName: a_1
+               indexKey: {"a": 1}
                isMultiKey: false
                indexBounds: ["a": (2, Infinity]]
                innerScanLoops: 100 loops
@@ -85,7 +86,7 @@ EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) select docu
                ->  Index Scan using a_1 on documentdb_data.documents_588001_5880002 collection (actual rows=99 loops=1)
                      Output: document
                      Index Cond: (collection.document OPERATOR(documentdb_api_catalog.@>) '{ "a" : { "$numberInt" : "2" } }'::documentdb_core.bson)
-(20 rows)
+(21 rows)
 
 ROLLBACK;
 BEGIN;
@@ -106,6 +107,7 @@ EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) select docu
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=99 loops=1)
                Output: document, documentdb_api_catalog.bson_orderby(document, '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
                indexName: a_1
+               indexKey: {"a": 1}
                isMultiKey: false
                indexBounds: ["a": (2, Infinity]]
                innerScanLoops: 100 loops
@@ -115,7 +117,7 @@ EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) select docu
                      Output: document
                      Index Cond: (collection.document OPERATOR(documentdb_api_catalog.@>) '{ "a" : { "$numberInt" : "2" } }'::documentdb_core.bson)
                      Order By: (collection.document OPERATOR(documentdb_api_catalog.|-<>) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(21 rows)
+(22 rows)
 
 ROLLBACK;
 -- multiple fields work fine
@@ -168,6 +170,7 @@ EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) select docu
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
                Output: document
                indexName: a_1_b_1
+               indexKey: {"a": 1,"b": 1}
                isMultiKey: false
                indexBounds: ["a": (2, Infinity], "b": [3, 3]]
                innerScanLoops: 100 loops
@@ -176,7 +179,7 @@ EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) select docu
                ->  Index Scan using a_1_b_1 on documentdb_data.documents_588001_5880002 collection (actual rows=1 loops=1)
                      Output: document
                      Index Cond: ((collection.document OPERATOR(documentdb_api_catalog.@>) '{ "a" : { "$numberInt" : "2" } }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "b" : { "$numberInt" : "3" } }'::documentdb_core.bson))
-(20 rows)
+(21 rows)
 
 ROLLBACK;
 -- test error paths

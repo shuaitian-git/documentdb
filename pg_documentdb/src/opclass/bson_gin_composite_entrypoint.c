@@ -1885,6 +1885,42 @@ GetEqualityRangePredicatesForIndexPath(IndexPath *indexPath, void *options,
 
 
 char *
+SerializeCompositeIndexKeyForExplain(bytea *entry)
+{
+	BsonGinCompositePathOptions *pathOptions = (BsonGinCompositePathOptions *) entry;
+	const char *indexPaths[INDEX_MAX_KEYS] = { 0 };
+	uint32_t indexPathsLengths[INDEX_MAX_KEYS] = { 0 };
+	int8_t sortOrders[INDEX_MAX_KEYS] = { 0 };
+
+	int numPaths = GetIndexPathsFromOptionsWithLength(
+		pathOptions,
+		indexPaths, indexPathsLengths, sortOrders);
+	StringInfoData keyData;
+	initStringInfo(&keyData);
+	appendStringInfo(&keyData, "{");
+
+	const char *separator = "";
+	for (int i = 0; i < numPaths; i++)
+	{
+		const char *indexPath = indexPaths[i];
+		const char *pathSuffix = "";
+		if (i == pathOptions->wildcardPathIndex)
+		{
+			/* add the wildcard suffix if needed */
+			pathSuffix = indexPathsLengths[i] == 0 ? "$**" : ".$**";
+		}
+
+		appendStringInfo(&keyData, "%s\"%s%s\": %d", separator, indexPath, pathSuffix,
+						 sortOrders[i]);
+		separator = ",";
+	}
+
+	appendStringInfo(&keyData, "}");
+	return keyData.data;
+}
+
+
+char *
 SerializeBoundsStringForExplain(bytea *entry, void *extraData, PG_FUNCTION_ARGS)
 {
 	CompositeQueryRunData *runData = (CompositeQueryRunData *) extraData;
@@ -2001,6 +2037,86 @@ DetermineCompositeScanDirection(bytea *compositeScanOptions,
 
 	ereport(ERROR, (errmsg(
 						"Unable to determine sort direction - path in order by doesn't match any path in the index")));
+}
+
+
+Datum
+FormCompositeDatumFromQuals(List *indexQuals, List *indexOrderBy, bool isMultiKey)
+{
+	ScanKeyData *scanKeys = palloc0(sizeof(ScanKeyData) * list_length(indexQuals));
+	ScanKeyData targetScanKey = { 0 };
+
+	ListCell *cell;
+	int i = 0;
+	foreach(cell, indexQuals)
+	{
+		Expr *expr = lfirst(cell);
+		if (!IsA(expr, OpExpr))
+		{
+			return (Datum) 0;
+		}
+
+		OpExpr *clauseExpr = (OpExpr *) expr;
+		BsonIndexStrategy strategy = GetMongoIndexOperatorByPostgresOperatorId(
+			clauseExpr->opno)->indexStrategy;
+		if (list_length(clauseExpr->args) != 2)
+		{
+			return (Datum) 0;
+		}
+
+		if (strategy == BSON_INDEX_STRATEGY_INVALID)
+		{
+			if (clauseExpr->opno == BsonRangeMatchOperatorOid())
+			{
+				strategy = BSON_INDEX_STRATEGY_DOLLAR_RANGE;
+			}
+			else
+			{
+				return (Datum) 0;
+			}
+		}
+
+		Expr *leftop = (Expr *) linitial(clauseExpr->args);
+
+		if (leftop && IsA(leftop, RelabelType))
+		{
+			leftop = ((RelabelType *) leftop)->arg;
+		}
+
+		Assert(leftop != NULL);
+
+		if (!(IsA(leftop, Var) &&
+			  ((Var *) leftop)->varno == INDEX_VAR))
+		{
+			return (Datum) 0;
+		}
+
+		AttrNumber varattno = ((Var *) leftop)->varattno;
+
+		Expr *secondArg = lsecond(clauseExpr->args);
+		if (!IsA(secondArg, Const))
+		{
+			return (Datum) 0;
+		}
+
+		Const *secondConst = (Const *) secondArg;
+
+		scanKeys[i].sk_attno = varattno;
+		scanKeys[i].sk_strategy = strategy;
+		scanKeys[i].sk_argument = secondConst->constvalue;
+		i++;
+	}
+
+	/* TODO: Extract order by scan direction from index orderby */
+	if (!ModifyScanKeysForCompositeScan(scanKeys, list_length(indexQuals), &targetScanKey,
+										isMultiKey,
+										list_length(indexOrderBy) > 0,
+										ForwardScanDirection))
+	{
+		return (Datum) 0;
+	}
+
+	return targetScanKey.sk_argument;
 }
 
 

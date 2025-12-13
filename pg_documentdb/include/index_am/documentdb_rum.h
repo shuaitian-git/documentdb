@@ -102,6 +102,8 @@ bool RumGetTruncationStatus(Relation indexRelation);
 
 struct ExplainState;
 void ExplainCompositeScan(IndexScanDesc scan, struct ExplainState *es);
+void ExplainRawCompositeScan(Relation index_rel, List *indexQuals, List *indexOrderBy,
+							 ScanDirection indexScanDir, struct ExplainState *es);
 
 void ExplainRegularIndexScan(IndexScanDesc scan, struct ExplainState *es);
 #endif

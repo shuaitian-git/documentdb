@@ -62,6 +62,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          Output: bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" } }'::bson, '{ "a" : { "$gt" : { "$numberInt" : "50" } } }'::bson, '{ "now" : NOW_SYS_VARIABLE }'::bson)
          indexName: a_1
+         indexKey: {"a": 1}
          isMultiKey: false
          indexBounds: ["a": (50, Infinity]]
          innerScanLoops: 5 loops
@@ -70,7 +71,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
          ->  Index Scan using a_1 on documentdb_data.documents_68501_685002 collection (actual rows=5 loops=1)
                Output: document
                Index Cond: (collection.document @> '{ "a" : { "$numberInt" : "50" } }'::bson)
-(13 rows)
+(14 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2',
     '{ "find": "query_ordered_pref", "filter": { "a": { "$gt": 50, "$lt": 900 } }, "projection": { "_id": 1 }, "limit": 5 }');
@@ -81,6 +82,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          Output: bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" } }'::bson, '{ "a" : { "$gt" : { "$numberInt" : "50" }, "$lt" : { "$numberInt" : "900" } } }'::bson, '{ "now" : NOW_SYS_VARIABLE }'::bson)
          indexName: a_1
+         indexKey: {"a": 1}
          isMultiKey: false
          indexBounds: ["a": (50, 900)]
          innerScanLoops: 5 loops
@@ -89,7 +91,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
          ->  Index Scan using a_1 on documentdb_data.documents_68501_685002 collection (actual rows=5 loops=1)
                Output: document
                Index Cond: ((collection.document @> '{ "a" : { "$numberInt" : "50" } }'::bson) AND (collection.document @< '{ "a" : { "$numberInt" : "900" } }'::bson))
-(13 rows)
+(14 rows)
 
 set documentdb_rum.preferOrderedIndexScan to on;
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2',
@@ -101,6 +103,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          Output: bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" } }'::bson, '{ "a" : { "$gt" : { "$numberInt" : "50" } } }'::bson, '{ "now" : NOW_SYS_VARIABLE }'::bson)
          indexName: a_1
+         indexKey: {"a": 1}
          isMultiKey: false
          indexBounds: ["a": (50, Infinity]]
          innerScanLoops: 6 loops
@@ -109,7 +112,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
          ->  Index Scan using a_1 on documentdb_data.documents_68501_685002 collection (actual rows=5 loops=1)
                Output: document
                Index Cond: (collection.document @> '{ "a" : { "$numberInt" : "50" } }'::bson)
-(13 rows)
+(14 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2',
     '{ "find": "query_ordered_pref", "filter": { "a": { "$gt": 50, "$lt": 900 } }, "projection": { "_id": 1 }, "limit": 5 }');
@@ -120,6 +123,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          Output: bson_dollar_project_find(document, '{ "_id" : { "$numberInt" : "1" } }'::bson, '{ "a" : { "$gt" : { "$numberInt" : "50" }, "$lt" : { "$numberInt" : "900" } } }'::bson, '{ "now" : NOW_SYS_VARIABLE }'::bson)
          indexName: a_1
+         indexKey: {"a": 1}
          isMultiKey: false
          indexBounds: ["a": (50, 900)]
          innerScanLoops: 6 loops
@@ -128,7 +132,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
          ->  Index Scan using a_1 on documentdb_data.documents_68501_685002 collection (actual rows=5 loops=1)
                Output: document
                Index Cond: ((collection.document @> '{ "a" : { "$numberInt" : "50" } }'::bson) AND (collection.document @< '{ "a" : { "$numberInt" : "900" } }'::bson))
-(13 rows)
+(14 rows)
 
 -- test ordered scan in the presence of deletes
 set documentdb.enableExtendedExplainPlans to off;
@@ -325,6 +329,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=90 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": 1,"c": 1}
    isMultiKey: false
    indexBounds: ["a": [2, 4], "b": (MinKey, MaxKey), "c": [3, 5]]
    innerScanLoops: 301 loops
@@ -333,7 +338,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68503_685006 collection (actual rows=90 loops=1)
          Output: document
          Index Cond: ((collection.document @>= '{ "a" : { "$numberInt" : "2" } }'::bson) AND (collection.document @<= '{ "a" : { "$numberInt" : "4" } }'::bson) AND (collection.document @>= '{ "c" : { "$numberInt" : "3" } }'::bson) AND (collection.document @<= '{ "c" : { "$numberInt" : "5" } }'::bson))
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2',
     '{ "find": "skip_entry_desc", "filter": { "a": { "$gte": 2, "$lte": 4 }, "c": { "$gte": 3, "$lte": 5 } } }');
@@ -342,6 +347,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=90 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": -1,"b": -1,"c": -1}
    isMultiKey: false
    indexBounds: ["a": DESC[2, 4], "b": DESC(MinKey, MaxKey), "c": DESC[3, 5]]
    innerScanLoops: 301 loops
@@ -350,7 +356,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68504_685008 collection (actual rows=90 loops=1)
          Output: document
          Index Cond: ((collection.document @>= '{ "a" : { "$numberInt" : "2" } }'::bson) AND (collection.document @<= '{ "a" : { "$numberInt" : "4" } }'::bson) AND (collection.document @>= '{ "c" : { "$numberInt" : "3" } }'::bson) AND (collection.document @<= '{ "c" : { "$numberInt" : "5" } }'::bson))
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2',
     '{ "find": "skip_entry_asc", "filter": { "a": { "$in": [ 2, 3 ] }, "c": { "$gte": 3, "$lte": 5 } } }');
@@ -359,6 +365,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=60 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": 1,"c": 1}
    isMultiKey: false
    indexBounds: ["a": [2, 2], "b": (MinKey, MaxKey), "c": [3, 5]], ["a": [3, 3], "b": (MinKey, MaxKey), "c": [3, 5]]
    innerScanLoops: 60 loops
@@ -367,7 +374,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68503_685006 collection (actual rows=60 loops=1)
          Output: document
          Index Cond: ((collection.document @*= '{ "a" : [ { "$numberInt" : "2" }, { "$numberInt" : "3" } ] }'::bson) AND (collection.document @>= '{ "c" : { "$numberInt" : "3" } }'::bson) AND (collection.document @<= '{ "c" : { "$numberInt" : "5" } }'::bson))
-(11 rows)
+(12 rows)
 
 -- with skip entries on we skip relevant portions of the tree
 set documentdb_rum.enableSkipIntermediateEntry to on;
@@ -378,6 +385,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=90 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": 1,"c": 1}
    isMultiKey: false
    indexBounds: ["a": [2, 4], "b": (MinKey, MaxKey), "c": [3, 5]]
    innerScanLoops: 151 loops
@@ -386,7 +394,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68503_685006 collection (actual rows=90 loops=1)
          Output: document
          Index Cond: ((collection.document @>= '{ "a" : { "$numberInt" : "2" } }'::bson) AND (collection.document @<= '{ "a" : { "$numberInt" : "4" } }'::bson) AND (collection.document @>= '{ "c" : { "$numberInt" : "3" } }'::bson) AND (collection.document @<= '{ "c" : { "$numberInt" : "5" } }'::bson))
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2',
     '{ "find": "skip_entry_desc", "filter": { "a": { "$gte": 2, "$lte": 4 }, "c": { "$gte": 3, "$lte": 5 } } }');
@@ -395,6 +403,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=90 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": -1,"b": -1,"c": -1}
    isMultiKey: false
    indexBounds: ["a": DESC[2, 4], "b": DESC(MinKey, MaxKey), "c": DESC[3, 5]]
    innerScanLoops: 151 loops
@@ -403,7 +412,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68504_685008 collection (actual rows=90 loops=1)
          Output: document
          Index Cond: ((collection.document @>= '{ "a" : { "$numberInt" : "2" } }'::bson) AND (collection.document @<= '{ "a" : { "$numberInt" : "4" } }'::bson) AND (collection.document @>= '{ "c" : { "$numberInt" : "3" } }'::bson) AND (collection.document @<= '{ "c" : { "$numberInt" : "5" } }'::bson))
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2',
     '{ "find": "skip_entry_asc", "filter": { "a": { "$in": [ 2, 3 ] }, "c": { "$gte": 3, "$lte": 5 } } }');
@@ -412,6 +421,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=60 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": 1,"c": 1}
    isMultiKey: false
    indexBounds: ["a": [2, 2], "b": (MinKey, MaxKey), "c": [3, 5]], ["a": [3, 3], "b": (MinKey, MaxKey), "c": [3, 5]]
    innerScanLoops: 60 loops
@@ -420,7 +430,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68503_685006 collection (actual rows=60 loops=1)
          Output: document
          Index Cond: ((collection.document @*= '{ "a" : [ { "$numberInt" : "2" }, { "$numberInt" : "3" } ] }'::bson) AND (collection.document @>= '{ "c" : { "$numberInt" : "3" } }'::bson) AND (collection.document @<= '{ "c" : { "$numberInt" : "5" } }'::bson))
-(11 rows)
+(12 rows)
 
 -- try with hint to do secondary/tertiary docs
 SELECT documentdb_api.insert_one('comp_db2', 'skip_entry_mixed', '{ "_id": 0 }');
@@ -467,6 +477,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": -1,"c": 1,"d": -1}
    isMultiKey: false
    indexBounds: ["a": [1, 1], "b": DESC(MinKey, MaxKey), "c": (MinKey, MaxKey), "d": DESC(MinKey, MaxKey)]
    innerScanLoops: 4 loops
@@ -475,7 +486,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68505_685010 collection (actual rows=4 loops=1)
          Output: document
          Index Cond: (collection.document @= '{ "a" : { "$numberInt" : "1" } }'::bson)
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2', '{ "find": "skip_entry_mixed", "filter": { "b": 1 }, "hint": "a_1" }');
                                                 QUERY PLAN                                                 
@@ -483,6 +494,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=3 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": -1,"c": 1,"d": -1}
    isMultiKey: false
    indexBounds: ["a": (MinKey, MaxKey), "b": DESC[1, 1], "c": (MinKey, MaxKey), "d": DESC(MinKey, MaxKey)]
    innerScanLoops: 5 loops
@@ -491,7 +503,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68505_685010 collection (actual rows=3 loops=1)
          Output: document
          Index Cond: (collection.document @= '{ "b" : { "$numberInt" : "1" } }'::bson)
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2', '{ "find": "skip_entry_mixed", "filter": { "c": 1 }, "hint": "a_1" }');
                                                 QUERY PLAN                                                 
@@ -499,6 +511,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": -1,"c": 1,"d": -1}
    isMultiKey: false
    indexBounds: ["a": (MinKey, MaxKey), "b": DESC(MinKey, MaxKey), "c": [1, 1], "d": DESC(MinKey, MaxKey)]
    innerScanLoops: 5 loops
@@ -507,7 +520,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68505_685010 collection (actual rows=2 loops=1)
          Output: document
          Index Cond: (collection.document @= '{ "c" : { "$numberInt" : "1" } }'::bson)
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2', '{ "find": "skip_entry_mixed", "filter": { "d": 1 }, "hint": "a_1" }');
                                                 QUERY PLAN                                                 
@@ -515,6 +528,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": -1,"c": 1,"d": -1}
    isMultiKey: false
    indexBounds: ["a": (MinKey, MaxKey), "b": DESC(MinKey, MaxKey), "c": (MinKey, MaxKey), "d": DESC[1, 1]]
    innerScanLoops: 5 loops
@@ -523,7 +537,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68505_685010 collection (actual rows=1 loops=1)
          Output: document
          Index Cond: (collection.document @= '{ "d" : { "$numberInt" : "1" } }'::bson)
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2', '{ "find": "skip_entry_mixed", "filter": { "a": null }, "hint": "a_1" }');
                                                     QUERY PLAN                                                     
@@ -531,6 +545,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": -1,"c": 1,"d": -1}
    isMultiKey: false
    indexBounds: ["a": (MinKey, null], "b": DESC(MinKey, MaxKey), "c": (MinKey, MaxKey), "d": DESC(MinKey, MaxKey)]
    innerScanLoops: 2 loops
@@ -539,7 +554,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68505_685010 collection (actual rows=1 loops=1)
          Output: document
          Index Cond: (collection.document @= '{ "a" : null }'::bson)
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2', '{ "find": "skip_entry_mixed", "filter": { "b": null }, "hint": "a_1" }');
                                                     QUERY PLAN                                                     
@@ -547,6 +562,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": -1,"c": 1,"d": -1}
    isMultiKey: false
    indexBounds: ["a": (MinKey, MaxKey), "b": DESC(MinKey, null], "c": (MinKey, MaxKey), "d": DESC(MinKey, MaxKey)]
    innerScanLoops: 3 loops
@@ -555,7 +571,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68505_685010 collection (actual rows=2 loops=1)
          Output: document
          Index Cond: (collection.document @= '{ "b" : null }'::bson)
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2', '{ "find": "skip_entry_mixed", "filter": { "c": null }, "hint": "a_1" }');
                                                     QUERY PLAN                                                     
@@ -563,6 +579,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=3 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": -1,"c": 1,"d": -1}
    isMultiKey: false
    indexBounds: ["a": (MinKey, MaxKey), "b": DESC(MinKey, MaxKey), "c": (MinKey, null], "d": DESC(MinKey, MaxKey)]
    innerScanLoops: 4 loops
@@ -571,7 +588,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68505_685010 collection (actual rows=3 loops=1)
          Output: document
          Index Cond: (collection.document @= '{ "c" : null }'::bson)
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_db2', '{ "find": "skip_entry_mixed", "filter": { "d": null }, "hint": "a_1" }');
                                                     QUERY PLAN                                                     
@@ -579,6 +596,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
    Output: document
    indexName: a_1
+   indexKey: {"a": 1,"b": -1,"c": 1,"d": -1}
    isMultiKey: false
    indexBounds: ["a": (MinKey, MaxKey), "b": DESC(MinKey, MaxKey), "c": (MinKey, MaxKey), "d": DESC(MinKey, null]]
    innerScanLoops: 5 loops
@@ -587,5 +605,5 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, BUFFERS OFF, TIMING OFF, SUMMARY OFF
    ->  Index Scan using a_1 on documentdb_data.documents_68505_685010 collection (actual rows=4 loops=1)
          Output: document
          Index Cond: (collection.document @= '{ "d" : null }'::bson)
-(11 rows)
+(12 rows)
 

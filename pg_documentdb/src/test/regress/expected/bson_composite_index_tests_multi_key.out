@@ -229,11 +229,12 @@ SELECT documentdb_test_helpers.run_explain_and_trim( $cmd$
 ---------------------------------------------------------------------------------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: a_b_c_1
+   indexKey: {"a.b": 1,"a.c": 1}
    isMultiKey: true
    indexBounds: ["a.b": (0, Infinity], "a.c": [2, 2]]
    ->  Index Scan using a_b_c_1 on documents_501 collection (actual rows=1 loops=1)
          Index Cond: ((document @> '{ "a.b" : { "$numberInt" : "0" } }'::bson) AND (document @= '{ "a.c" : { "$numberInt" : "2" } }'::bson))
-(6 rows)
+(7 rows)
 
 SELECT documentdb_test_helpers.run_explain_and_trim( $cmd$
     EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('mkey_db', '{ "find": "mkey_coll", "filter": { "a.b": 1, "a.c": 2 }}') $cmd$);
@@ -241,11 +242,12 @@ SELECT documentdb_test_helpers.run_explain_and_trim( $cmd$
 ---------------------------------------------------------------------------------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: a_b_c_1
+   indexKey: {"a.b": 1,"a.c": 1}
    isMultiKey: true
    indexBounds: ["a.b": [1, 1], "a.c": [2, 2]]
    ->  Index Scan using a_b_c_1 on documents_501 collection (actual rows=1 loops=1)
          Index Cond: ((document @= '{ "a.b" : { "$numberInt" : "1" } }'::bson) AND (document @= '{ "a.c" : { "$numberInt" : "2" } }'::bson))
-(6 rows)
+(7 rows)
 
 -- multikey on a.b - query on a.c can be pushed
 TRUNCATE documentdb_data.documents_501;
@@ -261,11 +263,12 @@ SELECT documentdb_test_helpers.run_explain_and_trim( $cmd$
 ---------------------------------------------------------------------------------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: a_b_c_1
+   indexKey: {"a.b": 1,"a.c": 1}
    isMultiKey: true
    indexBounds: ["a.b": (0, Infinity], "a.c": [2, 2]]
    ->  Index Scan using a_b_c_1 on documents_501 collection (actual rows=1 loops=1)
          Index Cond: ((document @> '{ "a.b" : { "$numberInt" : "0" } }'::bson) AND (document @= '{ "a.c" : { "$numberInt" : "2" } }'::bson))
-(6 rows)
+(7 rows)
 
 SELECT documentdb_test_helpers.run_explain_and_trim( $cmd$
     EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('mkey_db', '{ "find": "mkey_coll", "filter": { "a.b": 1, "a.c": 2 }}') $cmd$);
@@ -273,9 +276,10 @@ SELECT documentdb_test_helpers.run_explain_and_trim( $cmd$
 ---------------------------------------------------------------------------------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: a_b_c_1
+   indexKey: {"a.b": 1,"a.c": 1}
    isMultiKey: true
    indexBounds: ["a.b": [1, 1], "a.c": [2, 2]]
    ->  Index Scan using a_b_c_1 on documents_501 collection (actual rows=1 loops=1)
          Index Cond: ((document @= '{ "a.b" : { "$numberInt" : "1" } }'::bson) AND (document @= '{ "a.c" : { "$numberInt" : "2" } }'::bson))
-(6 rows)
+(7 rows)
 
