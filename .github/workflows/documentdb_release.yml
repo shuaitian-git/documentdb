@@ -55,86 +55,20 @@ jobs:
           echo "version_dash=$VERSION" >> $GITHUB_OUTPUT
 
   build-deb-packages:
-    name: Build DEB for ${{ matrix.os }}-${{ matrix.arch }}-PG${{ matrix.pg_version }}
-    runs-on: ${{ matrix.runner }}
+    name: Build DEB Packages
     needs: extract-version
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [deb11, deb12, ubuntu22.04, ubuntu24.04]
-        arch: [amd64, arm64]
-        pg_version: [16, 17, 18]
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Fetch all tags
-        run: |
-          git fetch --tags --force
-          git status
-
-      - name: Build Package
-        run: |
-          ./packaging/build_packages.sh --os ${{ matrix.os }} --pg ${{ matrix.pg_version }} --version ${{ needs.extract-version.outputs.version }}
-
-      - name: Upload Package as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deb-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ needs.extract-version.outputs.version }}
-          path: |
-            packaging/*.deb
-          retention-days: 90
-          if-no-files-found: error
-          compression-level: 0
+    uses: ./.github/workflows/build_deb_packages.yml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+      use_full_matrix: true
 
   build-rpm-packages:
-    name: Build RPM for ${{ matrix.os }}-${{ matrix.arch }}-PG${{ matrix.pg_version }}
-    runs-on: ${{ matrix.runner }}
+    name: Build RPM Packages
     needs: extract-version
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [rhel8, rhel9]
-        arch: [amd64, arm64]
-        pg_version: [16, 17, 18]
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Fetch all tags
-        run: |
-          git fetch --tags --force
-          git status
-
-      - name: Build Package
-        run: |
-          ./packaging/build_packages.sh --os ${{ matrix.os }} --pg ${{ matrix.pg_version }} --version ${{ needs.extract-version.outputs.version }}
-
-      - name: Upload Package as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: rpm-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ needs.extract-version.outputs.version }}
-          path: |
-            packaging/*.rpm
-          retention-days: 90
-          if-no-files-found: error
-          compression-level: 0
+    uses: ./.github/workflows/build_rpm_packages.yml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+      use_full_matrix: true
 
   create-release:
     name: Create GitHub Release
