@@ -63,7 +63,7 @@ jobs:
       matrix:
         os: [deb11, deb12, ubuntu22.04, ubuntu24.04]
         arch: [amd64, arm64]
-        pg_version: [16, 17]
+        pg_version: [16, 17, 18]
         include:
           - arch: amd64
             runner: ubuntu-24.04
@@ -104,7 +104,7 @@ jobs:
       matrix:
         os: [rhel8, rhel9]
         arch: [amd64, arm64]
-        pg_version: [16, 17]
+        pg_version: [16, 17, 18]
         include:
           - arch: amd64
             runner: ubuntu-24.04
