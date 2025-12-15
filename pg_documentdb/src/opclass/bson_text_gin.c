@@ -1031,7 +1031,7 @@ ValidateDefaultLanguageSpec(const char *defaultLanguage)
 /*
  * Populates the language spec provided to a CREATE INDEX text search options.
  */
-static Size
+static pg_attribute_no_sanitize_alignment() Size
 FillDefaultLanguageSpec(const char *defaultLanguage, void *buffer)
 {
 	uint32_t length = defaultLanguage == NULL ? 0 : sizeof(Oid);
@@ -1058,7 +1058,7 @@ FillDefaultLanguageSpec(const char *defaultLanguage, void *buffer)
  * This includes the path and associated weights encoded as follows
  * <numPaths><Datum[4] of weights>[<pathLength><path><weightIndex>]+
  */
-static Size
+pg_attribute_no_sanitize_alignment() static Size
 FillWeightsSpec(const char *weightsSpec, void *buffer)
 {
 	/* Weights count + Weight array (for rank) */

@@ -4,7 +4,9 @@ If you want to build and run DocumentDB from source (instead of using Docker), f
 
 ### Prerequisites
 
-Install the required dependencies:
+*Recommended* use the provided devcontainer for VSCode which contains all the dependencies pre-installed.
+
+Or install the required dependencies:
 
 ```bash
 sudo apt update
@@ -14,64 +16,36 @@ sudo apt install build-essential libbson-dev postgresql-server-dev-all pkg-confi
 ### Step 1: Build PostgreSQL Extensions
 
 ```bash
-cd /path/to/documentdb/pg_documentdb_core
-make
-sudo make install
-
-cd /path/to/documentdb/pg_documentdb
-make
 sudo make install
 ```
 
 ### Step 2: Build the Gateway
 
 ```bash
-cd /path/to/documentdb/pg_documentdb_gw
-cargo build --profile=release-with-symbols
+scripts/build_and_install_with_pgrx.sh -i -d pg_documentdb_gw_host/
 ```
 
-### Step 3: Start PostgreSQL
-
-If PostgreSQL isn’t running, start it:
+### Step 3: Start PostgreSQL and the Gateway
 
 ```bash
-sudo service postgresql start
+scripts/start_oss_server.sh -c -g
 ```
 
-### Step 4: Enable Extensions
+### Step 4: Connect and Test
 
-Connect to PostgreSQL and run:
-
-```bash
-psql -U postgres -d postgres -c "CREATE EXTENSION pg_documentdb_core;"
-psql -U postgres -d postgres -c "CREATE EXTENSION pg_documentdb;"
-```
-
-### Step 5: Start the Gateway
-
-Use the provided script:
+#### Using a MongoDB Client
 
 ```bash
-cd /path/to/documentdb/scripts
-./build_and_start_gateway.sh -u <username> -p <password>
-```
-Replace `<username>` and `<password>` with your desired credentials.
-
-### Step 6: Connect and Test
-
-Use a MongoDB client (like `mongosh`):
-
-```bash
-mongosh --host localhost --port 10260
+mongosh --host localhost --port 10260 --tls --tlsAllowInvalidCertificates -u docdb_user -p Admin100
 ```
 
 Try basic MongoDB commands to verify everything works.
 
-### Troubleshooting
+#### Using PostgreSQL shell
 
-- **libbson-static-1.0 not found:**  Install `libbson-dev` and check your `PKG_CONFIG_PATH`.
-- **pg_config not found:**  Install `postgresql-server-dev-all`.
-- **Other errors:**  Double-check all dependencies and your OS version.
+```bash
+psql -p 9712 -d postgres
+```
 
 ### Need Help?
 

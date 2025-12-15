@@ -43,3 +43,18 @@ SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate": "count
 SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate": "countcoll", "pipeline": [ { "$collStats": { "storageStats": {} }} ] }');
 
 ROLLBACK;
+
+set documentdb.enableNewCountAggregates to off;
+SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {"value": {"$gt": 20}, "value": {"$lt": 150} } }');
+EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {"value": {"$gt": 20}, "value": {"$lt": 150} } }');
+
+set documentdb.enableNewCountAggregates to on;
+SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {"value": {"$gt": 20}, "value": {"$lt": 150} } }');
+EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {"value": {"$gt": 20}, "value": {"$lt": 150} } }');
+
+-- test with sharded collection, should be pushed to the workers
+SELECT documentdb_api.shard_collection('countdb', 'countcoll', '{ "_id": "hashed" }', false);
+
+EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_count('countdb', '{ "count": "countcoll", "query": {"value": {"$gt": 20}, "value": {"$lt": 150} } }');
+EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate": "countcoll", "pipeline": [{"$match": {"value": {"$gt": 20}, "value": {"$lt": 150} }}, {"$count": "c"}] }');
+EXPLAIN (COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('countdb', '{ "aggregate": "countcoll", "pipeline": [{"$match": {"value": {"$gt": 20}, "value": {"$lt": 150} }}, {"$group": {"_id": null, "count": {"$sum": 1}}}] }');
