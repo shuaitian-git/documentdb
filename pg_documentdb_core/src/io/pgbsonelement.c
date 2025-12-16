@@ -293,7 +293,7 @@ PgbsonElementToPgbson(pgbsonelement *element)
 /* Private helper methods */
 /* --------------------------------------------------------- */
 
-pg_attribute_no_sanitize_alignment() static bool
+static bool
 FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element, bool
 						skipLengthOffset)
 {
@@ -328,7 +328,12 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 	}
 
 	/* First 4 bytes are the length */
-	uint32_t length = skipLengthOffset ? data_len : *((uint32_t *) data);
+	uint32_t length = data_len;
+
+	if (!skipLengthOffset)
+	{
+		memcpy(&length, data, sizeof(uint32_t));
+	}
 
 	/* Fifth byte is the value */
 	element->bsonValue.value_type = (bson_type_t) data[typeOffset];
@@ -349,7 +354,7 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			element->bsonValue.value.v_datetime = *((int64_t *) data);
+			memcpy(&element->bsonValue.value.v_datetime, data, sizeof(int64_t));
 			return true;
 		}
 
@@ -360,7 +365,7 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			element->bsonValue.value.v_double = *((double *) data);
+			memcpy(&element->bsonValue.value.v_double, data, sizeof(double));
 			return true;
 		}
 
@@ -371,7 +376,7 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			element->bsonValue.value.v_int64 = *((int64_t *) data);
+			memcpy(&element->bsonValue.value.v_int64, data, sizeof(int64_t));
 			return true;
 		}
 
@@ -382,9 +387,11 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			element->bsonValue.value.v_timestamp.timestamp = *((uint32_t *) data);
+			memcpy(&element->bsonValue.value.v_timestamp.timestamp, data,
+				   sizeof(uint32_t));
 			data += 4;
-			element->bsonValue.value.v_timestamp.increment = *((uint32_t *) data);
+			memcpy(&element->bsonValue.value.v_timestamp.increment, data,
+				   sizeof(uint32_t));
 			return true;
 		}
 
@@ -395,7 +402,8 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			int32_t codeLength = *((int32_t *) data);
+			int32_t codeLength;
+			memcpy(&codeLength, data, sizeof(int32_t));
 			data += 4;
 
 			if (lengthLeft < codeLength + 4)
@@ -415,7 +423,8 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			int32_t symbolLength = *((int32_t *) data);
+			int32_t symbolLength;
+			memcpy(&symbolLength, data, sizeof(int32_t));
 			data += 4;
 			if (lengthLeft < symbolLength + 4)
 			{
@@ -434,7 +443,8 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			int32_t utf8Length = *((int32_t *) data);
+			int32_t utf8Length;
+			memcpy(&utf8Length, data, sizeof(int32_t));
 			data += 4;
 			if (lengthLeft < utf8Length + 4)
 			{
@@ -453,7 +463,8 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			int32_t binaryLength = *((int32_t *) data);
+			int32_t binaryLength;
+			memcpy(&binaryLength, data, sizeof(int32_t));
 			data += 4;
 			if (lengthLeft < 4 + binaryLength + 1)
 			{
@@ -483,7 +494,8 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			int32_t docLength = *((int32_t *) data);
+			int32_t docLength;
+			memcpy(&docLength, data, sizeof(int32_t));
 
 			if (lengthLeft < docLength)
 			{
@@ -544,7 +556,8 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			int32_t utf8Length = *((int32_t *) data);
+			int32_t utf8Length;
+			memcpy(&utf8Length, data, sizeof(int32_t));
 			data += 4;
 			if (lengthLeft < utf8Length + 4)
 			{
@@ -571,7 +584,8 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			int32_t totalcodeLength = *((int32_t *) data);
+			int32_t totalcodeLength;
+			memcpy(&totalcodeLength, data, sizeof(int32_t));
 			data += 4;
 			if (lengthLeft < totalcodeLength)
 			{
@@ -611,7 +625,7 @@ FillPgbsonElementUnsafe(uint8_t *data, uint32_t data_len, pgbsonelement *element
 				return false;
 			}
 
-			element->bsonValue.value.v_int32 = *((int32_t *) data);
+			memcpy(&element->bsonValue.value.v_int32, data, sizeof(int32_t));
 			return true;
 		}
 
