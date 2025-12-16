@@ -18,7 +18,6 @@ on:
 permissions:
   contents: write
   packages: write
-  pages: write
   id-token: write
 
 jobs:
@@ -83,16 +82,11 @@ jobs:
           fetch-depth: 0
 
       - name: Prepare Release Variables
-        id: prepare
         run: |
           VERSION_DASH="${{ needs.extract-version.outputs.version_dash }}"
           RELEASE_DATE=$(date '+%B %d, %Y' | sed 's/ 0/ /')
-          RELEASE_NAME="v${VERSION_DASH} (${RELEASE_DATE})"
-
           echo "VERSION_DASH=$VERSION_DASH" >> $GITHUB_ENV
-          echo "RELEASE_DATE=$RELEASE_DATE" >> $GITHUB_ENV
-          echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
-          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "RELEASE_NAME=v${VERSION_DASH} (${RELEASE_DATE})" >> $GITHUB_ENV
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -102,20 +96,7 @@ jobs:
       - name: Organize artifacts
         run: |
           mkdir -p ./packages
-          # Extract all zip files and find packages
-          cd ./release-artifacts
-          for dir in */; do
-            if [ -d "$dir" ]; then
-              cd "$dir"
-              # Unzip if there are zip files
-              for zipfile in *.zip; do
-                [ -f "$zipfile" ] && unzip -o "$zipfile"
-              done
-              cd ..
-            fi
-          done
-          cd ..
-          # Copy all package files to packages directory
+          # Copy all package files to packages directory (exclude debug symbols)
           find ./release-artifacts -type f \( -name "*.deb" -o -name "*.rpm" \) ! -name "*dbgsym*" -exec cp {} ./packages/ \;
           ls -lh ./packages/
           echo "Total packages: $(ls -1 ./packages/ | wc -l)"
