@@ -1,7 +1,3 @@
-SET citus.next_shard_id TO 320000;
-SET documentdb.next_collection_id TO 32000;
-SET documentdb.next_collection_index_id TO 32000;
-
 CREATE SCHEMA change_index_jobs_schema;
 CREATE OR REPLACE FUNCTION change_index_jobs_schema.change_index_jobs_status(active_status boolean)
 RETURNS void
@@ -19,11 +15,10 @@ $$
 LANGUAGE plpgsql;
 
 SET search_path to documentdb_core,documentdb_api,documentdb_api_catalog,change_index_jobs_schema;
+SELECT change_index_jobs_schema.change_index_jobs_status(true);
+
 -- Delete all old create index requests from other tests
 DELETE from documentdb_api_catalog.documentdb_index_queue;
-
--- show index_queue schema
-\d documentdb_api_catalog.documentdb_index_queue;
 
 ---- createIndexes - top level - parse error ----
 SELECT * FROM documentdb_api.create_indexes_background('db', NULL);
@@ -154,9 +149,8 @@ SELECT * FROM documentdb_api.create_indexes_background('db', '{"createIndexes": 
 
 -- Delete all old create index requests submitted so far
 DELETE from documentdb_api_catalog.documentdb_index_queue;
--- The create_indexes_background creates a remote connection via run_command_on_coordinator. Therefore, setting sequence instead of GUC.
-
-CALL documentdb_distributed_test_helpers.create_indexes_background(
+-- The create_indexes_background creates a remote connection. Therefore, setting sequence instead of GUC.
+CALL documentdb_test_helpers.create_indexes_background(
   'db',
   '{
      "createIndexes": "createIndex_background_1",
@@ -166,39 +160,26 @@ CALL documentdb_distributed_test_helpers.create_indexes_background(
    }'
 );
 
-CALL documentdb_distributed_test_helpers.create_indexes_background(
+CALL documentdb_test_helpers.create_indexes_background(
   'db',
   '{
      "createIndexes": "createIndex_background_1",
      "indexes": [
        {"key": {"b": 1}, "name": "my_idx_b"}
-     ],
-     "blocking": true
-   }',
-   p_log_index_queue => true
-);
-
-CALL documentdb_distributed_test_helpers.create_indexes_background(
-  'db',
-  '{
-     "createIndexes": "createIndex_background_1",
-     "indexes": [
-       {"key": {"block_c": 1}, "name": "my_idx_blocking_c", "storageEngine": { "blocking": true }}
      ]
-   }',
-   p_log_index_queue => true
+   }'
 );
 
 -- Queue should be empty
 SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id, attempt, user_oid FROM documentdb_api_catalog.documentdb_index_queue ORDER BY index_id;
 
-SELECT * FROM documentdb_distributed_test_helpers.count_collection_indexes('db', 'createIndex_background_1') ORDER BY 1,2;
+SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'createIndex_background_1') ORDER BY 1,2;
 -- Show that we didn't leave any invalid pg indexes behind
 SELECT indexrelid::regclass, indisvalid, indisready
-FROM documentdb_distributed_test_helpers.get_data_table_indexes('db', 'createIndex_background_1')
+FROM documentdb_test_helpers.get_data_table_indexes('db', 'createIndex_background_1')
 ORDER BY indexrelid;
 
-CALL documentdb_distributed_test_helpers.create_indexes_background(
+CALL documentdb_test_helpers.create_indexes_background(
   'db',
   '{
      "createIndexes": "createIndex_background_1",
@@ -206,12 +187,11 @@ CALL documentdb_distributed_test_helpers.create_indexes_background(
        {"key": {"c": 1}, "name": "my_idx_c"},
        {"key": {"d": 1}, "name": "my_idx_d"}
      ]
-   }',
-   p_log_index_queue => true
+   }'
 );
 
 -- Index request submission will fail
-CALL documentdb_distributed_test_helpers.create_indexes_background(
+CALL documentdb_test_helpers.create_indexes_background(
   'db',
   '{
      "createIndexes": "createIndex_background_1",
@@ -220,21 +200,7 @@ CALL documentdb_distributed_test_helpers.create_indexes_background(
      ]
    }'
 );
-
--- create one concurrent and one blocking.
-CALL documentdb_distributed_test_helpers.create_indexes_background(
-  'db',
-  '{
-     "createIndexes": "createIndex_background_1",
-     "indexes": [
-       {"key": {"block_e": 1}, "name": "my_idx_block_e"},
-       {"key": {"block_f": 1}, "name": "my_idx_block_f", "storageEngine": { "blocking": true } }
-     ]
-   }',
-   p_log_index_queue => true
-);
-
-SELECT * FROM documentdb_distributed_test_helpers.count_collection_indexes('db', 'createIndex_background_1') ORDER BY 1,2;
+SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'createIndex_background_1') ORDER BY 1,2;
 
 -- Test unique and non-unique index creation in same request
 ------ check the intermediate response
@@ -254,7 +220,7 @@ SELECT pg_sleep(2);
 SELECT documentdb_api.insert_one('db','mycol', '{"_id": 1, "a" : 80, "b" : 10 }', NULL);
 SELECT documentdb_api.insert_one('db','mycol', '{"_id": 2, "a" : 90, "b" : 20 }', NULL);
 
-CALL documentdb_distributed_test_helpers.create_indexes_background(
+CALL documentdb_test_helpers.create_indexes_background(
   'db',
   '{
      "createIndexes": "mycol",
@@ -264,13 +230,13 @@ CALL documentdb_distributed_test_helpers.create_indexes_background(
      ]
    }'
 );
-SELECT * FROM documentdb_distributed_test_helpers.count_collection_indexes('db', 'mycol') ORDER BY 1,2;
+SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'mycol') ORDER BY 1,2;
 
 -- Test constraint violation for unique index, insert duplicate docs
 SELECT documentdb_api.insert_one('db','constraint', '{"_id": 1, "a" : 80 }', NULL);
 SELECT documentdb_api.insert_one('db','constraint', '{"_id": 2, "a" : 80 }', NULL);
 
-CALL documentdb_distributed_test_helpers.create_indexes_background(
+CALL documentdb_test_helpers.create_indexes_background(
   'db',
   '{
      "createIndexes": "constraint",
@@ -280,7 +246,7 @@ CALL documentdb_distributed_test_helpers.create_indexes_background(
    }'
 );
 -- try multiple such requests which are going to fail
-CALL documentdb_distributed_test_helpers.create_indexes_background(
+CALL documentdb_test_helpers.create_indexes_background(
   'db',
   '{
      "createIndexes": "constraint",
@@ -291,7 +257,7 @@ CALL documentdb_distributed_test_helpers.create_indexes_background(
 );
 
 -- try multiple such requests which are going to fail
-CALL documentdb_distributed_test_helpers.create_indexes_background(
+CALL documentdb_test_helpers.create_indexes_background(
   'db',
   '{
      "createIndexes": "constraint",
@@ -301,17 +267,14 @@ CALL documentdb_distributed_test_helpers.create_indexes_background(
    }'
 );
 -- test skippable error test
-CALL documentdb_distributed_test_helpers.create_indexes_background('db', '{ "createIndexes": "ValidateVectorSearchAsync", "indexes": [ { "name": "largeVectorIndex", "key": { "largevector": "cosmosSearch"}, "cosmosSearchOptions": { "kind": "vector-ivf", "numLists": 100, "similarity": "COS", "dimensions": 2001 } } ] }');
-CALL documentdb_distributed_test_helpers.create_indexes_background('db', '{ "createIndexes": "ValidateVectorSearchAsync", "indexes": [ { "name": "largeVectorIndex", "key": { "largevector": "cosmosSearch"}, "cosmosSearchOptions": { "kind": "vector-hnsw", "similarity": "COS", "dimensions": 2001 } } ] }');
+-- todo: add this test back when pgvector version upgrade is done.
+-- CALL documentdb_test_helpers.create_indexes_background('db', '{ "createIndexes": "ValidateVectorSearchAsync", "indexes": [ { "name": "largeVectorIndex", "key": { "largevector": "cosmosSearch"}, "cosmosSearchOptions": { "kind": "vector-ivf", "numLists": 100, "similarity": "COS", "dimensions": 2001 } } ] }');
+-- CALL documentdb_test_helpers.create_indexes_background('db', '{ "createIndexes": "ValidateVectorSearchAsync", "indexes": [ { "name": "largeVectorIndex", "key": { "largevector": "cosmosSearch"}, "cosmosSearchOptions": { "kind": "vector-hnsw", "similarity": "COS", "dimensions": 2001 } } ] }');
 
 -- test another skippable error
 SELECT documentdb_api.insert_one('db','LargeKeySize', '{"_id": 1, "a" : [ "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" ] }');
-CALL documentdb_distributed_test_helpers.create_indexes_background('db', '{ "createIndexes": "LargeKeySize", "indexes": [ { "key" : { "a": 1 }, "name": "rumConstraint1"}] }');
-CALL documentdb_distributed_test_helpers.create_indexes_background('db', '{ "createIndexes": "UnsupportedLanguage", "indexes": [ { "key": { "$**": "text" }, "name": "idx1", "default_language": "ok" } ] }');
-
---Reset -- so that other tests do not get impacted
-SELECT change_index_jobs_schema.change_index_jobs_status(false);
-
+CALL documentdb_test_helpers.create_indexes_background('db', '{ "createIndexes": "LargeKeySize", "indexes": [ { "key" : { "a": 1 }, "name": "rumConstraint1"}] }');
+CALL documentdb_test_helpers.create_indexes_background('db', '{ "createIndexes": "UnsupportedLanguage", "indexes": [ { "key": { "$**": "text" }, "name": "idx1", "default_language": "ok" } ] }');
 
 -- test CheckForIndexCmdToFinish
 DELETE FROM documentdb_api_catalog.documentdb_index_queue;
@@ -353,21 +316,37 @@ DELETE FROM documentdb_api_catalog.documentdb_index_queue;
 
 SELECT * FROM documentdb_api_internal.check_build_index_status('{"indexRequest" : {"cmdType" : "C", "ids" :[32101]}}');
 
-BEGIN;
--- test config update, documentdb_api_internal.schedule_background_index_build_jobs reads default guc values
-SELECT FROM documentdb_api_internal.schedule_background_index_build_jobs(true);
-SELECT schedule, jobname FROM cron.job WHERE jobname LIKE 'documentdb_index_build_task_%' ORDER BY jobId;
+-- test multiple scheduled builds drain together.
+DELETE FROM documentdb_api_catalog.documentdb_index_queue;
 
--- now set guc values and verify that they take effect
-SET LOCAL documentdb.maxNumActiveUsersIndexBuilds TO 1;
--- default value for the indexBuildScheduleInSec
-SELECT FROM documentdb_api_internal.schedule_background_index_build_jobs(true);
-SELECT schedule, jobname FROM cron.job WHERE jobname LIKE 'documentdb_index_build_task_%' ORDER BY jobId;
+-- insert multiple index requests across multiple collections.
+SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backgroundcoll1", "indexes": [ { "key" : { "a": 1 }, "name": "a_1"}] }');
+SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backgroundcoll1", "indexes": [ { "key" : { "b": 1 }, "name": "b_1"}] }');
+SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backgroundcoll1", "indexes": [ { "key" : { "c": 1 }, "name": "c_1"}] }');
 
-SET LOCAL documentdb.maxNumActiveUsersIndexBuilds TO 1;
-SET LOCAL documentdb.indexBuildScheduleInSec TO 3;
-SELECT FROM documentdb_api_internal.schedule_background_index_build_jobs(true);
-SELECT schedule, jobname FROM cron.job WHERE jobname LIKE 'documentdb_index_build_task_%' ORDER BY jobId;
+SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backgroundcoll2", "indexes": [ { "key" : { "a": 1 }, "name": "a_1"}] }');
+SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backgroundcoll2", "indexes": [ { "key" : { "b": 1 }, "name": "b_1"}] }');
+SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backgroundcoll2", "indexes": [ { "key" : { "c": 1 }, "name": "c_1"}] }');
 
-ROLLBACK;
-SELECT schedule, jobname FROM cron.job WHERE jobname LIKE 'documentdb_index_build_task_%' ORDER BY jobId;
+-- we should only have index on "a" since that creates the collection inline and shoul dbe built. The index queue should have b and c indexes.
+SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue;
+SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'backgroundcoll1');
+SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'backgroundcoll2');
+
+-- now call build once.
+-- it's okay to call both since exactly one of them will execute with the other NOOP due to the GUC
+CALL documentdb_api_internal.build_index_concurrently(1);
+CALL documentdb_api_internal.build_index_background(1);
+
+--all indexes should be built and queue should be empty.
+SELECT * FROM documentdb_api_catalog.documentdb_index_queue;
+SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'backgroundcoll1');
+SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'backgroundcoll2');
+
+-- now queue some reindex jobs and test index builds
+SELECT * FROM documentdb_api_internal.reindex_index_background('db', '{ "collection": "backgroundcoll1", "indexes": [ 32044, 32045 ] }');
+SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue;
+CALL documentdb_api_internal.build_index_concurrently(1);
+
+--all indexes should be built and queue should be empty.
+SELECT * FROM documentdb_api_catalog.documentdb_index_queue;

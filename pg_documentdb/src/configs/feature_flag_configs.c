@@ -272,6 +272,14 @@ bool PopulateBackgroundWorkerJobsTable = DEFAULT_POPULATE_BACKGROUND_WORKER_JOBS
 #define DEFAULT_ENABLE_COLLMOD_UNIQUE false
 bool EnableCollModUnique = DEFAULT_ENABLE_COLLMOD_UNIQUE;
 
+/*
+ * SECTION: Schedule jobs via background worker.
+ */
+
+/* Remove after v111*/
+#define DEFAULT_INDEX_BUILDS_SCHEDULED_ON_BGWORKER false
+bool IndexBuildsScheduledOnBgWorker = DEFAULT_INDEX_BUILDS_SCHEDULED_ON_BGWORKER;
+
 /* FEATURE FLAGS END */
 
 void
@@ -770,5 +778,13 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether to use foreign key for lookup inline method."),
 		NULL, &EnableUseForeignKeyLookupInline,
 		DEFAULT_USE_FOREIGN_KEY_LOOKUP_INLINE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.indexBuildsScheduledOnBgWorker", newGucPrefix),
+		gettext_noop(
+			"Whether to schedule index builds via background worker jobs."),
+		NULL, &IndexBuildsScheduledOnBgWorker,
+		DEFAULT_INDEX_BUILDS_SCHEDULED_ON_BGWORKER,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }
