@@ -285,6 +285,7 @@ static char FeatureMapping[MAX_FEATURE_COUNT][MAX_FEATURE_NAME_LENGTH] = {
 	[FEATURE_CURSOR_TYPE_SINGLE_BATCH] = "cursor_type_single_batch",
 	[FEATURE_CURSOR_TYPE_STREAMING] = "cursor_type_streaming",
 	[FEATURE_CURSOR_TYPE_TAILABLE] = "cursor_type_tailable",
+	[FEATURE_CURSOR_CAN_USE_PRIMARY_KEY_SCAN] = "cursor_can_use_primary_key_scan",
 
 	/* Feature mapping region - ExternalIdentityProvider */
 	[FEATURE_EXTERNAL_IDENTITY_USER_CREATE] = "external_identity_user_create",
