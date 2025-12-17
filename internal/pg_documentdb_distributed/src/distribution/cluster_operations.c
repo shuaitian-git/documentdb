@@ -19,6 +19,7 @@
 #include "nodes/makefuncs.h"
 
 #include "utils/documentdb_errors.h"
+#include "infrastructure/job_management.h"
 #include "metadata/collection.h"
 #include "metadata/index.h"
 #include "metadata/metadata_cache.h"

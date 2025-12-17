@@ -54,6 +54,7 @@ _PG_init(void)
 
 	InitializeBackgroundWorkerJobAllowedCommands();
 	InitializeDocumentDBBackgroundWorker("pg_documentdb", "documentdb", "documentdb");
+	RegisterDocumentDBBackgroundWorkerJobs();
 
 	InstallDocumentDBApiPostgresHooks();
 

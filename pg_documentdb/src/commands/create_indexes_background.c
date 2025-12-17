@@ -45,6 +45,7 @@
 #include "utils/documentdb_errors.h"
 #include "commands/parse_error.h"
 #include "geospatial/bson_geospatial_common.h"
+#include "infrastructure/job_management.h"
 #include "metadata/collection.h"
 #include "metadata/metadata_cache.h"
 #include "metadata/index.h"
@@ -168,6 +169,8 @@ static void TryDropCollectionIndex(int indexId);
 static bool PruneSkippableIndexes(MemoryContext mcxt);
 static BackgroundIndexRunStatus build_index_concurrently_from_indexqueue_core(
 	MemoryContext stableContext);
+static Datum build_index_background_core(PG_FUNCTION_ARGS);
+
 
 /*
  * command_build_index_concurrently is the implementation of the internal logic
@@ -175,6 +178,31 @@ static BackgroundIndexRunStatus build_index_concurrently_from_indexqueue_core(
  */
 Datum
 command_build_index_concurrently(PG_FUNCTION_ARGS)
+{
+	return build_index_background_core(fcinfo);
+}
+
+
+/*
+ * Drop-in replacement for build_index_concurrently. This will be called periodically by the
+ * background worker framework and will coexist with the previous UDF until it reaches
+ * stability.
+ */
+Datum
+command_build_index_background(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * Core logic for building indexes in background.
+ * Called by a job that is scheduled via either:
+ *  a) pg_cron
+ *  b) background worker
+ */
+static Datum
+build_index_background_core(PG_FUNCTION_ARGS)
 {
 	if (!IsMetadataCoordinator())
 	{
@@ -208,18 +236,6 @@ command_build_index_concurrently(PG_FUNCTION_ARGS)
 
 	/* Clean up the memory context. */
 	MemoryContextDelete(createContext);
-	PG_RETURN_VOID();
-}
-
-
-/*
- * Drop-in replacement for build_index_concurrently. This will be called periodically by the
- * background worker framework and will coexist with the previous UDF until it reaches
- * stability.
- */
-Datum
-command_build_index_background(PG_FUNCTION_ARGS)
-{
 	PG_RETURN_VOID();
 }
 
