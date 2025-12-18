@@ -17,7 +17,7 @@
 typedef struct
 {
 	const char *roleName;
-	List *inheritedBuiltInRoles;
+	List *parentRoles;
 } CreateRoleSpec;
 
 typedef struct
