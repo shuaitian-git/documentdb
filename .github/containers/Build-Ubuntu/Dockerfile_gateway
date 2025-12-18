@@ -52,9 +52,26 @@ RUN dpkg -i /tmp/install_setup/$(basename "$DEB_PACKAGE_REL_PATH")
 RUN useradd -ms /bin/bash documentdb -G sudo
 RUN echo "%sudo ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers.d/no-pass-ask
 
+# Copy scripts for standalone prebuild usage
+WORKDIR /scripts
+COPY scripts/start_oss_server.sh /scripts/
+COPY scripts/utils.sh /scripts/
+COPY scripts/setup_psqlrc.sh /scripts/
+
+USER documentdb
+ENV PG_VERSION_USED=${POSTGRES_VERSION}
+
+# Default entrypoint for prebuild stage (overridden in final stage)
+# Build with: docker build --target prebuild -t <tag> ...
+ENTRYPOINT ["/bin/bash", "-c", "/scripts/start_oss_server.sh \"$@\" & tail -f /dev/null", "--"]
+
 # ----------- Gateway Build Stage -----------
 FROM prebuild AS stage
 ARG BASE_IMAGE
+
+# Clear entrypoint for build stage
+ENTRYPOINT []
+USER root
 
 # Install dependencies (conditionally add software-properties-common unless base is debian:trixie-slim)
 RUN apt-get update; \
