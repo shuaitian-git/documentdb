@@ -1087,7 +1087,7 @@ RoundOrTruncateDecimal128Number(const bson_value_t *number, int64_t precision,
 /*
  * Performs the specified mathematical operation on x and y and sets it to result.
  */
-pg_attribute_no_sanitize_alignment() static Decimal128Result
+static Decimal128Result
 Decimal128MathematicalOperation2Operands(const bson_value_t *x, const bson_value_t *y,
 										 bson_value_t *result, Decimal128MathOperation
 										 operation)
@@ -1370,7 +1370,7 @@ Decimal128MathematicalOperation1Operand(const bson_value_t *value, bson_value_t 
 /**
  * This method returns the Intel Math Library representation from bson decimal128 representation
  */
-static pg_attribute_no_sanitize_alignment() inline BID_UINT128
+static inline BID_UINT128
 GetBIDUINT128FromBsonValue(const bson_value_t *decimal)
 {
 	CheckDecimal128Type(decimal);
@@ -1399,7 +1399,7 @@ GetBsonDecimal128FromBIDUINT128(const BID_UINT128 *bid)
 /**
  * Checks if value is decimal128 otherwise throws generic error
  */
-pg_attribute_no_sanitize_alignment() static inline void
+static inline void
 CheckDecimal128Type(const bson_value_t *value)
 {
 	if (value->value_type != BSON_TYPE_DECIMAL128)
@@ -1608,7 +1608,7 @@ GetDecimal128FromInt64(int64_t value)
  *
  * Quantize(X, Y) => Returns a quantized decimal128 which has same numerical value as X and exponent as Y
  */
-static pg_attribute_no_sanitize_alignment() bson_decimal128_t
+bson_decimal128_t
 GetBsonValueAsDecimal128Core(const bson_value_t *value, bool shouldQuantizeDouble)
 {
 	if (!BsonValueIsNumberOrBool(value) && value->value_type != BSON_TYPE_DATE_TIME)

@@ -566,7 +566,7 @@ BsonValueAsInt64(const bson_value_t *value)
  *    - The value is outside of the int64 range.
  * GetBsonDecimal128AsInt64 can throw, see method summary for details.
  */
-pg_attribute_no_sanitize_alignment() int64_t
+int64_t
 BsonValueAsInt64WithRoundingMode(const bson_value_t *value,
 								 ConversionRoundingMode roundingMode,
 								 bool throwIfFailed)
@@ -936,7 +936,7 @@ BsonTypeIsNumber(bson_type_t type)
 
 
 /* returns true if bson value is (double)NaN or (Decimal128)NaN */
-pg_attribute_no_sanitize_alignment() bool
+bool
 IsBsonValueNaN(const bson_value_t *value)
 {
 	if (value->value_type == BSON_TYPE_DECIMAL128)
@@ -957,7 +957,7 @@ IsBsonValueNaN(const bson_value_t *value)
  * Returns 1 if value is Infinity
  * Returns -1 if value is -Infinity
  */
-pg_attribute_no_sanitize_alignment() int
+int
 IsBsonValueInfinity(const bson_value_t *value)
 {
 	if (value->value_type == BSON_TYPE_DECIMAL128)
@@ -1494,7 +1494,7 @@ CompareStrings(const char *left, uint32_t leftLength, const char *right, uint32_
  * Core implementation of converting bson value to double
  * In quiet mode no error is thrown if conversion results in overflow or underflow
  */
-pg_attribute_no_sanitize_alignment() static double
+static double
 BsonValueAsDoubleCore(const bson_value_t *value, bool quiet)
 {
 	switch (value->value_type)
