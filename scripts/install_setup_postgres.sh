@@ -86,10 +86,8 @@ git checkout FETCH_HEAD
 echo "building and installing postgresql ref $POSTGRESQL_REF and installing to $postgresqlInstallDir..."
 
 EXTRA_CPP_FLAGS=" "
-EXTRA_CPP_FLAGS_ARGS=""
 if [ "$withvalgrind" == "true" ]; then
   EXTRA_CPP_FLAGS=" -DUSE_VALGRIND -Og"
-  EXTRA_CPP_FLAGS_ARGS='CFLAGS="-DUSE_VALGRIND -Og"'
 fi
 
 if [ "$withasan" == "true" ]; then
@@ -99,9 +97,11 @@ if [ "$withasan" == "true" ]; then
 elif [ "$debug" == "true" ]; then
   ./configure --enable-debug --enable-cassert --enable-tap-tests CFLAGS="-ggdb -Og -g3 -fno-omit-frame-pointer $EXTRA_CPP_FLAGS" --with-openssl --prefix="$postgresqlInstallDir" --with-icu
 elif [ "$cassert" == "true" ]; then
-  ./configure --enable-debug --enable-cassert --enable-tap-tests --with-openssl --prefix="$postgresqlInstallDir" --with-icu $EXTRA_CPP_FLAGS_ARGS
+  export CPPFLAGS="$EXTRA_CPP_FLAGS"
+  ./configure --enable-debug --enable-cassert --enable-tap-tests --with-openssl --prefix="$postgresqlInstallDir" --with-icu
 elif [ "$withvalgrind" == "true" ]; then
-  ./configure --enable-debug --enable-tap-tests --with-openssl --prefix="$postgresqlInstallDir" --with-icu $EXTRA_CPP_FLAGS_ARGS
+  export CPPFLAGS="$EXTRA_CPP_FLAGS"
+  ./configure --enable-debug --enable-tap-tests --with-openssl --prefix="$postgresqlInstallDir" --with-icu
 else
   ./configure --enable-debug --enable-tap-tests --with-openssl --prefix="$postgresqlInstallDir" --with-icu
 fi
