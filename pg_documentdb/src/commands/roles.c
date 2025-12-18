@@ -36,6 +36,8 @@ PG_FUNCTION_INFO_V1(command_roles_info);
 PG_FUNCTION_INFO_V1(command_update_role);
 
 static void ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec);
+static void ParseRolesArray(bson_iter_t *rolesIter, CreateRoleSpec *createRoleSpec);
+static void GrantInheritedRoles(const CreateRoleSpec *createRoleSpec);
 static void ParseDropRoleSpec(pgbson *dropRoleBson, DropRoleSpec *dropRoleSpec);
 static void ParseRolesInfoSpec(pgbson *rolesInfoBson, RolesInfoSpec *rolesInfoSpec);
 static void ParseRoleDefinition(bson_iter_t *iter, RolesInfoSpec *rolesInfoSpec);
@@ -151,7 +153,7 @@ create_role(pgbson *createRoleBson)
 	ParseCreateRoleSpec(createRoleBson, &createRoleSpec);
 
 	/* Validate that at least one inherited role is specified */
-	if (list_length(createRoleSpec.inheritedBuiltInRoles) == 0)
+	if (list_length(createRoleSpec.parentRoles) == 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 						errmsg(
@@ -168,26 +170,7 @@ create_role(pgbson *createRoleBson)
 	ExtensionExecuteQueryViaSPI(createRoleInfo->data, readOnly, SPI_OK_UTILITY, &isNull);
 
 	/* Grant inherited roles to the new role */
-	ListCell *currentRole;
-	foreach(currentRole, createRoleSpec.inheritedBuiltInRoles)
-	{
-		const char *inheritedRole = (const char *) lfirst(currentRole);
-
-		if (!IS_BUILTIN_ROLE(inheritedRole))
-		{
-			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_ROLENOTFOUND),
-							errmsg("Role '%s' not supported.",
-								   inheritedRole)));
-		}
-
-		StringInfo grantRoleInfo = makeStringInfo();
-		appendStringInfo(grantRoleInfo, "GRANT %s TO %s",
-						 quote_identifier(inheritedRole),
-						 quote_identifier(createRoleSpec.roleName));
-
-		ExtensionExecuteQueryViaSPI(grantRoleInfo->data, readOnly, SPI_OK_UTILITY,
-									&isNull);
-	}
+	GrantInheritedRoles(&createRoleSpec);
 
 	pgbson_writer finalWriter;
 	PgbsonWriterInit(&finalWriter);
@@ -232,42 +215,7 @@ ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec)
 		}
 		else if (strcmp(key, "roles") == 0)
 		{
-			if (bson_iter_type(&createRoleIter) == BSON_TYPE_ARRAY)
-			{
-				bson_iter_t rolesArrayIter;
-				bson_iter_recurse(&createRoleIter, &rolesArrayIter);
-
-				while (bson_iter_next(&rolesArrayIter))
-				{
-					if (bson_iter_type(&rolesArrayIter) == BSON_TYPE_UTF8)
-					{
-						uint32_t roleNameLength = 0;
-						const char *inheritedBuiltInRole = bson_iter_utf8(&rolesArrayIter,
-																		  &roleNameLength);
-
-						if (roleNameLength > 0)
-						{
-							createRoleSpec->inheritedBuiltInRoles = lappend(
-								createRoleSpec->inheritedBuiltInRoles,
-								pstrdup(
-									inheritedBuiltInRole));
-						}
-					}
-					else
-					{
-						ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-										errmsg(
-											"Invalid inherited from role name provided.")));
-					}
-				}
-			}
-			else
-			{
-				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
-								errmsg(
-									"Expected 'array' type for 'roles' parameter but found '%s' type",
-									BsonTypeName(bson_iter_type(&createRoleIter)))));
-			}
+			ParseRolesArray(&createRoleIter, createRoleSpec);
 		}
 		else if (strcmp(key, "$db") == 0 && EnableRolesAdminDBCheck)
 		{
@@ -304,6 +252,80 @@ ParseCreateRoleSpec(pgbson *createRoleBson, CreateRoleSpec *createRoleSpec)
 	{
 		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
 						errmsg("'createRole' is a required field.")));
+	}
+}
+
+
+/*
+ * ParseRolesArray parses the "roles" array from the createRole command.
+ * Extracts inherited built-in role names.
+ */
+static void
+ParseRolesArray(bson_iter_t *rolesIter, CreateRoleSpec *createRoleSpec)
+{
+	if (bson_iter_type(rolesIter) != BSON_TYPE_ARRAY)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+						errmsg(
+							"Expected 'array' type for 'roles' parameter but found '%s' type",
+							BsonTypeName(bson_iter_type(rolesIter)))));
+	}
+
+	bson_iter_t rolesArrayIter;
+	bson_iter_recurse(rolesIter, &rolesArrayIter);
+
+	while (bson_iter_next(&rolesArrayIter))
+	{
+		if (bson_iter_type(&rolesArrayIter) != BSON_TYPE_UTF8)
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE),
+							errmsg(
+								"Invalid inherited from role name provided.")));
+		}
+
+		uint32_t roleNameLength = 0;
+		const char *inheritedBuiltInRole = bson_iter_utf8(&rolesArrayIter,
+														  &roleNameLength);
+
+		if (roleNameLength > 0)
+		{
+			createRoleSpec->parentRoles = lappend(
+				createRoleSpec->parentRoles,
+				pstrdup(inheritedBuiltInRole));
+		}
+	}
+}
+
+
+/*
+ * GrantInheritedRoles grants the inherited built-in roles to the new role.
+ * Validates that each role is a supported built-in role before granting.
+ */
+static void
+GrantInheritedRoles(const CreateRoleSpec *createRoleSpec)
+{
+	bool readOnly = false;
+	bool isNull = false;
+
+	ListCell *currentRole;
+	foreach(currentRole, createRoleSpec->parentRoles)
+	{
+		const char *inheritedRole = (const char *) lfirst(currentRole);
+
+		if (!IS_BUILTIN_ROLE(inheritedRole))
+		{
+			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_ROLENOTFOUND),
+							errmsg("Role '%s' not supported.",
+								   inheritedRole)));
+		}
+
+		StringInfo grantRoleInfo = makeStringInfo();
+		appendStringInfo(grantRoleInfo, "GRANT %s TO %s",
+						 quote_identifier(inheritedRole),
+						 quote_identifier(createRoleSpec->roleName));
+
+		ExtensionExecuteQueryViaSPI(grantRoleInfo->data, readOnly, SPI_OK_UTILITY,
+									&isNull);
 	}
 }
 
@@ -748,7 +770,8 @@ ParseRoleDefinition(bson_iter_t *iter, RolesInfoSpec *rolesInfoSpec)
 
 
 /*
- * ProcessAllRoles handles the case when showAllRoles is true
+ * ProcessAllRoles handles the case when showAllRoles is true.
+ * It retrieves all roles from pg_roles table and writes their details to the response array.
  */
 static void
 ProcessAllRoles(pgbson_array_writer *rolesArrayWriter, RolesInfoSpec rolesInfoSpec)
@@ -829,7 +852,8 @@ ProcessAllRoles(pgbson_array_writer *rolesArrayWriter, RolesInfoSpec rolesInfoSp
 
 
 /*
- * ProcessSpecificRoles handles the case when specific role names are requested
+ * ProcessSpecificRoles handles the case when specific role names are requested.
+ * It retrieves each specified role from pg_roles table and writes their details to the response array.
  */
 static void
 ProcessSpecificRoles(pgbson_array_writer *rolesArrayWriter, RolesInfoSpec rolesInfoSpec)
