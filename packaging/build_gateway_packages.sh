@@ -99,32 +99,29 @@ DOCKERFILE=""
 OS_VERSION_NUMBER=""
 
 if [[ "$PACKAGE_TYPE" == "deb" ]]; then
+    # Use unified gateway Dockerfile for all Debian/Ubuntu builds
+    DOCKERFILE="${script_dir}/packaging/deb/Dockerfile-deb-gateway"
     case $OS in
         deb11)
             DOCKER_IMAGE="rust:slim-bullseye"
             TEST_DOCKER_IMAGE="debian:bullseye-slim"
-            DOCKERFILE="${script_dir}/packaging/deb/Dockerfile_gateway_deb"
             ;;
         deb12)
             DOCKER_IMAGE="rust:slim-bookworm"
             TEST_DOCKER_IMAGE="debian:bookworm-slim"
-            DOCKERFILE="${script_dir}/packaging/deb/Dockerfile_gateway_deb"
             ;;
         deb13)
             DOCKER_IMAGE="rust:slim-trixie"
             TEST_DOCKER_IMAGE="debian:trixie-slim"
-            DOCKERFILE="${script_dir}/packaging/deb/Dockerfile_gateway_deb"
             ;;
-        # Ubuntu images need to install rust manually
+        # Ubuntu images need to install rust manually (handled in Dockerfile)
         ubuntu22.04)
             DOCKER_IMAGE="ubuntu:22.04"
             TEST_DOCKER_IMAGE="ubuntu:22.04"
-            DOCKERFILE="${script_dir}/packaging/deb/Dockerfile_gateway_ubuntu"
             ;;
         ubuntu24.04)
             DOCKER_IMAGE="ubuntu:24.04"
             TEST_DOCKER_IMAGE="ubuntu:24.04"
-            DOCKERFILE="${script_dir}/packaging/deb/Dockerfile_gateway_ubuntu"
             ;;
     esac
 elif [[ "$PACKAGE_TYPE" == "rpm" ]]; then

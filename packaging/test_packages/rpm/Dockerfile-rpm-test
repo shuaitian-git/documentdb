@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=rockylinux:8
+ARG BASE_IMAGE=rockylinux:9
 FROM ${BASE_IMAGE}
 
 ARG POSTGRES_VERSION=16
@@ -6,11 +6,23 @@ ARG RPM_PACKAGE_REL_PATH
 ARG TARGETARCH
 
 ENV POSTGRES_VERSION=${POSTGRES_VERSION}
-RUN echo "Testing for RPM install on RHEL 8"
 
-RUN dnf install -y dnf-plugins-core
-RUN dnf install -y epel-release && \
-    dnf config-manager --set-enabled powertools && \
+# Detect RHEL version from /etc/os-release
+RUN . /etc/os-release && echo "RHEL_VERSION=${VERSION_ID%%.*}" > /etc/rhel-version
+RUN . /etc/rhel-version && echo "Testing for RPM install on RHEL ${RHEL_VERSION}"
+
+# Enable appropriate repo: powertools (RHEL 8) or crb (RHEL 9+)
+# Note: Repository metadata download can be flaky, so we add retries
+RUN . /etc/rhel-version && \
+    for i in 1 2 3; do \
+        dnf install -y dnf-plugins-core && dnf install -y epel-release && break || \
+        { echo "Attempt $i failed, retrying in 10 seconds..." && sleep 10; }; \
+    done && \
+    if [ "${RHEL_VERSION}" = "8" ]; then \
+        dnf config-manager --set-enabled powertools; \
+    else \
+        dnf config-manager --set-enabled crb; \
+    fi && \
     dnf clean all
 
 RUN dnf -y install glibc-langpack-en glibc-common && \
@@ -35,10 +47,11 @@ RUN dnf -y swap curl-minimal curl && \
 
 RUN echo "Detected architecture: ${TARGETARCH}"
 
-# PostgreSQL yum repo setup for RHEL 8
-RUN if [ -n "${TARGETARCH}" ] && ( [ "${TARGETARCH}" = "arm64" ] || [ "${TARGETARCH}" = "arm64v8" ] ); then ARCH=aarch64; else ARCH=x86_64; fi; \
-    echo "Setting up PGDG repo for RHEL 8 (arch=${ARCH})" && \
-    dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm && \
+# PostgreSQL yum repo setup - auto-detect RHEL version
+RUN . /etc/rhel-version && \
+    if [ -n "${TARGETARCH}" ] && ( [ "${TARGETARCH}" = "arm64" ] || [ "${TARGETARCH}" = "arm64v8" ] ); then ARCH=aarch64; else ARCH=x86_64; fi; \
+    echo "Setting up PGDG repo for RHEL ${RHEL_VERSION} (arch=${ARCH})" && \
+    dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-${RHEL_VERSION}-${ARCH}/pgdg-redhat-repo-latest.noarch.rpm && \
     dnf -qy module disable postgresql && \
     for i in 1 2 3; do \
         dnf -y install --allowerasing --nobest --skip-broken postgresql${POSTGRES_VERSION} \

@@ -136,13 +136,12 @@ if [[ "$PACKAGE_TYPE" == "deb" ]]; then
             ;;
     esac
 elif [[ "$PACKAGE_TYPE" == "rpm" ]]; then
+    DOCKERFILE="${script_dir}/packaging/rpm/Dockerfile-rpm"
     case $OS in
         rhel8)
-            DOCKERFILE="${script_dir}/packaging/rpm/rhel-8/Dockerfile-rhel8"
             DOCKER_IMAGE="rockylinux:8"
             ;;
         rhel9)
-            DOCKERFILE="${script_dir}/packaging/rpm/rhel-9/Dockerfile-rhel9"
             DOCKER_IMAGE="rockylinux:9"
             ;;
         *)
@@ -208,15 +207,8 @@ if [[ $TEST_CLEAN_INSTALL == true ]]; then
 
         echo "RPM package path passed into Docker build: $package_rel_path"
         
-        # Select the correct test Dockerfile for RHEL 8 or RHEL 9
-        if [[ "$OS" == "rhel8" ]]; then
-            TEST_DOCKERFILE="${script_dir}/packaging/test_packages/rhel-8/Dockerfile-rhel8-test"
-        elif [[ "$OS" == "rhel9" ]]; then
-            TEST_DOCKERFILE="${script_dir}/packaging/test_packages/rhel-9/Dockerfile-rhel9-test"
-        else
-            echo "Error: Unknown RPM OS for test Dockerfile: $OS"
-            exit 1
-        fi
+        # Use unified RPM test Dockerfile
+        TEST_DOCKERFILE="${script_dir}/packaging/test_packages/rpm/Dockerfile-rpm-test"
         docker build -t documentdb-test-rpm-packages:latest -f "$TEST_DOCKERFILE" \
             --build-arg BASE_IMAGE="$DOCKER_IMAGE" \
             --build-arg POSTGRES_VERSION="$PG" \

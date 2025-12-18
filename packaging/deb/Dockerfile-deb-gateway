@@ -1,0 +1,66 @@
+# Unified Gateway Dockerfile for both Ubuntu and Debian builds
+# Usage:
+#   Ubuntu: --build-arg BASE_IMAGE=ubuntu:22.04
+#   Debian: --build-arg BASE_IMAGE=rust:slim-bookworm
+
+ARG BASE_IMAGE=rust:slim-bookworm
+FROM ${BASE_IMAGE}
+ARG BASE_IMAGE
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install base dependencies
+RUN apt-get update; \
+    apt-get install -y --no-install-recommends \
+        jq curl sudo git make wget build-essential \
+        openssl pkg-config libssl-dev ca-certificates \
+        lsb-release gnupg2; \
+    rm -rf /var/lib/apt/lists/*
+
+# Install software-properties-common (skip for trixie which doesn't need it)
+RUN apt-get update; \
+    if echo "$BASE_IMAGE" | grep -qvE "(trixie|slim-trixie)"; then \
+        apt-get install -y --no-install-recommends software-properties-common; \
+    else \
+        echo "Skipping software-properties-common for base ${BASE_IMAGE}"; \
+    fi; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN useradd -ms /bin/bash documentdb -G sudo
+RUN mkdir -p /etc/sudoers.d && echo "%sudo ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/no-pass-ask
+
+USER documentdb
+WORKDIR /home/documentdb/code
+
+COPY . /home/documentdb/code
+
+RUN sudo chmod +x /home/documentdb/code/scripts/*.sh
+RUN /home/documentdb/code/scripts/install_llvm.sh
+
+# Install Rust if not using rust:* base image (i.e., Ubuntu)
+# rust:slim-* images already have cargo/rustc pre-installed
+ENV RUSTUP_HOME=/home/documentdb/.rustup
+ENV CARGO_HOME=/home/documentdb/.cargo
+ENV PATH=$PATH:/home/documentdb/.cargo/bin
+
+RUN if ! command -v cargo &> /dev/null; then \
+        echo "Rust not found, installing via rustup..."; \
+        mkdir -p $RUSTUP_HOME && mkdir -p $CARGO_HOME; \
+        /home/documentdb/code/scripts/install_rustup.sh --install-toolchain; \
+    else \
+        echo "Rust already installed: $(cargo --version)"; \
+    fi
+
+RUN cargo install cargo-deb
+
+RUN sudo chown -R documentdb:documentdb /home/documentdb/code
+
+WORKDIR /home/documentdb/code/pg_documentdb_gw
+
+RUN CARGO_MANIFEST_DIR=/home/documentdb/code/pg_documentdb_gw cargo build --profile=release-with-symbols
+
+# Create /output directory and set permissions for the documentdb user
+USER root
+RUN mkdir -p /output && chown documentdb:documentdb /output
+USER documentdb
+
+CMD ["cargo", "deb", "--no-build", "--profile=release-with-symbols", "--output", "/output/"]
