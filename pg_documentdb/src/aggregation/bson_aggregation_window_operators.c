@@ -113,6 +113,9 @@ typedef struct
 
 	/* The function that will create WindowClause for the window operator */
 	WindowOperatorFunc windowOperatorFunc;
+
+	/* Feature counter */
+	FeatureType feature;
 } WindowOperatorDefinition;
 
 /* --------------------------------------------------------- */
@@ -255,135 +258,168 @@ static const WindowOperatorDefinition WindowOperatorDefinitions[] =
 {
 	{
 		.operatorName = "$_internal_constFill",
-		.windowOperatorFunc = &HandleDollarConstFillWindowOperator
+		.windowOperatorFunc = &HandleDollarConstFillWindowOperator,
+		.feature = INTERNAL_FEATURE_TYPE
 	},
 	{
 		.operatorName = "$addToSet",
-		.windowOperatorFunc = &HandleDollarAddToSetWindowOperator
+		.windowOperatorFunc = &HandleDollarAddToSetWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_ADD_TO_SET
 	},
 	{
 		.operatorName = "$avg",
-		.windowOperatorFunc = &HandleDollarAvgWindowOperator
+		.windowOperatorFunc = &HandleDollarAvgWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_AVG
 	},
 	{
 		.operatorName = "$bottom",
-		.windowOperatorFunc = &HandleDollarBottomWindowOperator
+		.windowOperatorFunc = &HandleDollarBottomWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_BOTTOM
 	},
 	{
 		.operatorName = "$bottomN",
-		.windowOperatorFunc = &HandleDollarBottomNWindowOperator
+		.windowOperatorFunc = &HandleDollarBottomNWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_BOTTOM_N
 	},
 	{
 		.operatorName = "$count",
-		.windowOperatorFunc = &HandleDollarCountWindowOperator
+		.windowOperatorFunc = &HandleDollarCountWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_COUNT
 	},
 	{
 		.operatorName = "$covariancePop",
-		.windowOperatorFunc = &HandleDollarCovariancePopWindowOperator
+		.windowOperatorFunc = &HandleDollarCovariancePopWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_COVARIANCE_POP
 	},
 	{
 		.operatorName = "$covarianceSamp",
-		.windowOperatorFunc = &HandleDollarCovarianceSampWindowOperator
+		.windowOperatorFunc = &HandleDollarCovarianceSampWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_COVARIANCE_SAMP
 	},
 	{
 		.operatorName = "$denseRank",
-		.windowOperatorFunc = &HandleDollarDenseRankWindowOperator
+		.windowOperatorFunc = &HandleDollarDenseRankWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_DENSE_RANK
 	},
 	{
 		.operatorName = "$derivative",
-		.windowOperatorFunc = HandleDollarDerivativeWindowOperator
+		.windowOperatorFunc = HandleDollarDerivativeWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_DERIVATIVE
 	},
 	{
 		.operatorName = "$documentNumber",
-		.windowOperatorFunc = &HandleDollarDocumentNumberWindowOperator
+		.windowOperatorFunc = &HandleDollarDocumentNumberWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_DOCUMENT_NUMBER
 	},
 	{
 		.operatorName = "$expMovingAvg",
-		.windowOperatorFunc = &HandleDollarExpMovingAvgWindowOperator
+		.windowOperatorFunc = &HandleDollarExpMovingAvgWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_EXP_MOVING_AVG
 	},
 	{
 		.operatorName = "$first",
-		.windowOperatorFunc = &HandleDollarFirstWindowOperator
+		.windowOperatorFunc = &HandleDollarFirstWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_FIRST
 	},
 	{
 		.operatorName = "$firstN",
-		.windowOperatorFunc = &HandleDollarFirstNWindowOperator
+		.windowOperatorFunc = &HandleDollarFirstNWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_FIRST_N
 	},
 	{
 		.operatorName = "$integral",
-		.windowOperatorFunc = HandleDollarIntegralWindowOperator
+		.windowOperatorFunc = HandleDollarIntegralWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_INTEGRAL
 	},
 	{
 		.operatorName = "$last",
-		.windowOperatorFunc = &HandleDollarLastWindowOperator
+		.windowOperatorFunc = &HandleDollarLastWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_LAST
 	},
 	{
 		.operatorName = "$lastN",
-		.windowOperatorFunc = &HandleDollarLastNWindowOperator
+		.windowOperatorFunc = &HandleDollarLastNWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_LAST_N
 	},
 	{
 		.operatorName = "$linearFill",
-		.windowOperatorFunc = &HandleDollarLinearFillWindowOperator
+		.windowOperatorFunc = &HandleDollarLinearFillWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_LINEAR_FILL
 	},
 	{
 		.operatorName = "$locf",
-		.windowOperatorFunc = &HandleDollarLocfFillWindowOperator
+		.windowOperatorFunc = &HandleDollarLocfFillWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_LOCF
 	},
 	{
 		.operatorName = "$max",
-		.windowOperatorFunc = &HandleDollarMaxWindowOperator
+		.windowOperatorFunc = &HandleDollarMaxWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_MAX
 	},
 	{
 		.operatorName = "$maxN",
-		.windowOperatorFunc = &HandleDollarMaxNWindowOperator
+		.windowOperatorFunc = &HandleDollarMaxNWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_MAX_N
 	},
 	{
 		.operatorName = "$median",
-		.windowOperatorFunc = NULL
+		.windowOperatorFunc = NULL,
+		.feature = FEATURE_AGGREGATE_WINDOW_MEDIAN
 	},
 	{
 		.operatorName = "$min",
-		.windowOperatorFunc = &HandleDollarMinWindowOperator
+		.windowOperatorFunc = &HandleDollarMinWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_MIN
 	},
 	{
 		.operatorName = "$minN",
-		.windowOperatorFunc = &HandleDollarMinNWindowOperator
+		.windowOperatorFunc = &HandleDollarMinNWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_MIN_N
 	},
 	{
 		.operatorName = "$percentile",
-		.windowOperatorFunc = NULL
+		.windowOperatorFunc = NULL,
+		.feature = FEATURE_AGGREGATE_WINDOW_PERCENTILE
 	},
 	{
 		.operatorName = "$push",
-		.windowOperatorFunc = &HandleDollarPushWindowOperator
+		.windowOperatorFunc = &HandleDollarPushWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_PUSH
 	},
 	{
 		.operatorName = "$rank",
-		.windowOperatorFunc = &HandleDollarRankWindowOperator
+		.windowOperatorFunc = &HandleDollarRankWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_RANK
 	},
 	{
 		.operatorName = "$shift",
-		.windowOperatorFunc = &HandleDollarShiftWindowOperator
+		.windowOperatorFunc = &HandleDollarShiftWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_SHIFT
 	},
 	{
 		.operatorName = "$stdDevPop",
-		.windowOperatorFunc = &HandleDollarStdDevPopWindowOperator
+		.windowOperatorFunc = &HandleDollarStdDevPopWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_STDDEV_POP
 	},
 	{
 		.operatorName = "$stdDevSamp",
-		.windowOperatorFunc = &HandleDollarStdDevSampWindowOperator
+		.windowOperatorFunc = &HandleDollarStdDevSampWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_STDDEV_SAMP
 	},
 	{
 		.operatorName = "$sum",
-		.windowOperatorFunc = &HandleDollarSumWindowOperator
+		.windowOperatorFunc = &HandleDollarSumWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_SUM
 	},
 	{
 		.operatorName = "$top",
-		.windowOperatorFunc = &HandleDollarTopWindowOperator
+		.windowOperatorFunc = &HandleDollarTopWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_TOP
 	},
 	{
 		.operatorName = "$topN",
-		.windowOperatorFunc = &HandleDollarTopNWindowOperator
+		.windowOperatorFunc = &HandleDollarTopNWindowOperator,
+		.feature = FEATURE_AGGREGATE_WINDOW_TOP_N
 	}
 };
 
@@ -1429,6 +1465,11 @@ UpdateWindowAggregationOperator(const pgbsonelement *element,
 			&WindowOperatorDefinitions[i];
 		if (strcmp(element->path, definition->operatorName) == 0)
 		{
+			if (definition->feature >= 0 && definition->feature < MAX_FEATURE_INDEX)
+			{
+				ReportFeatureUsage(definition->feature);
+			}
+
 			if (definition->windowOperatorFunc == NULL)
 			{
 				ereport(ERROR, (
