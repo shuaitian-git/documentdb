@@ -1260,7 +1260,7 @@ GetIndexTermMetadata(void *indexOptions)
  * a wildcard, and/or suffix of the given path.
  * The method assumes that the options provided is a BsonGinWildcardProjectionPathOptions
  */
-pg_attribute_no_sanitize_alignment() IndexTraverseOption
+IndexTraverseOption
 GetWildcardProjectionPathIndexTraverseOption(void *contextOptions, const
 											 char *currentPath, uint32_t
 											 currentPathLength,
@@ -1276,7 +1276,8 @@ GetWildcardProjectionPathIndexTraverseOption(void *contextOptions, const
 	Get_Index_Path_Option(option, pathSpec, pathSpecBytes, pathCount);
 	for (uint32_t i = 0; i < pathCount; i++)
 	{
-		uint32_t indexPathLength = *(uint32_t *) pathSpecBytes;
+		uint32_t indexPathLength;
+		memcpy(&indexPathLength, pathSpecBytes, sizeof(uint32_t));
 		const char *indexPath = pathSpecBytes + sizeof(uint32_t);
 		pathSpecBytes += indexPathLength + sizeof(uint32_t);
 
@@ -1511,7 +1512,7 @@ ValidateWildcardProjectPathSpec(const char *prefix)
  * Here we parse the jsonified path options to build a serialized path
  * structure that is more efficiently parsed during term generation.
  */
-pg_attribute_no_sanitize_alignment() static Size
+static Size
 FillWildcardProjectPathSpec(const char *prefix, void *buffer)
 {
 	if (prefix == NULL)
@@ -1565,7 +1566,7 @@ FillWildcardProjectPathSpec(const char *prefix, void *buffer)
 			const char *path = bson_iter_utf8(&bsonIterator, &pathLength);
 
 			/* add the prefixed path length */
-			*((uint32_t *) bufferPtr) = pathLength;
+			memcpy(bufferPtr, &pathLength, sizeof(uint32_t));
 			bufferPtr += sizeof(uint32_t);
 
 			/* add the serialized string */
