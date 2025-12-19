@@ -35,9 +35,9 @@ use mongodb::{
     options::{AuthMechanism, ClientOptions, Credential, ServerAddress, Tls, TlsOptions},
     Client, Database,
 };
-use simple_logger::SimpleLogger;
 use tokio_postgres::{error::SqlState, NoTls};
 use tokio_util::sync::CancellationToken;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 static INIT: Once = Once::new();
 
@@ -46,13 +46,10 @@ async fn initialize_full(config: DocumentDBSetupConfiguration) {
     env::set_var("RUST_LIB_BACKTRACE", "1");
 
     INIT.call_once(|| {
-        SimpleLogger::new()
-            .with_level(log::LevelFilter::Info)
-            .with_module_level("rustls", log::LevelFilter::Info)
-            .with_module_level("tokio_postgres", log::LevelFilter::Info)
-            .with_module_level("hyper", log::LevelFilter::Info)
-            .init()
-            .unwrap();
+        tracing_subscriber::registry()
+            .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+            .with(tracing_subscriber::fmt::layer())
+            .init();
         thread::spawn(move || run(config));
         thread::sleep(Duration::from_millis(100));
     });
@@ -227,7 +224,7 @@ pub async fn create_user(user: &str, pass: &str, query_catalog: &QueryCatalog) -
         .first()
         .unwrap()
     {
-        log::info!("Test can create: {:?}", result.get("rolcreaterole"));
+        tracing::info!("Test can create: {:?}", result.get("rolcreaterole"));
     }
     Ok(())
 }

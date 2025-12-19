@@ -116,7 +116,10 @@ impl CommandError {
                 ValueAccessErrorKind::UnexpectedType {
                     actual, expected, ..
                 } => {
-                    log::error!(activity_id = activity_id; "Type mismatch error: expected {expected:?} but got {actual:?}");
+                    tracing::error!(
+                        activity_id = activity_id,
+                        "Type mismatch error: expected {expected:?} but got {actual:?}"
+                    );
                     CommandError::new(
                         ErrorCode::TypeMismatch as i32,
                         value_access_error_message(),
@@ -130,7 +133,7 @@ impl CommandError {
                 }
                 ValueAccessErrorKind::InvalidBson(_) => {
                     let error_message = "Value is not a valid BSON";
-                    log::error!(activity_id = activity_id; "{error_message}");
+                    tracing::error!(activity_id = activity_id, "{error_message}");
                     CommandError::new(
                         ErrorCode::BadValue as i32,
                         value_access_error_message(),
@@ -139,7 +142,7 @@ impl CommandError {
                 }
                 ValueAccessErrorKind::NotPresent => {
                     let error_message = "Value is not present";
-                    log::error!(activity_id = activity_id; "{error_message}");
+                    tracing::error!(activity_id = activity_id, "{error_message}");
                     CommandError::new(
                         ErrorCode::BadValue as i32,
                         value_access_error_message(),
@@ -147,7 +150,7 @@ impl CommandError {
                     )
                 }
                 _ => {
-                    log::error!(activity_id = activity_id; "Hit generic ValueAccessError.");
+                    tracing::error!(activity_id = activity_id, "Hit generic ValueAccessError.");
                     CommandError::new(
                         ErrorCode::BadValue as i32,
                         value_access_error_message(),
