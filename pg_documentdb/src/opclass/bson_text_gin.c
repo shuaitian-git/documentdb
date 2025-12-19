@@ -1033,7 +1033,7 @@ ValidateDefaultLanguageSpec(const char *defaultLanguage)
 /*
  * Populates the language spec provided to a CREATE INDEX text search options.
  */
-static pg_attribute_no_sanitize_alignment() Size
+static Size
 FillDefaultLanguageSpec(const char *defaultLanguage, void *buffer)
 {
 	uint32_t length = defaultLanguage == NULL ? 0 : sizeof(Oid);
@@ -1047,7 +1047,8 @@ FillDefaultLanguageSpec(const char *defaultLanguage, void *buffer)
 				.string = defaultLanguage, .length = strlen(defaultLanguage)
 			};
 			bool isCreateIndex = true;
-			*address = ExtractTsConfigFromLanguage(&languageView, isCreateIndex);
+			Oid languageOid = ExtractTsConfigFromLanguage(&languageView, isCreateIndex);
+			memcpy(address, &languageOid, sizeof(Oid));
 		}
 	}
 
@@ -1060,7 +1061,7 @@ FillDefaultLanguageSpec(const char *defaultLanguage, void *buffer)
  * This includes the path and associated weights encoded as follows
  * <numPaths><Datum[4] of weights>[<pathLength><path><weightIndex>]+
  */
-pg_attribute_no_sanitize_alignment() static Size
+static Size
 FillWeightsSpec(const char *weightsSpec, void *buffer)
 {
 	/* Weights count + Weight array (for rank) */
@@ -1119,7 +1120,8 @@ FillWeightsSpec(const char *weightsSpec, void *buffer)
 		for (int i = 0; i < 4; i++)
 		{
 			/* Initialize it to the default */
-			weightDatums[i] = Float4GetDatum(1.0f / maxWeight);
+			Datum defaultWeight = Float4GetDatum(1.0f / maxWeight);
+			memcpy(&weightDatums[i], &defaultWeight, sizeof(Datum));
 		}
 
 		PgbsonInitIterator(bson, &weightsIter);
@@ -1130,7 +1132,7 @@ FillWeightsSpec(const char *weightsSpec, void *buffer)
 			StringView pathView = bson_iter_key_string_view(&weightsIter);
 
 			/* add the prefixed path length */
-			*((uint32_t *) bufferPtr) = pathView.length;
+			memcpy(bufferPtr, &pathView.length, sizeof(uint32_t));
 			bufferPtr += sizeof(uint32_t);
 
 			/* Add the path */
@@ -1165,8 +1167,8 @@ FillWeightsSpec(const char *weightsSpec, void *buffer)
 				case 2:
 				case 3:
 				{
-					weightDatums[(int) weightLabel] = Float4GetDatum(((float) weight /
-																	  maxWeight));
+					Datum weightDatum = Float4GetDatum(((float) weight / maxWeight));
+					memcpy(&weightDatums[(int) weightLabel], &weightDatum, sizeof(Datum));
 					break;
 				}
 
