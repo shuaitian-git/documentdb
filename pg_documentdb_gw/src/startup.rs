@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use tokio::time::{sleep, Duration, Instant};
+use tokio::time::{Duration, Instant};
 
 use crate::{
     configuration::{DynamicConfiguration, SetupConfiguration},
@@ -26,7 +26,7 @@ pub fn get_service_context(
     authentication_pool: ConnectionPool,
     tls_provider: TlsProvider,
 ) -> ServiceContext {
-    log::info!("Initial dynamic configuration: {dynamic_configuration:?}");
+    tracing::info!("Initial dynamic configuration: {dynamic_configuration:?}");
 
     let connection_pool_manager = PoolManager::new(
         query_catalog.clone(),
@@ -94,8 +94,8 @@ where
             }
             Err(e) => {
                 if start.elapsed() < max_time {
-                    log::warn!("Exception when creating postgres object {e:?}");
-                    sleep(wait_time).await;
+                    tracing::warn!("Exception when creating postgres object {e:?}");
+                    tokio::time::sleep(wait_time).await;
                     continue;
                 } else {
                     panic!("Failed to create postgres object after {max_time:?}: {e}");

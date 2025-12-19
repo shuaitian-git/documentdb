@@ -1,7 +1,7 @@
 use pgrx::{bgworkers::*, prelude::*};
-use simple_logger::SimpleLogger;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use documentdb_gateway::{
     configuration::{DocumentDBSetupConfiguration, PgConfiguration, SetupConfiguration},
@@ -84,7 +84,7 @@ async fn run_docdb_gateway(setup_configuration_file: &str) {
     let setup_configuration =
         DocumentDBSetupConfiguration::new(&cfg_file).expect("Failed to load configuration.");
 
-    log::info!("Starting server with configuration: {setup_configuration:?}");
+    tracing::info!("Starting server with configuration: {setup_configuration:?}");
 
     let tls_provider = TlsProvider::new(
         SetupConfiguration::certificate_options(&setup_configuration),
@@ -94,11 +94,11 @@ async fn run_docdb_gateway(setup_configuration_file: &str) {
     .await
     .expect("Failed to create TLS provider.");
 
-    SimpleLogger::new()
-        .with_level(log::LevelFilter::Info)
-        .with_module_level("tokio_postgres", log::LevelFilter::Info)
-        .init()
-        .expect("Failed to start logger");
+    // Initialize tracing subscriber to handle all tracing events
+    tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
     let query_catalog = create_query_catalog();
 
@@ -111,7 +111,7 @@ async fn run_docdb_gateway(setup_configuration_file: &str) {
         )
         .await,
     );
-    log::info!("System requests pool initialized");
+    tracing::info!("System requests pool initialized");
 
     let dynamic_configuration = create_postgres_object(
         || async {
@@ -134,7 +134,7 @@ async fn run_docdb_gateway(setup_configuration_file: &str) {
         AUTHENTICATION_MAX_CONNECTIONS,
     )
     .await;
-    log::info!("Authentication pool initialized");
+    tracing::info!("Authentication pool initialized");
 
     let service_context = get_service_context(
         Box::new(setup_configuration),

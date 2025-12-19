@@ -36,7 +36,7 @@ pub fn get_projection_type_output(
                         return doc;
                     }
                 }
-                log::warn!("Failed to parse hex string from explain");
+                tracing::warn!("Failed to parse hex string from explain");
             }
         }
     }

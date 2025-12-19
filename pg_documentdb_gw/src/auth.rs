@@ -134,8 +134,8 @@ impl AuthState {
             sleep(Duration::from_secs(timeout_secs)).await;
 
             let connection_activity_id_as_str = connection_activity_id_owned.as_str();
-            log::info!(
-                activity_id = connection_activity_id_as_str;
+            tracing::info!(
+                activity_id = connection_activity_id_as_str,
                 "Authentication expiry timer elapsed"
             );
             *authorized.write().await = false;
@@ -322,11 +322,12 @@ async fn handle_oidc_token_authentication(
             match e {
                 DocumentDBError::PostgresError(pge_error, _) => match pge_error.as_db_error() {
                     Some(db_error) => {
-                        log::error!(
-                                activity_id = connection_context.connection_id.to_string().as_str();
-                                "Backend error during authentication: PostgresError({:?}, {:?})",
-                                db_error.code(),
-                                db_error.hint());
+                        tracing::error!(
+                            activity_id = connection_context.connection_id.to_string().as_str(),
+                            "Backend error during authentication: PostgresError({:?}, {:?})",
+                            db_error.code(),
+                            db_error.hint()
+                        );
 
                         if let Some((extension_error_code, _)) =
                             PgResponse::from_known_external_error_code(db_error.code())
@@ -356,8 +357,8 @@ async fn handle_oidc_token_authentication(
                         };
                     }
                     None => {
-                        log::error!(
-                            activity_id = connection_context.connection_id.to_string().as_str();
+                        tracing::error!(
+                            activity_id = connection_context.connection_id.to_string().as_str(),
                             "DbError not found in PostgresError, which is unexpected."
                         );
                         return Err(DocumentDBError::authentication_failed(
@@ -399,7 +400,7 @@ async fn handle_oidc_token_authentication(
     /* We are setting a timer for the time until token expiry, which will set authorized to false at the end */
     let connection_activity_id = connection_context.connection_id.to_string();
     let connection_activity_id_as_str = connection_activity_id.as_str();
-    log::info!(activity_id = connection_activity_id_as_str;
+    tracing::info!(activity_id = connection_activity_id_as_str,
         "Setting authentication expiry timer for {seconds_until_expiry} seconds until token expiry.",
     );
     connection_context
@@ -502,7 +503,7 @@ async fn handle_sasl_continue(
                 ));
             }
         } else {
-            log::warn!("Auth mechanism not provided in SaslContinue");
+            tracing::warn!("Auth mechanism not provided in SaslContinue");
         }
 
         // Username is not always provided by saslcontinue

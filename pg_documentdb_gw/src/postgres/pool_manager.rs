@@ -223,8 +223,8 @@ pub fn clean_unused_pools(service_context: ServiceContext) {
         loop {
             cleanup_interval.tick().await;
 
-            log::info!(
-                event_id = EventId::ConnectionPool;
+            tracing::info!(
+                event_id = EventId::ConnectionPool.code(),
                 "Performing the cleanup of unused pools"
             );
 
