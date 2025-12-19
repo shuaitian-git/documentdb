@@ -328,8 +328,8 @@ SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backg
 SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backgroundcoll2", "indexes": [ { "key" : { "b": 1 }, "name": "b_1"}] }');
 SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backgroundcoll2", "indexes": [ { "key" : { "c": 1 }, "name": "c_1"}] }');
 
--- we should only have index on "a" since that creates the collection inline and shoul dbe built. The index queue should have b and c indexes.
-SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue;
+-- we should only have index on "a" since that creates the collection inline and should be built. The index queue should have b and c indexes.
+SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue order by index_id;
 SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'backgroundcoll1');
 SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'backgroundcoll2');
 
@@ -345,7 +345,7 @@ SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'background
 
 -- now queue some reindex jobs and test index builds
 SELECT * FROM documentdb_api_internal.reindex_index_background('db', '{ "collection": "backgroundcoll1", "indexes": [ 32044, 32045 ] }');
-SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue;
+SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue order by index_id;
 CALL documentdb_api_internal.build_index_concurrently(1);
 
 --all indexes should be built and queue should be empty.

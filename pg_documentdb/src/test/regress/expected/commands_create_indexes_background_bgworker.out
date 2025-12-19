@@ -871,8 +871,8 @@ SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backg
  ("{ ""raw"" : { ""defaultShard"" : { ""numIndexesBefore"" : { ""$numberInt"" : ""3"" }, ""numIndexesAfter"" : { ""$numberInt"" : ""4"" }, ""createdCollectionAutomatically"" : false, ""ok"" : { ""$numberInt"" : ""1"" } } }, ""ok"" : { ""$numberInt"" : ""1"" } }",t,"{ ""indexRequest"" : { ""cmdType"" : ""C"", ""ids"" : [ { ""$numberInt"" : ""42049"" } ] } }")
 (1 row)
 
--- we should only have index on "a" since that creates the collection inline and shoul dbe built. The index queue should have b and c indexes.
-SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue;
+-- we should only have index on "a" since that creates the collection inline and should be built. The index queue should have b and c indexes.
+SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue order by index_id;
                                                                                                 index_cmd                                                                                                 | cmd_type | index_id | index_cmd_status | collection_id 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------+----------+------------------+---------------
  CREATE INDEX CONCURRENTLY documents_rum_index_42044 ON documentdb_data.documents_42007 USING documentdb_rum ( document documentdb_api_internal.bson_rum_composite_path_ops(pathspec='[ "b" ]',tl=2691))  | C        |    42044 |                1 |         42007
@@ -923,7 +923,7 @@ SELECT * FROM documentdb_test_helpers.count_collection_indexes('db', 'background
 SELECT * FROM documentdb_api_internal.reindex_index_background('db', '{ "collection": "backgroundcoll1", "indexes": [ 32044, 32045 ] }');
 psql:sql/create_indexes_background_core.sql:347: ERROR:  reindex failed, index with id 32044 does not exist
 CONTEXT:  SQL statement "SELECT documentdb_api_internal.reindex_indexes_background_internal('db','BSONHEX4100000002636f6c6c656374696f6e00100000006261636b67726f756e64636f6c6c310004696e646578657300130000001030002c7d00001031002d7d00000000')"
-SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue;
+SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue order by index_id;
  index_cmd | cmd_type | index_id | index_cmd_status | collection_id 
 -----------+----------+----------+------------------+---------------
 (0 rows)

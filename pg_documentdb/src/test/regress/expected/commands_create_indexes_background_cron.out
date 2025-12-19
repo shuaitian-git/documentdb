@@ -871,8 +871,8 @@ SELECT documentdb_api.create_indexes_background('db', '{ "createIndexes": "backg
  ("{ ""raw"" : { ""defaultShard"" : { ""numIndexesBefore"" : { ""$numberInt"" : ""3"" }, ""numIndexesAfter"" : { ""$numberInt"" : ""4"" }, ""createdCollectionAutomatically"" : false, ""ok"" : { ""$numberInt"" : ""1"" } } }, ""ok"" : { ""$numberInt"" : ""1"" } }",t,"{ ""indexRequest"" : { ""cmdType"" : ""C"", ""ids"" : [ { ""$numberInt"" : ""32049"" } ] } }")
 (1 row)
 
--- we should only have index on "a" since that creates the collection inline and shoul dbe built. The index queue should have b and c indexes.
-SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue;
+-- we should only have index on "a" since that creates the collection inline and should be built. The index queue should have b and c indexes.
+SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue order by index_id;
                                                                                                 index_cmd                                                                                                 | cmd_type | index_id | index_cmd_status | collection_id 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------+----------+------------------+---------------
  CREATE INDEX CONCURRENTLY documents_rum_index_32044 ON documentdb_data.documents_32007 USING documentdb_rum ( document documentdb_api_internal.bson_rum_composite_path_ops(pathspec='[ "b" ]',tl=2691))  | C        |    32044 |                1 |         32007
@@ -926,7 +926,7 @@ SELECT * FROM documentdb_api_internal.reindex_index_background('db', '{ "collect
  { "raw" : { "defaultShard" : { "numIndexesBefore" : { "$numberInt" : "0" }, "numIndexesAfter" : { "$numberInt" : "2" }, "createdCollectionAutomatically" : false, "ok" : { "$numberInt" : "1" } } }, "ok" : { "$numberInt" : "1" } } | t  | { "indexRequest" : { "cmdType" : "R", "ids" : [ { "$numberInt" : "32044" }, { "$numberInt" : "32045" } ] } }
 (1 row)
 
-SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue;
+SELECT index_cmd, cmd_type, index_id, index_cmd_status, collection_id FROM documentdb_api_catalog.documentdb_index_queue order by index_id;
                               index_cmd                               | cmd_type | index_id | index_cmd_status | collection_id 
 ----------------------------------------------------------------------+----------+----------+------------------+---------------
  REINDEX INDEX CONCURRENTLY documentdb_data.documents_rum_index_32044 | R        |    32044 |                1 |         32007
