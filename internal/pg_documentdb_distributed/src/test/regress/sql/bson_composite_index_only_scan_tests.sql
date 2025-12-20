@@ -113,6 +113,7 @@ set documentdb.enableIndexOnlyScan to off;
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$lt": "Mexico"}} }, { "$count": "count" }]}');
 
 set documentdb.enableIndexOnlyScan to on;
+set documentdb.forceIndexOnlyScanIfAvailable to on;
 
 -- if we insert a multi-key value, it shouldn't use index only scan
 SELECT documentdb_api.insert_one('idx_only_scan_db', 'idx_only_scan_coll', '{"_id": 17, "country": "Mexico", "provider": ["AWS", "GCP"]}');

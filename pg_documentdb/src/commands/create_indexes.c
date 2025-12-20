@@ -163,6 +163,9 @@ extern bool SkipFailOnCollation;
 extern bool ForceWildcardReducedTerm;
 extern bool EnableCompositeUniqueHash;
 extern bool EnableCompositeWildcardIndex;
+extern bool EnableCompositeReducedCorrelatedTerms;
+extern bool EnableUniqueCompositeReducedCorrelatedTerms;
+extern bool EnableCompositeShardDocumentTerms;
 
 extern char *AlternateIndexHandler;
 
@@ -5383,13 +5386,21 @@ AppendUniqueColumnExpr(StringInfo indexExprStr, IndexDefKey *indexDefKey,
 					   bool firstColumnWritten, bool buildAsUnique,
 					   bool generateCompositeHash)
 {
+	const char *generateCompositeTermString = "";
+	if (generateCompositeHash && IsClusterVersionAtleast(DocDB_V0, 109, 0) &&
+		EnableCompositeShardDocumentTerms)
+	{
+		generateCompositeTermString = ", true";
+	}
+
 	appendStringInfo(indexExprStr,
-					 "%s%s.generate_unique_shard_document(document, shard_key_value, '%s'::%s.bson, %s) %s.bson_%s_unique_shard_path_ops%s",
+					 "%s%s.generate_unique_shard_document(document, shard_key_value, '%s'::%s.bson, %s%s) %s.bson_%s_unique_shard_path_ops%s",
 					 !firstColumnWritten ? "" : ",",
 					 DocumentDBApiInternalSchemaName,
 					 GenerateUniqueProjectionSpec(indexDefKey),
 					 CoreSchemaName,
 					 sparse ? "true" : "false",
+					 generateCompositeTermString,
 					 indexAmOpClassInternalCatalogSchema,
 					 indexAmSuffix,
 					 generateCompositeHash ? "(cmp=true)" : "");
@@ -5704,6 +5715,16 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 		char wildcardIndexTruncatedPathLimit[22] = { 0 };
 		char *wildCardIndexPathLimit = "";
 		char *wildcardIndexString = "";
+		char *reducedCorrelatedTermString = "";
+
+		bool isUniqueStyleIndex = unique || buildAsUnique;
+		if (list_length(indexDefKey->keyPathList) > 1 &&
+			((EnableCompositeReducedCorrelatedTerms && !isUniqueStyleIndex) ||
+			 (EnableUniqueCompositeReducedCorrelatedTerms && isUniqueStyleIndex)))
+		{
+			reducedCorrelatedTermString = ",rct=true";
+		}
+
 		if (wildcardTermIndex >= 0)
 		{
 			pg_sprintf(wildcardIndexPath, ",wki=%d", wildcardTermIndex);
@@ -5715,14 +5736,15 @@ GenerateIndexExprStr(const char *indexAmSuffix,
 		}
 
 		appendStringInfo(indexExprStr,
-						 "%s document %s.bson_%s_composite_path_ops(pathspec=%s%s%s%s)",
+						 "%s document %s.bson_%s_composite_path_ops(pathspec=%s%s%s%s%s)",
 						 firstColumnWritten ? "," : "",
 						 indexAmOpClassInternalCatalogSchema,
 						 indexAmSuffix,
 						 quote_literal_cstr(BsonValueToJsonForLogging(&arrayValue)),
 						 indexTermSizeLimitArg,
 						 wildcardIndexString,
-						 wildCardIndexPathLimit);
+						 wildCardIndexPathLimit,
+						 reducedCorrelatedTermString);
 
 		if (indexExprStr->len >= MAX_INDEX_OPTIONS_LENGTH)
 		{
