@@ -72,8 +72,16 @@ typedef struct CompositeTermGenerateState
 
 	/* The total number of actual paths */
 	uint32_t pathCount;
+
+	List *correlatedTerms;
 } CompositeTermGenerateState;
 
+
+typedef struct
+{
+	Datum *terms[INDEX_MAX_KEYS];
+	int32_t numTerms[INDEX_MAX_KEYS];
+} MergedTermSet;
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -119,6 +127,7 @@ static bytea * BuildTermForBounds(CompositeQueryRunData *runData,
 								  uint32_t *indexPathLengths, int8_t *sortOrders);
 static void ParseCompositeQuerySpec(pgbson *querySpec, pgbsonelement *singleElement,
 									bool *isMultiKey, bool *isOrderedScan,
+									bool *hasCorrelatedReducedTerms,
 									bool *isBackward);
 static int32_t RunCompareOnBounds(CompositeIndexBounds *bounds,
 								  const BsonIndexTerm *compareValue,
@@ -237,22 +246,34 @@ gin_bson_composite_path_extract_query(PG_FUNCTION_ARGS)
 																				 numPaths);
 	IndexTermCreateMetadata compositeMetadata = GetCompositeIndexTermMetadata(options);
 
-	if (strategy == BSON_INDEX_STRATEGY_IS_MULTIKEY)
+	switch (strategy)
 	{
-		/* Consider only the root multi-key term */
-		*nentries = 1;
-		Datum *result = palloc(sizeof(Datum));
-		result[0] = GenerateRootMultiKeyTerm(&compositeMetadata);
-		PG_RETURN_POINTER(result);
-	}
+		case BSON_INDEX_STRATEGY_IS_MULTIKEY:
+		{
+			/* Consider only the root multi-key term */
+			*nentries = 1;
+			Datum *result = palloc(sizeof(Datum));
+			result[0] = GenerateRootMultiKeyTerm(&compositeMetadata);
+			PG_RETURN_POINTER(result);
+		}
 
-	if (strategy == BSON_INDEX_STRATEGY_HAS_TRUNCATED_TERMS)
-	{
-		/* Consider only the root truncated term */
-		*nentries = 1;
-		Datum *result = palloc(sizeof(Datum));
-		result[0] = GenerateRootTruncatedTerm(&compositeMetadata);
-		PG_RETURN_POINTER(result);
+		case BSON_INDEX_STRATEGY_HAS_TRUNCATED_TERMS:
+		{
+			/* Consider only the root truncated term */
+			*nentries = 1;
+			Datum *result = palloc(sizeof(Datum));
+			result[0] = GenerateRootTruncatedTerm(&compositeMetadata);
+			PG_RETURN_POINTER(result);
+		}
+
+		case BSON_INDEX_STRATEGY_HAS_CORRELATED_REDUCED_TERMS:
+		{
+			/* Consider only the root truncated term */
+			*nentries = 1;
+			Datum *result = palloc(sizeof(Datum));
+			result[0] = GenerateCorrelatedRootArrayTerm(&compositeMetadata);
+			PG_RETURN_POINTER(result);
+		}
 	}
 
 	VariableIndexBounds variableBounds = { 0 };
@@ -271,6 +292,7 @@ gin_bson_composite_path_extract_query(PG_FUNCTION_ARGS)
 	/* key that we're doing an ordered scan based off of search mode */
 	bool isOrderedScan = (*searchMode != GIN_SEARCH_MODE_DEFAULT);
 	metaInfo->isBackwardScan = false;
+	bool isCorrelatedReducedScan = false;
 	if (isOrderedScan)
 	{
 		*searchMode = GIN_SEARCH_MODE_DEFAULT;
@@ -305,6 +327,7 @@ gin_bson_composite_path_extract_query(PG_FUNCTION_ARGS)
 	{
 		pgbsonelement singleElement;
 		ParseCompositeQuerySpec(query, &singleElement, &hasArrayPaths, &isOrderedScan,
+								&isCorrelatedReducedScan,
 								&metaInfo->isBackwardScan);
 		ParseBoundsForCompositeOperator(&singleElement, indexPaths, indexPathLengths,
 										numPaths,
@@ -334,17 +357,27 @@ gin_bson_composite_path_extract_query(PG_FUNCTION_ARGS)
 			PickVariableBoundsForOrderedScan(&variableBounds, runData);
 		}
 	}
-	else if (!hasArrayPaths)
+	else
 	{
-		variableBounds.variableBoundsList =
-			MergeSingleVariableBounds(variableBounds.variableBoundsList,
-									  &runData->wildcardPath,
-									  runData->indexBounds);
+		if (isCorrelatedReducedScan && options->enableCompositeReducedCorrelatedTerms)
+		{
+			/* In a reduced scan, we can't filter on any paths that's not the first path */
+			TrimSecondaryVariableBounds(&variableBounds, runData);
+		}
+
+		if (!hasArrayPaths)
+		{
+			variableBounds.variableBoundsList =
+				MergeSingleVariableBounds(variableBounds.variableBoundsList,
+										  &runData->wildcardPath,
+										  runData->indexBounds);
+		}
+		else if (isOrderedScan)
+		{
+			PickVariableBoundsForOrderedScan(&variableBounds, runData);
+		}
 	}
-	else if (isOrderedScan)
-	{
-		PickVariableBoundsForOrderedScan(&variableBounds, runData);
-	}
+
 
 	/* Tally up the total variable bound counts - this is the permutation of all variable terms
 	 * e.g. if we have { "a": { "$in": [ 1, 2, 3 ]}} && { "b": { "$in": [ 4, 5 ] } }
@@ -505,6 +538,28 @@ gin_bson_composite_path_compare_partial(PG_FUNCTION_ARGS)
 			if (term.element.bsonValue.value_type == BSON_TYPE_ARRAY)
 			{
 				PG_RETURN_INT32(0);
+			}
+
+			PG_RETURN_INT32(-1);
+		}
+
+		case BSON_INDEX_STRATEGY_HAS_CORRELATED_REDUCED_TERMS:
+		{
+			if (!IsSerializedIndexTermMetadata(serializedTerms[0]))
+			{
+				PG_RETURN_INT32(1);
+			}
+
+			BsonIndexTerm term;
+			InitializeBsonIndexTerm(serializedTerms[0], &term);
+
+			if (term.element.bsonValue.value_type == BSON_TYPE_INT32)
+			{
+				if (term.element.bsonValue.value.v_int32 ==
+					RootMetadataKind_CorrelatedRootArray)
+				{
+					PG_RETURN_INT32(0);
+				}
 			}
 
 			PG_RETURN_INT32(-1);
@@ -879,6 +934,7 @@ gin_bson_composite_path_consistent(PG_FUNCTION_ARGS)
 	/* Datum *queryKeys = (Datum *) PG_GETARG_POINTER(6); */
 
 	if (strategy == BSON_INDEX_STRATEGY_IS_MULTIKEY ||
+		strategy == BSON_INDEX_STRATEGY_HAS_CORRELATED_REDUCED_TERMS ||
 		strategy == BSON_INDEX_STRATEGY_HAS_TRUNCATED_TERMS)
 	{
 		*recheck = false;
@@ -997,6 +1053,8 @@ gin_bson_get_composite_path_generated_terms(PG_FUNCTION_ARGS)
 		char *pathSpec = text_to_cstring(PG_GETARG_TEXT_P(1));
 		int32_t truncationLimit = PG_GETARG_INT32(2);
 		int32_t wildcardPathIndex = PG_GETARG_INT32(4);
+		bool enableCompositeReducedCorrelatedTerms = PG_NARGS() > 5 ? PG_GETARG_BOOL(5) :
+													 false;
 
 		functionContext = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
@@ -1010,6 +1068,8 @@ gin_bson_get_composite_path_generated_terms(PG_FUNCTION_ARGS)
 		options->base.version = IndexOptionsVersion_V0;
 		options->compositePathSpec = sizeof(BsonGinCompositePathOptions);
 		options->wildcardPathIndex = wildcardPathIndex;
+		options->enableCompositeReducedCorrelatedTerms =
+			enableCompositeReducedCorrelatedTerms;
 
 		FillCompositePathSpec(
 			pathSpec,
@@ -1409,8 +1469,13 @@ gin_bson_composite_path_options(PG_FUNCTION_ARGS)
 							INT32_MAX, /* default value */
 							0, /* min */
 							INT32_MAX, /* max */
-							offsetof(BsonGinWildcardProjectionPathOptions,
+							offsetof(BsonGinCompositePathOptions,
 									 base.wildcardIndexTruncatedPathLimit));
+	add_local_bool_reloption(relopts, "rct",
+							 "Whether or not to enable the reduced correlated term generation.",
+							 false, /* default value */
+							 offsetof(BsonGinCompositePathOptions,
+									  enableCompositeReducedCorrelatedTerms));
 	add_local_int_reloption(relopts, "v",
 							"The version of the options struct.",
 							IndexOptionsVersion_V0,          /* default value */
@@ -1549,8 +1614,9 @@ GetCompositeOpClassColumnNumber(const char *currentPath, void *contextOptions,
 
 
 static IndexTraverseOption
-GetCompositeTraverseOptionSinglePath(BsonGinCompositePathOptions *options, const
-									 char *currentPath,
+GetCompositeTraverseOptionSinglePath(BsonGinCompositePathOptions *options,
+									 BsonIndexStrategy strategy,
+									 const char *currentPath,
 									 uint32_t currentPathLength,
 									 int32_t *compositeIndexCol)
 {
@@ -1565,6 +1631,18 @@ GetCompositeTraverseOptionSinglePath(BsonGinCompositePathOptions *options, const
 		if (indexPathsLengths[i] == currentPathLength &&
 			strncmp(currentPath, indexPaths[i], currentPathLength) == 0)
 		{
+			if (options->enableCompositeReducedCorrelatedTerms &&
+				(strategy == BSON_INDEX_STRATEGY_DOLLAR_ORDERBY ||
+				 strategy == BSON_INDEX_STRATEGY_DOLLAR_ORDERBY_REVERSE) &&
+				i > 0)
+			{
+				/*
+				 * Can't push down order by on secondary columns yet
+				 * TODO: Requires orderby to match reduced index term in the runtime
+				 */
+				return IndexTraverse_Invalid;
+			}
+
 			*compositeIndexCol = i;
 			return IndexTraverse_Match;
 		}
@@ -1719,9 +1797,11 @@ GetCompositePathIndexTraverseOption(BsonIndexStrategy strategy, void *contextOpt
 
 	BsonGinCompositePathOptions *options =
 		(BsonGinCompositePathOptions *) contextOptions;
+
 	if (options->wildcardPathIndex < 0)
 	{
-		return GetCompositeTraverseOptionSinglePath(options, currentPath,
+		return GetCompositeTraverseOptionSinglePath(options,
+													strategy, currentPath,
 													currentPathLength,
 													compositeIndexCol);
 	}
@@ -2041,7 +2121,8 @@ DetermineCompositeScanDirection(bytea *compositeScanOptions,
 
 
 Datum
-FormCompositeDatumFromQuals(List *indexQuals, List *indexOrderBy, bool isMultiKey)
+FormCompositeDatumFromQuals(List *indexQuals, List *indexOrderBy, bool isMultiKey, bool
+							hasCorrelatedReducedTerm)
 {
 	ScanKeyData *scanKeys = palloc0(sizeof(ScanKeyData) * list_length(indexQuals));
 	ScanKeyData targetScanKey = { 0 };
@@ -2109,7 +2190,7 @@ FormCompositeDatumFromQuals(List *indexQuals, List *indexOrderBy, bool isMultiKe
 
 	/* TODO: Extract order by scan direction from index orderby */
 	if (!ModifyScanKeysForCompositeScan(scanKeys, list_length(indexQuals), &targetScanKey,
-										isMultiKey,
+										isMultiKey, hasCorrelatedReducedTerm,
 										list_length(indexOrderBy) > 0,
 										ForwardScanDirection))
 	{
@@ -2132,7 +2213,8 @@ FormCompositeDatumFromQuals(List *indexQuals, List *indexOrderBy, bool isMultiKe
  */
 bool
 ModifyScanKeysForCompositeScan(ScanKey scankey, int nscankeys, ScanKey targetScanKey,
-							   bool hasArrayKeys, bool hasOrderBys,
+							   bool hasArrayKeys, bool hasCorrelatedReducedTerms, bool
+							   hasOrderBys,
 							   ScanDirection scanDirection)
 {
 	pgbson_writer querySpecWriter;
@@ -2167,6 +2249,10 @@ ModifyScanKeysForCompositeScan(ScanKey scankey, int nscankeys, ScanKey targetSca
 	PgbsonWriterAppendBool(&querySpecWriter, "or", 2, hasOrderBys);
 	PgbsonWriterAppendBool(&querySpecWriter, "db", 2, ScanDirectionIsBackward(
 							   scanDirection));
+	if (hasCorrelatedReducedTerms)
+	{
+		PgbsonWriterAppendBool(&querySpecWriter, "cr", 2, hasCorrelatedReducedTerms);
+	}
 
 	Datum finalDatum = PointerGetDatum(
 		PgbsonWriterGetPgbson(&querySpecWriter));
@@ -2190,7 +2276,9 @@ ModifyScanKeysForCompositeScan(ScanKey scankey, int nscankeys, ScanKey targetSca
 
 static void
 ParseCompositeQuerySpec(pgbson *querySpec, pgbsonelement *singleElement,
-						bool *isMultiKey, bool *isOrderBy, bool *isBackward)
+						bool *isMultiKey, bool *isOrderBy,
+						bool *hasCorrelatedReducedTerms,
+						bool *isBackward)
 {
 	bson_iter_t queryIter;
 	PgbsonInitIterator(querySpec, &queryIter);
@@ -2213,6 +2301,11 @@ ParseCompositeQuerySpec(pgbson *querySpec, pgbsonelement *singleElement,
 		else if (strcmp(key, "or") == 0)
 		{
 			*isOrderBy = *isOrderBy || bson_iter_bool(&queryIter);
+		}
+		else if (strcmp(key, "cr") == 0)
+		{
+			*hasCorrelatedReducedTerms = *hasCorrelatedReducedTerms || bson_iter_bool(
+				&queryIter);
 		}
 		else if (strcmp(key, "db") == 0)
 		{
@@ -2382,6 +2475,60 @@ GetCompositePathDataState(void *state, int i)
 }
 
 
+static bool
+IsCompositeRecursivePathMatch(void *state, int i)
+{
+	CompositeTermGenerateState *genState = (CompositeTermGenerateState *) state;
+	return genState->matchStatus[i] == IndexTraverse_Recurse ||
+		   genState->matchStatus[i] == IndexTraverse_MatchAndRecurse;
+}
+
+
+static int
+CompositeGetCurrentRecursivePaths(void *state)
+{
+	CompositeTermGenerateState *genState = (CompositeTermGenerateState *) state;
+	return list_length(genState->correlatedTerms);
+}
+
+
+static void
+UpdateCorrelatedTermPaths(void *state, int32_t *previousTermCounts, bool *termMatchStatus)
+{
+	CompositeTermGenerateState *genState = (CompositeTermGenerateState *) state;
+	MergedTermSet *termSet = palloc0(sizeof(MergedTermSet));
+	bool hasTerms = false;
+	for (int i = 0; i < (int) genState->pathCount; i++)
+	{
+		termSet->terms[i] = NULL;
+		if (!termMatchStatus[i])
+		{
+			termSet->numTerms[i] = -1;
+			continue;
+		}
+
+		hasTerms = true;
+		termSet->numTerms[i] = genState->pathData[i].terms.index - previousTermCounts[i];
+		if (termSet->numTerms[i] > 0)
+		{
+			termSet->terms[i] = palloc(sizeof(Datum) * termSet->numTerms[i]);
+			memcpy(termSet->terms[i],
+				   &genState->pathData[i].terms.entries[previousTermCounts[i]],
+				   termSet->numTerms[i] * sizeof(Datum));
+		}
+	}
+
+	if (hasTerms)
+	{
+		genState->correlatedTerms = lappend(genState->correlatedTerms, termSet);
+	}
+	else
+	{
+		pfree(termSet);
+	}
+}
+
+
 static IndexTraverseOption
 GetCompositePathGenerateTraverseOption(void *contextOptions,
 									   const char *currentPath, uint32_t
@@ -2482,50 +2629,62 @@ static uint32_t
 BuildSinglePathTermsForCompositeTermsNew(pgbson *bson,
 										 BsonGinCompositePathOptions *options,
 										 GinEntrySet *entries,
+										 CompositeTermGenerateState *termState,
 										 bool *entryHasMultiKey, bool *entryHasTruncation,
-										 uint32_t *pathCountOut)
+										 uint32_t *pathCountOut,
+										 List **correlatedTerms)
 {
-	CompositeTermGenerateState termState = { 0 };
-	termState.pathCount = (uint32_t) GetIndexPathsFromOptions(options,
-															  termState.indexPaths,
-															  termState.sortOrders);
-	*pathCountOut = termState.pathCount;
+	termState->pathCount = (uint32_t) GetIndexPathsFromOptions(options,
+															   termState->indexPaths,
+															   termState->sortOrders);
+	*pathCountOut = termState->pathCount;
 
-	for (uint32_t i = 0; i < termState.pathCount; i++)
+	termState->correlatedTerms = NIL;
+	for (uint32_t i = 0; i < termState->pathCount; i++)
 	{
 		bool allowValueOnly = false;
-		termState.pathOptions[i] = CreateSinglePathOptions(
-			termState.indexPaths[i], i, termState.pathCount, options, &allowValueOnly);
-		UpdateCompositePathData(&termState.pathData[i], termState.pathOptions[i],
-								allowValueOnly, termState.sortOrders[i]);
+		termState->pathOptions[i] = CreateSinglePathOptions(
+			termState->indexPaths[i], i, termState->pathCount, options, &allowValueOnly);
+		UpdateCompositePathData(&termState->pathData[i], termState->pathOptions[i],
+								allowValueOnly, termState->sortOrders[i]);
 	}
 
 	GenerateTermsContext context = { 0 };
-	context.pathDataState = (void *) &termState;
-	context.maxPaths = termState.pathCount;
+	context.pathDataState = (void *) termState;
+	context.maxPaths = termState->pathCount;
 	context.getPathDataFunc = GetCompositePathDataState;
+	context.isRecursivePathMatch = IsCompositeRecursivePathMatch;
+	context.currentRecursivePathIndex = CompositeGetCurrentRecursivePaths;
 
-	context.options = (void *) &termState;
+	if (options->enableCompositeReducedCorrelatedTerms)
+	{
+		context.enableCompositeReducedCorrelatedTerms = true;
+		context.updateCorrelatedTermPaths = UpdateCorrelatedTermPaths;
+	}
+
+	context.options = (void *) termState;
 	context.traverseOptionsFunc = &GetCompositePathGenerateTraverseOption;
 	SetGenerateTermsContextFlags(&context);
 	GenerateTermsForPath(bson, &context);
 
 	/* We will have at least 1 term */
 	uint32_t totalTermCount = 1;
-	for (uint32_t i = 0; i < termState.pathCount; i++)
+	for (uint32_t i = 0; i < termState->pathCount; i++)
 	{
-		entries[i].entries = termState.pathData[i].terms.entries;
-		entries[i].index = termState.pathData[i].terms.index;
-		entries[i].entryCapacity = termState.pathData[i].terms.entryCapacity;
+		entries[i].entries = termState->pathData[i].terms.entries;
+		entries[i].index = termState->pathData[i].terms.index;
+		entries[i].entryCapacity = termState->pathData[i].terms.entryCapacity;
 
-		*entryHasMultiKey = *entryHasMultiKey || termState.pathData[i].hasArrayValues;
+		*entryHasMultiKey = *entryHasMultiKey || termState->pathData[i].hasArrayValues;
 		*entryHasTruncation = *entryHasTruncation ||
-							  termState.pathData[i].hasTruncatedTerms;
+							  termState->pathData[i].hasTruncatedTerms;
 
-		totalTermCount = totalTermCount * termState.pathData[i].terms.index;
-		pfree(termState.pathOptions[i]);
+		totalTermCount = totalTermCount * termState->pathData[i].terms.index;
+		pfree(termState->pathOptions[i]);
+		termState->pathOptions[i] = NULL;
 	}
 
+	*correlatedTerms = termState->correlatedTerms;
 	return totalTermCount;
 }
 
@@ -2614,10 +2773,102 @@ AddTruncationOrMultiKeyTerms(Datum *indexEntries, uint32_t totalTermCount,
 }
 
 
+static void
+GenerateCompositedTerms(GinEntrySet *entrySet,
+						Datum *indexEntries, uint32_t totalTermCount, uint32_t pathCount,
+						bool *hasTruncation)
+{
+	bytea *compositeDatums[INDEX_MAX_KEYS] = { 0 };
+	for (uint32_t i = 0; i < totalTermCount; i++)
+	{
+		int termIndex = i;
+		for (uint32_t j = 0; j < pathCount; j++)
+		{
+			int32_t currentIndex = termIndex % entrySet[j].index;
+			termIndex = termIndex / entrySet[j].index;
+			Datum term = entrySet[j].entries[currentIndex];
+
+			bytea *termPointer = DatumGetByteaPP(term);
+			if (IsSerializedIndexTermTruncated(termPointer))
+			{
+				*hasTruncation = true;
+			}
+
+			compositeDatums[j] = termPointer;
+		}
+
+		BsonCompressableIndexTermSerialized serializedTerm =
+			SerializeCompositeBsonIndexTermWithCompression(compositeDatums, pathCount);
+		if (serializedTerm.isIndexTermTruncated)
+		{
+			*hasTruncation = true;
+		}
+
+		indexEntries[i] = serializedTerm.indexTermDatum;
+	}
+}
+
+
+static uint32_t
+PreprocessMergedTermSet(MergedTermSet *mergedSet, GinEntrySet *entrySet,
+						uint32_t pathCount, GinEntryPathData *pathData)
+{
+	uint32_t currentTotalTermCount = 1;
+	for (int i = 0; i < (int) pathCount; i++)
+	{
+		if (mergedSet->numTerms[i] < 0)
+		{
+			/* Current path was a mismatch for recursive correlation - use global set */
+			mergedSet->numTerms[i] = entrySet[i].index;
+			mergedSet->terms[i] = entrySet[i].entries;
+		}
+		else if (mergedSet->numTerms[i] == 0)
+		{
+			/* Current path matched but generated no terms - generate path not exists term */
+			mergedSet->terms[i] = palloc(sizeof(Datum));
+			mergedSet->numTerms[i] = 1;
+			mergedSet->terms[i][0] = GenerateValueUndefinedTerm(
+				&pathData[i].termMetadata);
+		}
+
+		currentTotalTermCount = currentTotalTermCount * mergedSet->numTerms[i];
+	}
+
+	return currentTotalTermCount;
+}
+
+
+static uint32_t
+BuildCurrentEntrySetFromMergedSet(MergedTermSet *mergedSet, GinEntrySet *currentEntrySet,
+								  uint32_t pathCount,
+								  GinEntryPathData *pathData)
+{
+	uint32_t currentTotalTermCount = 1;
+	for (int i = 0; i < (int) pathCount; i++)
+	{
+		if (mergedSet->numTerms[i] <= 0)
+		{
+			/* Current path was a mismatch for recursive correlation - use global set */
+			ereport(ERROR, (errmsg(
+								"Unexpected - mergedSet for reduced terms should not have 0 terms")));
+		}
+
+		/* Current path matched and had terms - use that instead */
+		currentEntrySet[i].entries = mergedSet->terms[i];
+		currentEntrySet[i].index = mergedSet->numTerms[i];
+		currentEntrySet[i].entryCapacity = mergedSet->numTerms[i];
+		currentTotalTermCount = currentTotalTermCount * currentEntrySet[i].index;
+	}
+
+	return currentTotalTermCount;
+}
+
+
 static Datum *
 GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 						   int32_t *nentries)
 {
+	CompositeTermGenerateState termState = { 0 };
 	GinEntrySet entrySet[INDEX_MAX_KEYS] = { 0 };
 	bool entryHasMultiKey = false;
 	bool entryHasTruncation = false;
@@ -2626,13 +2877,16 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 	IndexTermCreateMetadata overallMetadata = GetCompositeIndexTermMetadata(options);
 	uint32_t totalTermCount;
 	uint32_t pathCount;
+	List *correlatedTerms = NIL;
 	if (RumUseNewCompositeTermGeneration)
 	{
 		totalTermCount = BuildSinglePathTermsForCompositeTermsNew(bson, options,
 																  entrySet,
+																  &termState,
 																  &entryHasMultiKey,
 																  &entryHasTruncation,
-																  &pathCount);
+																  &pathCount,
+																  &correlatedTerms);
 	}
 	else
 	{
@@ -2651,39 +2905,68 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 			entryHasTruncation, nentries, &overallMetadata);
 	}
 
-	/* Now that we have the per term counts, generate the overall terms */
-	/* Add an additional one in case we need a truncated term */
-	int32_t finalEntryCapacity = (totalTermCount + 3);
-	Datum *indexEntries = palloc0(sizeof(Datum) * finalEntryCapacity);
 	bool hasTruncation = false;
+	int32_t finalEntryCapacity;
+	Datum *indexEntries;
 
-	bytea *compositeDatums[INDEX_MAX_KEYS] = { 0 };
-	for (uint32_t i = 0; i < totalTermCount; i++)
+	if (RumUseNewCompositeTermGeneration &&
+		options->enableCompositeReducedCorrelatedTerms &&
+		list_length(correlatedTerms) > 0)
 	{
-		int termIndex = i;
-		for (uint32_t j = 0; j < pathCount; j++)
-		{
-			int32_t currentIndex = termIndex % entrySet[j].index;
-			termIndex = termIndex / entrySet[j].index;
-			Datum term = entrySet[j].entries[currentIndex];
+		ListCell *cell;
 
-			bytea *termPointer = DatumGetByteaPP(term);
-			if (IsSerializedIndexTermTruncated(termPointer))
+		/* First pass, calculate num terms */
+		uint32_t computedTermCount = 0;
+		foreach(cell, correlatedTerms)
+		{
+			MergedTermSet *mergedSet = (MergedTermSet *) lfirst(cell);
+			uint32_t termCount = PreprocessMergedTermSet(mergedSet, entrySet, pathCount,
+														 termState.pathData);
+			computedTermCount += termCount;
+		}
+
+		/* Buffer the term count by 4 to account for the truncated or multi-key status terms added
+		 * below.
+		 */
+		uint32_t capacityBuffer = 4;
+		finalEntryCapacity = computedTermCount + capacityBuffer;
+		indexEntries = palloc(sizeof(Datum) * finalEntryCapacity);
+
+		totalTermCount = 0;
+		foreach(cell, correlatedTerms)
+		{
+			GinEntrySet currentEntrySet[INDEX_MAX_KEYS] = { 0 };
+			MergedTermSet *mergedSet = (MergedTermSet *) lfirst(cell);
+
+			uint32_t currentTotalTermCount =
+				BuildCurrentEntrySetFromMergedSet(mergedSet, currentEntrySet,
+												  pathCount, termState.pathData);
+
+			if (totalTermCount + currentTotalTermCount > computedTermCount)
 			{
-				hasTruncation = true;
+				ereport(ERROR, (errmsg(
+									"Generating more terms than computed capacity - this is a bug. totalTermCount %u, current %u, capacity %u",
+									totalTermCount, currentTotalTermCount,
+									finalEntryCapacity)));
 			}
 
-			compositeDatums[j] = termPointer;
+			GenerateCompositedTerms(currentEntrySet, &indexEntries[totalTermCount],
+									currentTotalTermCount, pathCount, &hasTruncation);
+			totalTermCount += currentTotalTermCount;
 		}
 
-		BsonCompressableIndexTermSerialized serializedTerm =
-			SerializeCompositeBsonIndexTermWithCompression(compositeDatums, pathCount);
-		if (serializedTerm.isIndexTermTruncated)
-		{
-			hasTruncation = true;
-		}
-
-		indexEntries[i] = serializedTerm.indexTermDatum;
+		/* Emit a term that tracks that this is a reduced correlated term set */
+		indexEntries[totalTermCount] = GenerateCorrelatedRootArrayTerm(&overallMetadata);
+		totalTermCount++;
+	}
+	else
+	{
+		/* Now that we have the per term counts, generate the overall terms */
+		/* Add an additional one in case we need a truncated term */
+		finalEntryCapacity = (totalTermCount + 3);
+		indexEntries = palloc0(sizeof(Datum) * finalEntryCapacity);
+		GenerateCompositedTerms(entrySet, indexEntries, totalTermCount, pathCount,
+								&hasTruncation);
 	}
 
 	return AddTruncationOrMultiKeyTerms(
@@ -2692,41 +2975,13 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 }
 
 
-static Datum *
-GenerateCompositeExtractQueryUniqueEqual(pgbson *bson,
-										 BsonGinCompositePathOptions *options,
-										 int32_t *nentries, bool **partialMatch,
-										 Pointer **extra_data,
-										 CompositeQueryRunData *runData)
+static void
+GenerateCompositedUniqueEqualQueryValues(Datum *indexEntries, bool *partialMatch,
+										 Pointer *extra_data, uint32_t totalTermCount,
+										 GinEntrySet *entrySet, uint32_t pathCount,
+										 CompositeQueryRunData *runData,
+										 BsonGinCompositePathOptions *options)
 {
-	uint32_t pathCount;
-	GinEntrySet entrySet[INDEX_MAX_KEYS] = { 0 };
-	bool hasArrayPaths = false;
-	bool hasTruncation = false;
-	uint32_t totalTermCount;
-	if (RumUseNewCompositeTermGeneration)
-	{
-		totalTermCount = BuildSinglePathTermsForCompositeTermsNew(bson, options,
-																  entrySet,
-																  &hasArrayPaths,
-																  &hasTruncation,
-																  &pathCount);
-	}
-	else
-	{
-		totalTermCount = BuildSinglePathTermsForCompositeTerms(bson, options,
-															   entrySet,
-															   &hasArrayPaths,
-															   &hasTruncation,
-															   &pathCount);
-	}
-
-	/* Now that we have the per term counts, generate the overall terms */
-	/* Add an additional one in case we need a truncated term */
-	Datum *indexEntries = palloc0(sizeof(Datum) * totalTermCount);
-	*partialMatch = palloc0(sizeof(bool) * totalTermCount);
-	*extra_data = palloc0(sizeof(Pointer) * totalTermCount);
-
 	bytea *compositeDatums[INDEX_MAX_KEYS] = { 0 };
 	for (uint32_t i = 0; i < totalTermCount; i++)
 	{
@@ -2734,6 +2989,7 @@ GenerateCompositeExtractQueryUniqueEqual(pgbson *bson,
 		bool hasTruncationInEntry = false;
 		bool hasNullsInEntry = false;
 		CompositeQueryRunData *runDataForEntry = runData;
+		partialMatch[i] = false;
 		for (uint32_t j = 0; j < pathCount; j++)
 		{
 			int32_t currentIndex = termIndex % entrySet[j].index;
@@ -2752,7 +3008,7 @@ GenerateCompositeExtractQueryUniqueEqual(pgbson *bson,
 				indexTerm.element.bsonValue.value_type == BSON_TYPE_NULL)
 			{
 				/* Set partial match info */
-				(*partialMatch)[i] = true;
+				partialMatch[i] = true;
 				hasNullsInEntry = true;
 
 				/* Clone runData if not done already */
@@ -2808,7 +3064,106 @@ GenerateCompositeExtractQueryUniqueEqual(pgbson *bson,
 		BsonIndexTermSerialized serializedTerm = SerializeCompositeBsonIndexTerm(
 			compositeDatums, pathCount);
 		indexEntries[i] = PointerGetDatum(serializedTerm.indexTermVal);
-		(*extra_data)[i] = (Pointer) runDataForEntry;
+		extra_data[i] = (Pointer) runDataForEntry;
+	}
+}
+
+
+static Datum *
+GenerateCompositeExtractQueryUniqueEqual(pgbson *bson,
+										 BsonGinCompositePathOptions *options,
+										 int32_t *nentries, bool **partialMatch,
+										 Pointer **extra_data,
+										 CompositeQueryRunData *runData)
+{
+	uint32_t pathCount;
+	CompositeTermGenerateState termState = { 0 };
+	GinEntrySet entrySet[INDEX_MAX_KEYS] = { 0 };
+	bool hasArrayPaths = false;
+	bool hasTruncation = false;
+	uint32_t totalTermCount;
+	List *correlatedTerms = NIL;
+	if (RumUseNewCompositeTermGeneration)
+	{
+		totalTermCount = BuildSinglePathTermsForCompositeTermsNew(bson, options,
+																  entrySet,
+																  &termState,
+																  &hasArrayPaths,
+																  &hasTruncation,
+																  &pathCount,
+																  &correlatedTerms);
+	}
+	else
+	{
+		totalTermCount = BuildSinglePathTermsForCompositeTerms(bson, options,
+															   entrySet,
+															   &hasArrayPaths,
+															   &hasTruncation,
+															   &pathCount);
+	}
+
+	/* Now that we have the per term counts, generate the overall terms */
+	/* Add an additional one in case we need a truncated term */
+	Datum *indexEntries;
+	if (options->enableCompositeReducedCorrelatedTerms &&
+		list_length(correlatedTerms) > 0)
+	{
+		ListCell *cell;
+		bool *partialMatchInner = palloc(sizeof(bool) * 1);
+		indexEntries = palloc(sizeof(Datum) * 1);
+		Pointer *extraDataInner = palloc(sizeof(Pointer) * 1);
+
+		/* First pass, calculate num terms */
+		uint32_t finalEntryCapacity = 0;
+		foreach(cell, correlatedTerms)
+		{
+			MergedTermSet *mergedSet = (MergedTermSet *) lfirst(cell);
+			uint32_t termCount = PreprocessMergedTermSet(mergedSet, entrySet, pathCount,
+														 termState.pathData);
+			finalEntryCapacity += termCount;
+		}
+
+		indexEntries = repalloc(indexEntries, sizeof(Datum) * finalEntryCapacity);
+		partialMatchInner = repalloc(partialMatchInner, sizeof(bool) *
+									 finalEntryCapacity);
+		extraDataInner = repalloc(extraDataInner, sizeof(Pointer) *
+								  finalEntryCapacity);
+		totalTermCount = 0;
+		foreach(cell, correlatedTerms)
+		{
+			GinEntrySet currentEntrySet[INDEX_MAX_KEYS] = { 0 };
+			MergedTermSet *mergedSet = (MergedTermSet *) lfirst(cell);
+
+			uint32_t currentTotalTermCount =
+				BuildCurrentEntrySetFromMergedSet(mergedSet, currentEntrySet,
+												  pathCount, termState.pathData);
+
+			if (totalTermCount + currentTotalTermCount > (uint32_t) finalEntryCapacity)
+			{
+				ereport(ERROR, (errmsg(
+									"Generating more terms than computed capacity - this is a bug. totalTermCount %u, current %u, capacity %u",
+									totalTermCount, currentTotalTermCount,
+									finalEntryCapacity)));
+			}
+
+			GenerateCompositedUniqueEqualQueryValues(
+				&indexEntries[totalTermCount], &partialMatchInner[totalTermCount],
+				&extraDataInner[totalTermCount],
+				currentTotalTermCount, currentEntrySet, pathCount, runData, options);
+			totalTermCount += currentTotalTermCount;
+		}
+
+		*partialMatch = partialMatchInner;
+		*extra_data = extraDataInner;
+	}
+	else
+	{
+		indexEntries = palloc0(sizeof(Datum) * totalTermCount);
+		*partialMatch = palloc0(sizeof(bool) * totalTermCount);
+		*extra_data = palloc0(sizeof(Pointer) * totalTermCount);
+		GenerateCompositedUniqueEqualQueryValues(
+			indexEntries, *partialMatch, *extra_data, totalTermCount, entrySet,
+			pathCount, runData, options);
 	}
 
 

@@ -20,11 +20,13 @@ bool GetEqualityRangePredicatesForIndexPath(struct IndexPath *indexPath, void *o
 bool CompositePathHasFirstColumnSpecified(IndexPath *indexPath);
 char *SerializeBoundsStringForExplain(bytea * entry, void *extraData, PG_FUNCTION_ARGS);
 
-Datum FormCompositeDatumFromQuals(List *indexQuals, List *indexOrderBy, bool isMultiKey);
+Datum FormCompositeDatumFromQuals(List *indexQuals, List *indexOrderBy, bool isMultiKey,
+								  bool hasCorrelatedReducedTerm);
 char * SerializeCompositeIndexKeyForExplain(bytea *entry);
 bool ModifyScanKeysForCompositeScan(ScanKey scankey, int nscankeys, ScanKey
-									targetScanKey, bool hasArrayKeys, bool hasOrderBys,
-									ScanDirection scanDirection);
+									targetScanKey, bool hasArrayKeys, bool
+									hasCorrelatedReducedTerms,
+									bool hasOrderBys, ScanDirection scanDirection);
 ScanDirection DetermineCompositeScanDirection(bytea *compositeScanOptions,
 											  ScanKey orderbys, int norderbys);
  #endif

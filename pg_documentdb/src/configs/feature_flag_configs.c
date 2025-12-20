@@ -122,6 +122,16 @@ bool RumUseNewCompositeTermGeneration = DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENER
 #define DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX false
 bool EnableCompositeWildcardIndex = DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX;
 
+#define DEFAULT_ENABLE_REDUCED_CORRELATED_TERMS false
+bool EnableCompositeReducedCorrelatedTerms = DEFAULT_ENABLE_REDUCED_CORRELATED_TERMS;
+
+#define DEFAULT_ENABLE_UNIQUE_REDUCED_CORRELATED_TERMS false
+bool EnableUniqueCompositeReducedCorrelatedTerms =
+	DEFAULT_ENABLE_UNIQUE_REDUCED_CORRELATED_TERMS;
+
+#define DEFAULT_ENABLE_COMPOSITE_SHARD_DOCUMENT_TERMS true
+bool EnableCompositeShardDocumentTerms = DEFAULT_ENABLE_COMPOSITE_SHARD_DOCUMENT_TERMS;
+
 /*
  * SECTION: Planner feature flags
  */
@@ -746,6 +756,30 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable composite wildcard index support"),
 		NULL, &EnableCompositeWildcardIndex, DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableCompositeReducedCorrelatedTerms", newGucPrefix),
+		gettext_noop(
+			"Whether to enable reduced term generation for correlated composite paths."),
+		NULL, &EnableCompositeReducedCorrelatedTerms,
+		DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableUniqueCompositeReducedCorrelatedTerms", newGucPrefix),
+		gettext_noop(
+			"Whether to enable reduced term generation for correlated composite paths for unique indexes."),
+		NULL, &EnableUniqueCompositeReducedCorrelatedTerms,
+		DEFAULT_ENABLE_UNIQUE_REDUCED_CORRELATED_TERMS,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableCompositeShardDocumentTerms", newGucPrefix),
+		gettext_noop(
+			"Whether to enable shard hash term generation for composite indexes (specially for null handling)."),
+		NULL, &EnableCompositeShardDocumentTerms,
+		DEFAULT_ENABLE_COMPOSITE_SHARD_DOCUMENT_TERMS,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

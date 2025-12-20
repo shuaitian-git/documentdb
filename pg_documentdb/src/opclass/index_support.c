@@ -2345,6 +2345,28 @@ UpdateEqualityPrefixesAndGetSortOrder(const char *queryPath, bytea *opClassOptio
 			break;
 		}
 
+		case BSON_INDEX_STRATEGY_DOLLAR_GREATER_EQUAL:
+		{
+			/* this is not a full scan (only exists: true is allowed) */
+			if (optionalQueryValue->value_type != BSON_TYPE_MINKEY)
+			{
+				nonEqualityPrefixes[columnNumber] = true;
+			}
+
+			break;
+		}
+
+		case BSON_INDEX_STRATEGY_DOLLAR_LESS_EQUAL:
+		{
+			/* this is not a full scan (only <= MaxKey is allowed) */
+			if (optionalQueryValue->value_type != BSON_TYPE_MAXKEY)
+			{
+				nonEqualityPrefixes[columnNumber] = true;
+			}
+
+			break;
+		}
+
 		case BSON_INDEX_STRATEGY_INVALID:
 		{
 			if (expr->opno == BsonRangeMatchOperatorOid() &&
