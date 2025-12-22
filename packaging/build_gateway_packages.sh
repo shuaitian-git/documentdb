@@ -173,7 +173,7 @@ if [[ $TEST_CLEAN_INSTALL == true ]]; then
             --build-arg BASE_IMAGE="$TEST_DOCKER_IMAGE" \
             --build-arg POSTGRES_VERSION="$PG" \
             --build-arg DEB_PACKAGE_REL_PATH="$deb_package_rel_path" \
-            --build-arg GATEWAY_PACKAGE_PATH="$gateway_package_rel_path" "$script_dir"
+            --build-arg DEB_GATEWAY_PACKAGE_REL_PATH="$gateway_package_rel_path" "$script_dir"
         # Run the Docker container to test the packages
         docker run --rm documentdb-test-gateway-packages:latest
 

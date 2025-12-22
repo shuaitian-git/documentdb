@@ -13,8 +13,8 @@
 #     docker build --target test-gateway \
 #       --build-arg BASE_IMAGE=ubuntu:22.04 \
 #       --build-arg POSTGRES_VERSION=17 \
-#       --build-arg DEB_PACKAGE_REL_PATH=packages/documentdb.deb \
-#       --build-arg GATEWAY_PACKAGE_PATH=packages/documentdb-gateway.deb \
+#       --build-arg DEB_PACKAGE_REL_PATH=packages/postgresql-17-documentdb_1.0.0_amd64.deb \
+#       --build-arg DEB_GATEWAY_PACKAGE_REL_PATH=packages/documentdb-gateway_1.0.0_amd64.deb \
 #       -f Dockerfile-deb-test .
 
 ARG BASE_IMAGE=debian:bookworm
@@ -83,16 +83,16 @@ ENTRYPOINT ["test-install-entrypoint.sh"]
 
 # ----------- Gateway Test Target -----------
 FROM base AS gateway-base
-ARG GATEWAY_PACKAGE_PATH
+ARG DEB_GATEWAY_PACKAGE_REL_PATH
 
 # Install gateway package (only if path provided)
-RUN if [ -n "${GATEWAY_PACKAGE_PATH}" ]; then \
+RUN if [ -n "${DEB_GATEWAY_PACKAGE_REL_PATH}" ]; then \
         echo "Installing gateway package..."; \
     else \
-        echo "ERROR: GATEWAY_PACKAGE_PATH required for gateway target" >&2; exit 1; \
+        echo "ERROR: DEB_GATEWAY_PACKAGE_REL_PATH required for gateway target" >&2; exit 1; \
     fi
-COPY ${GATEWAY_PACKAGE_PATH} /tmp/install_setup/
-RUN dpkg -i /tmp/install_setup/$(basename "${GATEWAY_PACKAGE_PATH}")
+COPY ${DEB_GATEWAY_PACKAGE_REL_PATH} /tmp/install_setup/
+RUN dpkg -i /tmp/install_setup/$(basename "${DEB_GATEWAY_PACKAGE_REL_PATH}")
 
 RUN useradd -ms /bin/bash documentdb -G sudo && \
     echo "%sudo ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers.d/no-pass-ask
