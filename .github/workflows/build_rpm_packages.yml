@@ -45,9 +45,9 @@ jobs:
       - name: Upload RPM Package as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-documentdb-${{ env.DOCUMENTDB_VERSION }}
+          name: documentdb-${{ env.DOCUMENTDB_VERSION }}-${{ matrix.os }}-pg${{ matrix.pg_version }}-${{ matrix.arch }}
           path: |
             packaging/*.rpm
-          retention-days: 7
+          retention-days: 90
           if-no-files-found: error
           compression-level: 0
