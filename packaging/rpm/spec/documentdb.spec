@@ -7,7 +7,7 @@ Release:        1%{?dist}
 Summary:        DocumentDB is the open-source engine powering vCore-based Azure Cosmos DB for MongoDB
 
 License:        MIT
-URL:            https://github.com/microsoft/documentdb
+URL:            https://github.com/documentdb/documentdb
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  gcc
@@ -88,6 +88,8 @@ rm -rf %{buildroot}/usr/src/documentdb/build
 
 %files
 %defattr(-,root,root,-)
+%license LICENSE
+%doc README.md NOTICE
 /usr/pgsql-%{pg_version}/lib/*.so
 /usr/pgsql-%{pg_version}/share/extension/*.control
 /usr/pgsql-%{pg_version}/share/extension/*.sql
