@@ -1,47 +1,147 @@
+# Unified DEB Test Dockerfile
+# Supports testing both core-only and full gateway installations
+#
+# Usage:
+#   DocumentDB test only:
+#     docker build --target test-documentdb \
+#       --build-arg BASE_IMAGE=debian:bookworm \
+#       --build-arg POSTGRES_VERSION=16 \
+#       --build-arg DEB_PACKAGE_REL_PATH=packages/postgresql-16-documentdb_1.0.0_amd64.deb \
+#       -f Dockerfile-deb-test .
+#
+#   Gateway test (requires both packages):
+#     docker build --target test-gateway \
+#       --build-arg BASE_IMAGE=ubuntu:22.04 \
+#       --build-arg POSTGRES_VERSION=17 \
+#       --build-arg DEB_PACKAGE_REL_PATH=packages/documentdb.deb \
+#       --build-arg GATEWAY_PACKAGE_PATH=packages/documentdb-gateway.deb \
+#       -f Dockerfile-deb-test .
+
 ARG BASE_IMAGE=debian:bookworm
-FROM ${BASE_IMAGE}
+FROM ${BASE_IMAGE} AS base
 ARG DEBIAN_FRONTEND=noninteractive
-
 ARG POSTGRES_VERSION=16
-ARG DEB_PACKAGE_REL_PATH=packages/postgresql-16-documentdb-1_1.0.0_amd64.deb
+ARG DEB_PACKAGE_REL_PATH
 
-RUN apt-get update
+# Fail fast if required build arg is missing
+RUN [ -n "${DEB_PACKAGE_REL_PATH}" ] || \
+    (echo "ERROR: DEB_PACKAGE_REL_PATH build-arg is required" >&2; exit 1)
 
-RUN apt-get install -y --no-install-recommends \
-    make \
-    wget \
-    gnupg2 \
-    lsb-release \
-    ca-certificates \
-    locales \
-    python3
+# Base tools + locale
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        make \
+        wget \
+        gnupg2 \
+        lsb-release \
+        ca-certificates \
+        locales \
+        python3 \
+        sudo && \
+    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
+    locale-gen en_US.UTF-8 && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
-    locale-gen en_US.UTF-8
+ENV LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+    LANGUAGE=en_US \
+    LC_COLLATE=en_US.UTF-8 \
+    LC_CTYPE=en_US.UTF-8
 
-ENV LC_ALL=en_US.UTF-8
-ENV LANGUAGE=en_US
-ENV LC_COLLATE=en_US.UTF-8
-ENV LC_CTYPE=en_US.UTF-8
-ENV LANG=en_US.UTF-8
+# Add PostgreSQL upstream repo (modern keyring method)
+RUN install -d -m 0755 /etc/apt/keyrings && \
+    wget -qO /etc/apt/keyrings/pgdg.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+    echo "deb [signed-by=/etc/apt/keyrings/pgdg.asc] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main ${POSTGRES_VERSION}" \
+        > /etc/apt/sources.list.d/pgdg.list
 
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main ${POSTGRES_VERSION}" > /etc/apt/sources.list.d/pgdg.list && \
-    wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+# Install PostgreSQL and extensions
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        postgresql-${POSTGRES_VERSION} \
+        postgresql-${POSTGRES_VERSION}-cron \
+        postgresql-${POSTGRES_VERSION}-pgvector \
+        postgresql-${POSTGRES_VERSION}-postgis-3 \
+        $(if [ "${POSTGRES_VERSION}" -lt 18 ]; then echo "postgresql-${POSTGRES_VERSION}-rum"; fi) && \
+    rm -rf /var/lib/apt/lists/*
 
-# actual dependencies of the package
-RUN apt-get update && apt-get install -y \
-    postgresql-${POSTGRES_VERSION} \
-    postgresql-${POSTGRES_VERSION}-cron \
-    postgresql-${POSTGRES_VERSION}-pgvector \
-    postgresql-${POSTGRES_VERSION}-postgis-3 \
-    $(if [ "${POSTGRES_VERSION}" -lt 18 ]; then echo "postgresql-${POSTGRES_VERSION}-rum"; else echo ""; fi)
+# Install DocumentDB package
+RUN mkdir -p /tmp/install_setup
+COPY ${DEB_PACKAGE_REL_PATH} /tmp/install_setup/
+RUN dpkg -i /tmp/install_setup/$(basename "${DEB_PACKAGE_REL_PATH}")
+
+# ----------- DocumentDB Test Target -----------
+FROM base AS test-documentdb
+ARG POSTGRES_VERSION
 
 WORKDIR /test-install
-
 COPY . /test-install
 
-RUN dpkg -i ${DEB_PACKAGE_REL_PATH}
-
 COPY packaging/test_packages/test-install-entrypoint.sh /usr/local/bin/test-install-entrypoint.sh
+RUN chmod +x /usr/local/bin/test-install-entrypoint.sh
 
 ENTRYPOINT ["test-install-entrypoint.sh"]
+
+# ----------- Gateway Test Target -----------
+FROM base AS gateway-base
+ARG GATEWAY_PACKAGE_PATH
+
+# Install gateway package (only if path provided)
+RUN if [ -n "${GATEWAY_PACKAGE_PATH}" ]; then \
+        echo "Installing gateway package..."; \
+    else \
+        echo "ERROR: GATEWAY_PACKAGE_PATH required for gateway target" >&2; exit 1; \
+    fi
+COPY ${GATEWAY_PACKAGE_PATH} /tmp/install_setup/
+RUN dpkg -i /tmp/install_setup/$(basename "${GATEWAY_PACKAGE_PATH}")
+
+RUN useradd -ms /bin/bash documentdb -G sudo && \
+    echo "%sudo ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers.d/no-pass-ask
+
+FROM gateway-base AS test-gateway
+ARG POSTGRES_VERSION
+
+RUN groupmod -g 103 postgres && usermod -u 105 -g 103 postgres
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        jq openssl lsof libc6 python3-venv netcat-openbsd && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV LANGUAGE=en_US.UTF-8 \
+    TERM=xterm-256color \
+    CERT_PATH="" \
+    KEY_FILE="" \
+    DATA_PATH="/data" \
+    DOCUMENTDB_PORT="10260" \
+    ENABLE_TELEMETRY="false" \
+    LOG_LEVEL="info" \
+    USERNAME="default_user" \
+    CREATE_USER="true" \
+    START_POSTGRESQL="true" \
+    POSTGRESQL_PORT="9712" \
+    OWNER="documentdb" \
+    PG_VERSION_USED="${POSTGRES_VERSION}" \
+    ALLOW_EXTERNAL_CONNECTIONS="false" \
+    PATH=/usr/lib/postgresql/${POSTGRES_VERSION}/bin:$PATH
+
+RUN mkdir -p /home/documentdb/gateway/pg_documentdb_gw/target/release-with-symbols && \
+    ln -s /usr/bin/documentdb_gateway /home/documentdb/gateway/pg_documentdb_gw/target/release-with-symbols/documentdb_gateway
+
+# Create /var/run/postgresql directory with proper permissions
+RUN mkdir -p /var/run/postgresql && \
+    chown -R documentdb:documentdb /var/run/postgresql && \
+    chmod 755 /var/run/postgresql
+
+COPY pg_documentdb_gw/SetupConfiguration.json /home/documentdb/gateway/pg_documentdb_gw/SetupConfiguration.json
+COPY scripts/start_oss_server.sh /home/documentdb/gateway/scripts/start_oss_server.sh
+COPY scripts/build_and_start_gateway.sh /home/documentdb/gateway/scripts/build_and_start_gateway.sh
+COPY scripts/emulator_entrypoint.sh /home/documentdb/gateway/scripts/emulator_entrypoint.sh
+COPY scripts/utils.sh /home/documentdb/gateway/scripts/utils.sh
+COPY scripts/setup_psqlrc.sh /home/documentdb/gateway/scripts/setup_psqlrc.sh
+COPY packaging/test_packages/test_gateway.py /home/documentdb/gateway/scripts/test_gateway.py
+COPY packaging/test_packages/test-gateway-install-entrypoint.sh /home/documentdb/gateway/scripts/test-gateway-install-entrypoint.sh
+
+USER documentdb
+RUN sudo chown -R documentdb:documentdb /home/documentdb/gateway
+
+WORKDIR /home/documentdb/gateway/scripts
+ENTRYPOINT ["/bin/bash", "-c", "/home/documentdb/gateway/scripts/test-gateway-install-entrypoint.sh"]

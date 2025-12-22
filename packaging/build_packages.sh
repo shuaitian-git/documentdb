@@ -10,7 +10,7 @@ function show_help {
     echo "Usage: $0 --os <OS> --pg <PG_VERSION> [--test-clean-install] [--output-dir <DIR>] [-h|--help]"
     echo ""
     echo "Description:"
-    echo "  This script builds extension packages (DEB/RPM) using Docker."
+    echo "  This script builds DocumentDB packages (DEB/RPM) using Docker."
     echo ""
     echo "Mandatory Arguments:"
     echo "  --os                 OS to build packages for. Possible values: [deb11, deb12, ubuntu22.04, ubuntu24.04, rhel8, rhel9]"
@@ -189,8 +189,10 @@ if [[ $TEST_CLEAN_INSTALL == true ]]; then
 
         echo "Debian package path passed into Docker build: $deb_package_rel_path"
 
-        # Build the Docker image while showing the output to the console
-    docker build -t documentdb-test-packages:latest -f "${script_dir}/packaging/test_packages/deb/Dockerfile-deb-test" \
+        # Build the Docker image using unified test Dockerfile (documentdb target)
+        docker build -t documentdb-test-packages:latest \
+            --target test-documentdb \
+            -f "${script_dir}/packaging/test_packages/deb/Dockerfile-deb-test" \
             --build-arg BASE_IMAGE="$DOCKER_IMAGE" \
             --build-arg POSTGRES_VERSION="$PG" \
             --build-arg DEB_PACKAGE_REL_PATH="$deb_package_rel_path" "$script_dir"
