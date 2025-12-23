@@ -128,7 +128,7 @@ if [[ $TEST_CLEAN_INSTALL == true ]]; then
         --build-arg BASE_IMAGE="debian:bookworm-slim" \
         --build-arg POSTGRES_VERSION="$PG_VERSION" \
         --build-arg DEB_PACKAGE_REL_PATH="$DOCUMENTDB_PACKAGE" \
-        --build-arg GATEWAY_PACKAGE_PATH="$gateway_package_rel_path" "$script_dir"
+        --build-arg DEB_GATEWAY_PACKAGE_REL_PATH="$gateway_package_rel_path" "$script_dir"
 
     # Run the test
     docker run --rm documentdb-test-gateway:latest
