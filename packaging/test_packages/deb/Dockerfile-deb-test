@@ -1,5 +1,5 @@
 # Unified DEB Test Dockerfile
-# Supports testing both core-only and full gateway installations
+# Supports testing both documentdb-only and documentdb with gateway installations
 #
 # Usage:
 #   DocumentDB test only:

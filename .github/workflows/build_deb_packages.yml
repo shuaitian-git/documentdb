@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   # Build DocumentDB packages (per OS, arch, PG version)
-  build-deb-packages:
+  build-documentdb:
     runs-on: ${{ matrix.runner }}
     name: DEB ${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}
     if: github.event.pull_request.draft == false
@@ -60,20 +60,21 @@ jobs:
           compression-level: 0
 
   # Build Gateway package (once per arch - distro and PG agnostic)
-  build-gateway:
+  build-documentdb-gateway:
     runs-on: ${{ matrix.runner }}
     name: Gateway ${{ matrix.arch }}
     if: github.event.pull_request.draft == false
-    needs: build-deb-packages
+    needs: build-documentdb
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-          - arch: arm64
-            runner: ubuntu-24.04-arm
+        # For PRs: only build amd64 (matches deb12-amd64-pg17 from build-documentdb)
+        # For full builds: build both architectures
+        ${{ fromJson(
+          github.event_name == 'pull_request' &&
+          '{"include":[{"arch":"amd64","runner":"ubuntu-24.04","test_os":"deb12","test_pg":"17"}]}' ||
+          '{"include":[{"arch":"amd64","runner":"ubuntu-24.04","test_os":"deb12","test_pg":"17"},{"arch":"arm64","runner":"ubuntu-24.04-arm","test_os":"deb12","test_pg":"17"}]}'
+        ) }}
 
     steps:
       - name: Checkout repository
@@ -90,12 +91,12 @@ jobs:
       - name: Download a DocumentDB package for testing
         uses: actions/download-artifact@v4
         with:
-          name: documentdb-${{ steps.version.outputs.documentdb_version }}-deb12-pg17-${{ matrix.arch }}
+          name: documentdb-${{ steps.version.outputs.documentdb_version }}-${{ matrix.test_os }}-pg${{ matrix.test_pg }}-${{ matrix.arch }}
           path: packaging/
 
       - name: Build Gateway Package
         run: |
-          deb_package=$(ls packaging/ | grep -E "deb12-postgresql-17-documentdb_" | grep -v "dbg" | head -n1)
+          deb_package=$(ls packaging/ | grep -E "${{ matrix.test_os }}-postgresql-${{ matrix.test_pg }}-documentdb_" | grep -v "dbg" | head -n1)
           ./packaging/build_gateway_packages.sh --test-clean-install --documentdb-package "packaging/${deb_package}"
 
       - name: Upload Gateway Package
