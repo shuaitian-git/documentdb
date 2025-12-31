@@ -23,12 +23,6 @@ set documentdb.enableExtendedExplainPlans to on;
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
     '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$gt": 120, "$lt": 150 } } } }');
 
--- without the GUC becomes a disjoint index filter
-set documentdb.useNewElemMatchIndexOperatorOnPushdown to off;
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$gt": 120, "$lt": 150 } } } }');
-reset documentdb.useNewElemMatchIndexOperatorOnPushdown;
-
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
     '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$in": [ 120, 140 ], "$gt": 121 } } } }');
 
@@ -67,3 +61,32 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
 -- disjoint filter handling for elemMatch and non elemMatch: this matches a document since these are matching different elements of the array.
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
     '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$eq": 110, "$elemMatch": { "$gt": 155, "$lt": 165 } } } }');
+
+
+-- test scenarios with prefix index and suffix object filters
+SELECT COUNT(documentdb_api.insert_one('comp_elmdb', 'setup_1', 
+    FORMAT('{ "_id": %s, "orgId": "8970674054893216127", "delFlag": 1, "state": 1, "workflowNodeList": [ { "nodePersonList": [ { "state": 4, "delFlag": 1, "personId": "5521063216615886977" } ] }] }', i)::bson)) FROM generate_series(1, 1000) i;
+
+SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_elmdb',
+    '{ "createIndexes": "setup_1", "indexes": [ { "key": { "orgId": 1, "delFlag": 1, "state": 1, "workFlowNodeList.nodePersonList.personId": 1, "workFlowNodeList.nodePersonList.state": 1, "workFlowNodeList.nodePersonList.delFlag": 1, "name": 1 }, "name": "idx2", "enableOrderedIndex": true } ] }', TRUE);
+
+ANALYZE documentdb_data.documents_10642;
+EXPLAIN (VERBOSE ON, COSTS OFF, VERBOSE ON) SELECT document from bson_aggregation_find('comp_elmdb',
+    '{ "find": "setup_1", "filter": { "orgId": { "$in": [ "8970674054893216127", "7368253168030687073" ] }, "delFlag": 1, "state": { "$in": [ 1, 2, 3 ] }, "workFlowNodeList.nodePersonList": { "$elemMatch": { "personId": "5521063216615886977", "state": 4, "delFlag": 1 } } } }');
+
+SELECT documentdb_api_internal.create_indexes_non_concurrently('comp_elmdb',
+    '{ "createIndexes": "setup_1", "indexes": [ { "key": {"orgId": 1, "delFlag": 1, "state":1, "createTime": -1 }, "name": "idx1", "enableOrderedIndex": true } ] }', TRUE);
+
+-- picks idx1 due to cost function being equivalent.
+ANALYZE documentdb_data.documents_10642;
+EXPLAIN (VERBOSE ON, COSTS OFF, VERBOSE ON) SELECT document from bson_aggregation_find('comp_elmdb',
+    '{ "find": "setup_1", "filter": { "orgId": { "$in": [ "8970674054893216127", "7368253168030687073" ] }, "delFlag": 1, "state": { "$in": [ 1, 2, 3 ] }, "workFlowNodeList.nodePersonList": { "$elemMatch": { "personId": "5521063216615886977", "state": 4, "delFlag": 1 } } } }');
+
+set enable_seqscan to off;
+set enable_bitmapscan to off;
+set documentdb.enablecompositeindexplanner to on;
+
+-- TODO: We need to ensure the costing of rum indexes with composite works better here.
+SELECT documentdb_distributed_test_helpers.drop_primary_key('comp_elmdb', 'setup_1');
+EXPLAIN (VERBOSE ON, COSTS OFF, VERBOSE ON) SELECT document from bson_aggregation_find('comp_elmdb',
+    '{ "find": "setup_1", "filter": { "orgId": { "$in": [ "8970674054893216127", "7368253168030687073" ] }, "delFlag": 1, "state": { "$in": [ 1, 2, 3 ] }, "workFlowNodeList.nodePersonList": { "$elemMatch": { "personId": "5521063216615886977", "state": 4, "delFlag": 1 } } } }');
