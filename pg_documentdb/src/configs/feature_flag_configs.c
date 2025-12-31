@@ -86,10 +86,6 @@ bool EnableCompositeIndexPlanner = DEFAULT_ENABLE_COMPOSITE_INDEX_PLANNER;
 #define DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN true
 bool EnableIndexOrderbyPushdown = DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN;
 
-/* Remove in v110 */
-#define DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE true
-bool EnableIndexOrderByReverse = DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE;
-
 /* We can enable by default once we stabilize by moving it's creation to the cost estimate. */
 #define DEFAULT_ENABLE_INDEX_ONLY_SCAN false
 bool EnableIndexOnlyScan = DEFAULT_ENABLE_INDEX_ONLY_SCAN;
@@ -138,9 +134,6 @@ bool EnableCompositeShardDocumentTerms = DEFAULT_ENABLE_COMPOSITE_SHARD_DOCUMENT
 #define DEFAULT_ENABLE_NEW_OPERATOR_SELECTIVITY false
 bool EnableNewOperatorSelectivityMode = DEFAULT_ENABLE_NEW_OPERATOR_SELECTIVITY;
 
-#define DEFAULT_DISABLE_DOLLAR_FUNCTION_SELECTIVITY false
-bool DisableDollarSupportFuncSelectivity = DEFAULT_DISABLE_DOLLAR_FUNCTION_SELECTIVITY;
-
 /* Remove after v109 */
 #define DEFAULT_LOOKUP_ENABLE_INNER_JOIN true
 bool EnableLookupInnerJoin = DEFAULT_LOOKUP_ENABLE_INNER_JOIN;
@@ -151,15 +144,8 @@ bool ForceBitmapScanForLookup = DEFAULT_FORCE_BITMAP_SCAN_FOR_LOOKUP;
 #define DEFAULT_LOW_SELECTIVITY_FOR_LOOKUP true
 bool LowSelectivityForLookup = DEFAULT_LOW_SELECTIVITY_FOR_LOOKUP;
 
-#define DEFAULT_SET_SELECTIVITY_FOR_FULL_SCAN true
-bool SetSelectivityForFullScan = DEFAULT_SET_SELECTIVITY_FOR_FULL_SCAN;
-
 #define DEFAULT_USE_NEW_ELEMMATCH_INDEX_PUSHDOWN false
 bool UseNewElemMatchIndexPushdown = DEFAULT_USE_NEW_ELEMMATCH_INDEX_PUSHDOWN;
-
-#define DEFAULT_USE_NEW_ELEMMATCH_INDEX_OPERATOR_ON_PUSHDOWN true
-bool UseNewElemMatchIndexOperatorOnPushdown =
-	DEFAULT_USE_NEW_ELEMMATCH_INDEX_OPERATOR_ON_PUSHDOWN;
 
 #define DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING true
 bool EnableIndexPriorityOrdering = DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING;
@@ -346,14 +332,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.disableDollarSupportFuncSelectivity", newGucPrefix),
-		gettext_noop(
-			"Disables the selectivity calculation for dollar support functions - override on top of enableNewSelectivityMode."),
-		NULL, &DisableDollarSupportFuncSelectivity,
-		DEFAULT_DISABLE_DOLLAR_FUNCTION_SELECTIVITY,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		psprintf("%s.enableSchemaValidation", prefix),
 		gettext_noop(
 			"Whether or not to support schema validation."),
@@ -486,14 +464,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.useNewElemMatchIndexOperatorOnPushdown", newGucPrefix),
-		gettext_noop(
-			"Whether or not to use the new elemMatch index operator on pushdown."),
-		NULL, &UseNewElemMatchIndexOperatorOnPushdown,
-		DEFAULT_USE_NEW_ELEMMATCH_INDEX_OPERATOR_ON_PUSHDOWN,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		psprintf("%s.enableLookupInnerJoin", newGucPrefix),
 		gettext_noop(
 			"Whether or not to enable lookup inner join."),
@@ -518,13 +488,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.setSelectivityForFullScan", newGucPrefix),
-		gettext_noop("Whether or not to set the selectivity for full scans"),
-		NULL, &SetSelectivityForFullScan,
-		DEFAULT_SET_SELECTIVITY_FOR_FULL_SCAN,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		psprintf("%s.defaultUseCompositeOpClass", newGucPrefix),
 		gettext_noop(
 			"Whether to enable the new ordered index opclass for default index creates"),
@@ -543,13 +506,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable the sort on the new experimental composite index opclass"),
 		NULL, &EnableIndexOrderbyPushdown, DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enableIndexOrderbyReverse", newGucPrefix),
-		gettext_noop("Whether or not to enable order by reverse index pushdown"),
-		NULL, &EnableIndexOrderByReverse,
-		DEFAULT_ENABLE_INDEX_ORDERBY_REVERSE,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

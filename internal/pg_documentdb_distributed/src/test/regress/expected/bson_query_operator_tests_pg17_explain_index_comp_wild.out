@@ -1347,7 +1347,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
 (9 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a"  : {"$all" : [{"$elemMatch" : {"b" : "M", "c" : {"$gt" : 50} } }, {"$elemMatch" : {"c" : 100, "d" : "Y" } }]}}' ORDER BY object_id;
-                                                                                                                                                                                                                    QUERY PLAN                                                                                                                                                                                                                    
+                                                                                                                                                                                                                                                                                                                                                                                                                             QUERY PLAN                                                                                                                                                                                                                                                                                                                                                                                                                             
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=2 loops=1)
    Task Count: 1
@@ -1363,14 +1363,16 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      indexName: queryoperator_a
                      indexKey: {"a.$**": 1}
                      isMultiKey: true
-                     indexBounds: ["a.b": [ { "$.b": "M" } ,  { "$.b": "M" } ]], ["a.c": [ { "$.c": 100 } ,  { "$.c": 100 } ]]
+                     indexBounds: ["a.b": [ { "$.b": "M" } ,  { "$.b": "M" } ]], ["a.c": ( { "$.c": 50 } ,  { "$.c": Infinity } ]], ["a.c": [ { "$.c": 100 } ,  { "$.c": 100 } ]], ["a.d": [ { "$.d": "Y" } ,  { "$.d": "Y" } ]]
                      innerScanLoops: 3 loops
                      scanType: regular
-                     scanKeyDetails: key 1: [(isInequality: false, estimatedEntryCount: 2), (isInequality: false, estimatedEntryCount: 3)]
-                     ->  Index Scan using queryoperator_a on documents_1100_1100001 collection (actual rows=2 loops=1)
-                           Index Cond: ((document OPERATOR(documentdb_api_catalog.@<>) '{ "a.b" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "1" }, "value" : "M", "isTopLevel" : false } ] } }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@<>) '{ "a.c" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "1" }, "value" : { "$numberInt" : "100" }, "isTopLevel" : false } ] } }'::documentdb_core.bson))
+                     scanKeyDetails: key 1: [(isInequality: false, estimatedEntryCount: 2), (isInequality: true, estimatedEntryCount: 3), (isInequality: false, estimatedEntryCount: 3), (isInequality: false, estimatedEntryCount: 3)]
+                     ->  Bitmap Heap Scan on documents_1100_1100001 collection (actual rows=2 loops=1)
                            Filter: ((document OPERATOR(documentdb_api_catalog.@#?) '{ "a" : { "b" : "M", "c" : { "$gt" : { "$numberInt" : "50" } } } }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@#?) '{ "a" : { "c" : { "$numberInt" : "100" }, "d" : "Y" } }'::documentdb_core.bson))
-(21 rows)
+                           Heap Blocks: exact=1
+                           ->  Bitmap Index Scan on queryoperator_a (actual rows=2 loops=1)
+                                 Index Cond: ((document OPERATOR(documentdb_api_catalog.@<>) '{ "a.b" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "1" }, "value" : "M", "isTopLevel" : false } ] } }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@<>) '{ "a.c" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "2" }, "value" : { "$numberInt" : "50" }, "isTopLevel" : false } ] } }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@<>) '{ "a.c" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "1" }, "value" : { "$numberInt" : "100" }, "isTopLevel" : false } ] } }'::documentdb_core.bson) AND (document OPERATOR(documentdb_api_catalog.@<>) '{ "a.d" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "1" }, "value" : "Y", "isTopLevel" : false } ] } }'::documentdb_core.bson))
+(23 rows)
 
 -- $or gets converted to $in for simple expressions.
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$or" : [ { "a": 3 }, { "b": 4 } ] }' ORDER BY object_id;
