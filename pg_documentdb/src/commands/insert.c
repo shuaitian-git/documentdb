@@ -707,6 +707,10 @@ DoSingleInsert(MongoCollection *collection,
 		/* Abort inner transaction */
 		RollbackAndReleaseCurrentSubTransaction();
 		CurrentResourceOwner = oldOwner;
+		if (IsOperatorInterventionError(errorData))
+		{
+			ReThrowError(errorData);
+		}
 
 		MemoryContextSwitchTo(batchResult->resultMemoryContext);
 		batchResult->writeErrors = lappend(batchResult->writeErrors,
