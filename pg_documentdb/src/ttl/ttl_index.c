@@ -526,6 +526,11 @@ delete_expired_rows(PG_FUNCTION_ARGS)
 								"TTL job failed when processing collection_id=%lu and index_id=%lu with error: %s",
 								collectionId, ttlIndexEntry->indexId, edata->message));
 
+					if (IsOperatorInterventionError(edata))
+					{
+						ReThrowError(edata);
+					}
+
 					shouldStop = true;
 
 					/* Abort the transaction and continue with the next TTL indexes */

@@ -260,6 +260,9 @@ bool EnablePrepareUnique = DEFAULT_ENABLE_PREPARE_UNIQUE;
 #define DEFAULT_ENABLE_COLLMOD_UNIQUE false
 bool EnableCollModUnique = DEFAULT_ENABLE_COLLMOD_UNIQUE;
 
+#define DEFAULT_ENABLE_DROP_INDEXES_ON_READ_ONLY true
+bool EnableDropInvalidIndexesOnReadOnly = DEFAULT_ENABLE_DROP_INDEXES_ON_READ_ONLY;
+
 /*
  * SECTION: Schedule jobs via background worker.
  */

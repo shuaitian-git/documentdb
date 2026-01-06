@@ -6074,9 +6074,10 @@ TryDropCollectionIndexes(uint64 collectionId, List *indexIdList, List *indexIsUn
 			/* we might or might not have created the pg index .. */
 			bool missingOk = true;
 			bool concurrently = true;
+			bool forceReadWrite = false;
 			DropPostgresIndex(collectionId, lfirst_int(indexIdListCell),
 							  lfirst_int(indexIsUniqueListCell),
-							  concurrently, missingOk);
+							  concurrently, forceReadWrite, missingOk);
 
 			DeleteCollectionIndexRecord(collectionId, lfirst_int(indexIdListCell));
 		}

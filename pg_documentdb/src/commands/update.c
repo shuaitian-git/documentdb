@@ -1212,6 +1212,11 @@ DoSingleUpdate(MongoCollection *collection, UpdateSpec *updateSpec, text *transa
 		MemoryContextSwitchTo(oldContext);
 		CurrentResourceOwner = oldOwner;
 
+		if (IsOperatorInterventionError(errorData))
+		{
+			ReThrowError(errorData);
+		}
+
 		MemoryContextSwitchTo(batchResult->resultMemoryContext);
 		batchResult->writeErrors = lappend(batchResult->writeErrors,
 										   GetWriteErrorFromErrorData(errorData,
