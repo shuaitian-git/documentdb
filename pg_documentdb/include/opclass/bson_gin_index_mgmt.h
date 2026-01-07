@@ -243,13 +243,13 @@ bool TraverseIndexPathForCompositeIndex(struct IndexPath *indexPath, struct
 #define Get_Index_Path_Option(options, field, result, resultFieldLength) \
 	const char *pathDefinition = GET_STRING_RELOPTION(options, field); \
 	if (pathDefinition == NULL) { resultFieldLength = 0; result = NULL; } \
-	else { resultFieldLength = *(uint32_t *) pathDefinition; result = pathDefinition + \
-																	  sizeof(uint32_t); }
+	else { memcpy(&resultFieldLength, pathDefinition, sizeof(uint32_t)); result = \
+			   pathDefinition + sizeof(uint32_t); }
 
 
 #define Get_Index_Path_Option_Length(options, field, resultFieldLength) \
 	const char *pathDefinition = GET_STRING_RELOPTION(options, field); \
 	if (pathDefinition == NULL) { resultFieldLength = 0; } \
-	else { resultFieldLength = *(uint32_t *) pathDefinition; }
+	else { memcpy(&resultFieldLength, pathDefinition, sizeof(uint32_t)); }
 
 #endif

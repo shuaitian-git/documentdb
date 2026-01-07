@@ -2358,7 +2358,7 @@ ValidateCompositePathSpec(const char *prefix)
  * Here we parse the jsonified path options to build a serialized path
  * structure that is more efficiently parsed during term generation.
  */
-pg_attribute_no_sanitize_alignment() static Size
+static Size
 FillCompositePathSpec(const char *prefix, void *buffer)
 {
 	if (prefix == NULL)
@@ -2419,7 +2419,9 @@ FillCompositePathSpec(const char *prefix, void *buffer)
 	{
 		PgbsonInitIterator(bson, &bsonIterator);
 		char *bufferPtr = (char *) buffer;
-		*((uint32_t *) bufferPtr) = pathCount;
+
+		/* Use memcpy to avoid misaligned memory access - buffer may not be 4-byte aligned */
+		memcpy(bufferPtr, &pathCount, sizeof(uint32_t));
 		bufferPtr += sizeof(uint32_t);
 
 		while (bson_iter_next(&bsonIterator))
@@ -2448,7 +2450,8 @@ FillCompositePathSpec(const char *prefix, void *buffer)
 			}
 
 			/* add the prefixed path length */
-			*((uint32_t *) bufferPtr) = pathLength;
+			/* Use memcpy to avoid misaligned memory access - buffer may not be 4-byte aligned */
+			memcpy(bufferPtr, &pathLength, sizeof(uint32_t));
 			bufferPtr += sizeof(uint32_t);
 
 			/* add the serialized string */
@@ -3172,7 +3175,7 @@ GenerateCompositeExtractQueryUniqueEqual(pgbson *bson,
 }
 
 
-pg_attribute_no_sanitize_alignment() static int32_t
+static int32_t
 GetIndexPathsFromOptions(BsonGinCompositePathOptions *options,
 						 const char **indexPaths,
 						 int8_t *sortOrders)
@@ -3183,7 +3186,9 @@ GetIndexPathsFromOptions(BsonGinCompositePathOptions *options,
 
 	for (uint32_t i = 0; i < pathCount; i++)
 	{
-		uint32_t indexPathLength = *(uint32_t *) pathSpecBytes;
+		/* Use memcpy to avoid misaligned memory access - buffer may not be 4-byte aligned */
+		uint32_t indexPathLength;
+		memcpy(&indexPathLength, pathSpecBytes, sizeof(uint32_t));
 		const char *indexPath = pathSpecBytes + sizeof(uint32_t);
 		pathSpecBytes += indexPathLength + sizeof(uint32_t) + 1;
 		sortOrders[i] = *(int8_t *) pathSpecBytes;
@@ -3196,7 +3201,7 @@ GetIndexPathsFromOptions(BsonGinCompositePathOptions *options,
 }
 
 
-pg_attribute_no_sanitize_alignment() static int32_t
+static int32_t
 GetIndexPathsFromOptionsWithLength(BsonGinCompositePathOptions *options,
 								   const char **indexPaths,
 								   uint32_t *indexPathLengths,
@@ -3208,7 +3213,9 @@ GetIndexPathsFromOptionsWithLength(BsonGinCompositePathOptions *options,
 
 	for (uint32_t i = 0; i < pathCount; i++)
 	{
-		uint32_t indexPathLength = *(uint32_t *) pathSpecBytes;
+		/* Use memcpy to avoid misaligned memory access - buffer may not be 4-byte aligned */
+		uint32_t indexPathLength;
+		memcpy(&indexPathLength, pathSpecBytes, sizeof(uint32_t));
 		const char *indexPath = pathSpecBytes + sizeof(uint32_t);
 		pathSpecBytes += indexPathLength + sizeof(uint32_t) + 1;
 		sortOrders[i] = *(int8_t *) pathSpecBytes;
