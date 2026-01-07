@@ -1452,7 +1452,8 @@ FillSinglePathSpec(const char *prefix, void *buffer)
 
 	if (buffer != NULL)
 	{
-		*((uint32_t *) buffer) = length;
+		/* Use memcpy to avoid misaligned memory access - buffer may not be 4-byte aligned */
+		memcpy(buffer, &length, sizeof(uint32_t));
 		if (length > 0)
 		{
 			char *address = (char *) buffer;
@@ -1557,7 +1558,9 @@ FillWildcardProjectPathSpec(const char *prefix, void *buffer)
 	{
 		PgbsonInitIterator(bson, &bsonIterator);
 		char *bufferPtr = (char *) buffer;
-		*((uint32_t *) bufferPtr) = pathCount;
+
+		/* Use memcpy to avoid misaligned memory access - buffer may not be 4-byte aligned */
+		memcpy(bufferPtr, &pathCount, sizeof(uint32_t));
 		bufferPtr += sizeof(uint32_t);
 
 		while (bson_iter_next(&bsonIterator))
