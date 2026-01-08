@@ -6,6 +6,9 @@
  *-------------------------------------------------------------------------
  */
 
+pub mod rbac_utils;
+pub mod validation_utils;
+
 use std::{
     backtrace::Backtrace,
     env,
@@ -20,22 +23,21 @@ use documentdb_gateway::{
         SetupConfiguration,
     },
     error::Result,
-    postgres::{create_query_catalog, ConnectionPool, DocumentDBDataClient, QueryCatalog},
+    postgres::{
+        create_query_catalog, ConnectionPool, DocumentDBDataClient, QueryCatalog,
+        AUTHENTICATION_MAX_CONNECTIONS, SYSTEM_REQUESTS_MAX_CONNECTIONS,
+    },
     run_gateway,
     service::TlsProvider,
-    startup::{get_service_context, AUTHENTICATION_MAX_CONNECTIONS},
+    startup::get_service_context,
 };
-
 use mongodb::{
     options::{AuthMechanism, ClientOptions, Credential, ServerAddress, Tls, TlsOptions},
     Client, Database,
 };
-use simple_logger::SimpleLogger;
 use tokio_postgres::{error::SqlState, NoTls};
 use tokio_util::sync::CancellationToken;
-
-pub mod rbac_utils;
-pub mod validation_utils;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 static INIT: Once = Once::new();
 
@@ -44,13 +46,10 @@ async fn initialize_full(config: DocumentDBSetupConfiguration) {
     env::set_var("RUST_LIB_BACKTRACE", "1");
 
     INIT.call_once(|| {
-        SimpleLogger::new()
-            .with_level(log::LevelFilter::Info)
-            .with_module_level("rustls", log::LevelFilter::Info)
-            .with_module_level("tokio_postgres", log::LevelFilter::Info)
-            .with_module_level("hyper", log::LevelFilter::Info)
-            .init()
-            .unwrap();
+        tracing_subscriber::registry()
+            .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+            .with(tracing_subscriber::fmt::layer())
+            .init();
         thread::spawn(move || run(config));
         thread::sleep(Duration::from_millis(100));
     });
@@ -79,7 +78,7 @@ async fn run(setup_config: DocumentDBSetupConfiguration) {
             &postgres_system_user,
             None,
             format!("{}-SystemRequests", setup_config.application_name()),
-            5,
+            SYSTEM_REQUESTS_MAX_CONNECTIONS,
         )
         .expect("Failed to create system pool"),
     );
@@ -117,7 +116,7 @@ async fn run(setup_config: DocumentDBSetupConfiguration) {
         .unwrap();
 }
 
-pub fn configuration() -> DocumentDBSetupConfiguration {
+pub fn setup_configuration() -> DocumentDBSetupConfiguration {
     DocumentDBSetupConfiguration {
         node_host_name: "localhost".to_string(),
         blocked_role_prefixes: Vec::new(),
@@ -170,7 +169,7 @@ pub fn get_client_insecure() -> Client {
 
 #[allow(dead_code)]
 pub async fn initialize_with_logger() -> Client {
-    initialize_full(configuration()).await;
+    initialize_full(setup_configuration()).await;
     get_client()
 }
 
@@ -182,7 +181,7 @@ pub async fn initialize_with_config(config: DocumentDBSetupConfiguration) -> Cli
 
 #[allow(dead_code)]
 pub async fn initialize() -> Client {
-    initialize_full(configuration()).await;
+    initialize_full(setup_configuration()).await;
     get_client()
 }
 
@@ -225,7 +224,7 @@ pub async fn create_user(user: &str, pass: &str, query_catalog: &QueryCatalog) -
         .first()
         .unwrap()
     {
-        log::info!("Test can create: {:?}", result.get("rolcreaterole"));
+        tracing::info!("Test can create: {:?}", result.get("rolcreaterole"));
     }
     Ok(())
 }

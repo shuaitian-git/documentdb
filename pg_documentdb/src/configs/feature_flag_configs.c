@@ -116,6 +116,22 @@ bool UseNewUniqueHashEqualityFunction = DEFAULT_USE_NEW_UNIQUE_HASH_EQUALITY_FUN
 #define DEFAULT_ENABLE_COMPOSITE_UNIQUE_HASH true
 bool EnableCompositeUniqueHash = DEFAULT_ENABLE_COMPOSITE_UNIQUE_HASH;
 
+#define DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENERATION true
+bool RumUseNewCompositeTermGeneration = DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENERATION;
+
+#define DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX false
+bool EnableCompositeWildcardIndex = DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX;
+
+#define DEFAULT_ENABLE_REDUCED_CORRELATED_TERMS false
+bool EnableCompositeReducedCorrelatedTerms = DEFAULT_ENABLE_REDUCED_CORRELATED_TERMS;
+
+#define DEFAULT_ENABLE_UNIQUE_REDUCED_CORRELATED_TERMS false
+bool EnableUniqueCompositeReducedCorrelatedTerms =
+	DEFAULT_ENABLE_UNIQUE_REDUCED_CORRELATED_TERMS;
+
+#define DEFAULT_ENABLE_COMPOSITE_SHARD_DOCUMENT_TERMS true
+bool EnableCompositeShardDocumentTerms = DEFAULT_ENABLE_COMPOSITE_SHARD_DOCUMENT_TERMS;
+
 /*
  * SECTION: Planner feature flags
  */
@@ -159,6 +175,9 @@ bool EnableUpdateBsonDocument = DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT;
 
 #define DEFAULT_ENABLE_NEW_COUNT_AGGREGATES true
 bool EnableNewCountAggregates = DEFAULT_ENABLE_NEW_COUNT_AGGREGATES;
+
+#define DEFAULT_ENABLE_EXTENDED_EXPLAIN_ON_ANALYZEOFF true
+bool EnableExtendedExplainOnAnalyzeOff = DEFAULT_ENABLE_EXTENDED_EXPLAIN_ON_ANALYZEOFF;
 
 
 /*
@@ -252,16 +271,16 @@ bool UsePgStatsLiveTuplesForCount = DEFAULT_USE_PG_STATS_LIVE_TUPLES_FOR_COUNT;
 #define DEFAULT_ENABLE_PREPARE_UNIQUE false
 bool EnablePrepareUnique = DEFAULT_ENABLE_PREPARE_UNIQUE;
 
-/*
- * SECTION: Background worker telemetry feature flags.
- */
-
-/* Remove after v110 */
-#define DEFAULT_POPULATE_BACKGROUND_WORKER_JOBS_TABLE true
-bool PopulateBackgroundWorkerJobsTable = DEFAULT_POPULATE_BACKGROUND_WORKER_JOBS_TABLE;
-
 #define DEFAULT_ENABLE_COLLMOD_UNIQUE false
 bool EnableCollModUnique = DEFAULT_ENABLE_COLLMOD_UNIQUE;
+
+/*
+ * SECTION: Schedule jobs via background worker.
+ */
+
+/* Remove after v111*/
+#define DEFAULT_INDEX_BUILDS_SCHEDULED_ON_BGWORKER false
+bool IndexBuildsScheduledOnBgWorker = DEFAULT_INDEX_BUILDS_SCHEDULED_ON_BGWORKER;
 
 /* FEATURE FLAGS END */
 
@@ -687,14 +706,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.populateBackgroundWorkerJobsTable", newGucPrefix),
-		gettext_noop(
-			"Whether to populate the background worker jobs table with telemetry data."),
-		NULL, &PopulateBackgroundWorkerJobsTable,
-		DEFAULT_POPULATE_BACKGROUND_WORKER_JOBS_TABLE,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		psprintf("%s.enableCollModUnique", newGucPrefix),
 		gettext_noop(
 			"Whether to enable unique for coll mod."),
@@ -706,6 +717,14 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable new count aggregate optimizations."),
 		NULL, &EnableNewCountAggregates, DEFAULT_ENABLE_NEW_COUNT_AGGREGATES,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableExtendedExplainOnAnalyzeOff", newGucPrefix),
+		gettext_noop(
+			"Whether to enable logging extended explain on explain with analyze off."),
+		NULL, &EnableExtendedExplainOnAnalyzeOff,
+		DEFAULT_ENABLE_EXTENDED_EXPLAIN_ON_ANALYZEOFF,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -725,6 +744,45 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		psprintf("%s.enableRumNewCompositeTermGeneration", newGucPrefix),
+		gettext_noop(
+			"Whether to enable the new term generation for composite terms."),
+		NULL, &RumUseNewCompositeTermGeneration,
+		DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENERATION,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableCompositeWildcardIndex", newGucPrefix),
+		gettext_noop(
+			"Whether to enable composite wildcard index support"),
+		NULL, &EnableCompositeWildcardIndex, DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableCompositeReducedCorrelatedTerms", newGucPrefix),
+		gettext_noop(
+			"Whether to enable reduced term generation for correlated composite paths."),
+		NULL, &EnableCompositeReducedCorrelatedTerms,
+		DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableUniqueCompositeReducedCorrelatedTerms", newGucPrefix),
+		gettext_noop(
+			"Whether to enable reduced term generation for correlated composite paths for unique indexes."),
+		NULL, &EnableUniqueCompositeReducedCorrelatedTerms,
+		DEFAULT_ENABLE_UNIQUE_REDUCED_CORRELATED_TERMS,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.enableCompositeShardDocumentTerms", newGucPrefix),
+		gettext_noop(
+			"Whether to enable shard hash term generation for composite indexes (specially for null handling)."),
+		NULL, &EnableCompositeShardDocumentTerms,
+		DEFAULT_ENABLE_COMPOSITE_SHARD_DOCUMENT_TERMS,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		psprintf("%s.enableUseLookupNewProjectInlineMethod", newGucPrefix),
 		gettext_noop(
 			"Whether to use new inline method for $project in $lookup."),
@@ -738,5 +796,13 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 			"Whether to use foreign key for lookup inline method."),
 		NULL, &EnableUseForeignKeyLookupInline,
 		DEFAULT_USE_FOREIGN_KEY_LOOKUP_INLINE,
+		PGC_USERSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		psprintf("%s.indexBuildsScheduledOnBgWorker", newGucPrefix),
+		gettext_noop(
+			"Whether to schedule index builds via background worker jobs."),
+		NULL, &IndexBuildsScheduledOnBgWorker,
+		DEFAULT_INDEX_BUILDS_SCHEDULED_ON_BGWORKER,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 }

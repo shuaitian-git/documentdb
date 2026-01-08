@@ -276,10 +276,16 @@ bson_query_match(PG_FUNCTION_ARGS)
 	}
 	else if (useQueryMatchWithLetAndCollation && PG_NARGS() == 4)
 	{
+		/* TODO: Remove after v0.110 when function has only STRICT forms */
+		if (PG_ARGISNULL(0) && PG_ARGISNULL(1))
+		{
+			PG_RETURN_NULL();
+		}
+
 		Const *variableSpecConst = NULL;
 		if (PG_ARGISNULL(2))
 		{
-			variableSpecConst = makeNullConst(BsonTypeId(), -1, InvalidOid);
+			variableSpecConst = MakeBsonConst(PgbsonInitEmpty());
 		}
 		else
 		{
@@ -290,7 +296,8 @@ bson_query_match(PG_FUNCTION_ARGS)
 		Const *collationConst = NULL;
 		if (PG_ARGISNULL(3))
 		{
-			collationConst = makeNullConst(TEXTOID, -1, InvalidOid);
+			collationConst = makeConst(TEXTOID, -1, InvalidOid, -1,
+									   CStringGetDatum(""), false, false);
 		}
 		else
 		{

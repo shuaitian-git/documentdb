@@ -14,6 +14,7 @@
 #include <utils/array.h>
 
 #include "io/bson_core.h"
+#include "background_worker/background_worker_job.h"
 
 #define INVALID_INDEX_ID ((int) 0)
 
@@ -218,10 +219,6 @@ typedef struct
 	bool isSupported;
 	MongoIndexKind indexKind;
 } MongoIndexSupport;
-
-/* index build tasks */
-void UnscheduleIndexBuildTasks(char *extensionPrefix);
-void ScheduleIndexBuildTasks(char *extensionPrefix);
 
 MongoIndexKind GetMongoIndexKind(char *indexKindName, bool *isSupported);
 

@@ -394,6 +394,7 @@
  documentdb_api_internal | empty_data_table                             | SETOF record                            | OUT shard_key_value bigint, OUT object_id documentdb_core.bson, OUT document documentdb_core.bson                                                                                                                                                                                                                                                                                                                                                                                                                                               | func
  documentdb_api_internal | ensure_valid_db_coll                         | boolean                                 | text, text                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | func
  documentdb_api_internal | generate_unique_shard_document               | documentdb_core.bson                    | p_document documentdb_core.bson, p_shard_key_value bigint, p_unique_spec documentdb_core.bson, p_sparse boolean                                                                                                                                                                                                                                                                                                                                                                                                                                 | func
+ documentdb_api_internal | generate_unique_shard_document               | documentdb_core.bson                    | p_document documentdb_core.bson, p_shard_key_value bigint, p_unique_spec documentdb_core.bson, p_sparse boolean, p_generate_composite boolean                                                                                                                                                                                                                                                                                                                                                                                                   | func
  documentdb_api_internal | get_bloat_stats_worker                       | documentdb_core.bson                    | p_collection_id bigint                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | func
  documentdb_api_internal | get_shard_key_value                          | bigint                                  | p_shard_key documentdb_core.bson, p_collection_id bigint, p_document documentdb_core.bson                                                                                                                                                                                                                                                                                                                                                                                                                                                       | func
  documentdb_api_internal | gin_bson_composite_path_compare_partial      | integer                                 | bytea, bytea, smallint, internal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | func
@@ -449,7 +450,7 @@
  documentdb_api_internal | update_one                                   | record                                  | p_collection_id bigint, p_shard_key_value bigint, p_query documentdb_core.bson, p_update documentdb_core.bson, p_shard_key documentdb_core.bson, p_is_upsert boolean, p_sort documentdb_core.bson, p_return_old_or_new boolean, p_return_fields documentdb_core.bson, p_array_filters documentdb_core.bson, p_transaction_id text, OUT o_is_row_updated boolean, OUT o_update_skipped boolean, OUT o_is_retry boolean, OUT o_reinsert_document documentdb_core.bson, OUT o_upserted_object_id bytea, OUT o_result_document documentdb_core.bson | func
  documentdb_api_internal | update_worker                                | documentdb_core.bson                    | p_collection_id bigint, p_shard_key_value bigint, p_shard_oid regclass, p_update_internal_spec documentdb_core.bson, p_update_internal_docs documentdb_core.bsonsequence, p_transaction_id text                                                                                                                                                                                                                                                                                                                                                 | func
  documentdb_api_internal | validate_dbname                              | void                                    | dbname text                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | func
-(267 rows)
+(268 rows)
 
 \df documentdb_data.*
                        List of functions
@@ -578,24 +579,6 @@ unique, btree, for table "documentdb_api_catalog.collections"
  database_name   | text | yes  | database_name
  collection_name | text | yes  | collection_name
 primary key, btree, for table "documentdb_api_catalog.collections"
-
-              Table "documentdb_api_catalog.documentdb_background_jobs"
-          Column          |           Type           | Collation | Nullable | Default 
---------------------------+--------------------------+-----------+----------+---------
- jobid                    | integer                  |           | not null | 
- schedule_sec             | integer                  |           | not null | 
- command                  | text                     |           | not null | 
- timeout_sec              | integer                  |           | not null | 
- exec_on_coordinator_only | boolean                  |           | not null | 
- registered_time          | timestamp with time zone |           |          | now()
-Indexes:
-    "documentdb_background_jobs_jobid_idx" UNIQUE, btree (jobid)
-
-Index "documentdb_api_catalog.documentdb_background_jobs_jobid_idx"
- Column |  Type   | Key? | Definition 
---------+---------+------+------------
- jobid  | integer | yes  | jobid
-unique, btree, for table "documentdb_api_catalog.documentdb_background_jobs"
 
             Table "documentdb_api_catalog.documentdb_index_queue"
       Column      |           Type           | Collation | Nullable | Default 

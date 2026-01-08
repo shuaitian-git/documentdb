@@ -229,7 +229,7 @@ bson_to_bsonsequence(PG_FUNCTION_ARGS)
  * Creates a list of bson_value_t for the documents that are stored in
  * the bsonsequence.
  */
-pg_attribute_no_sanitize_alignment() List *
+pgbson_require_alignment() List *
 PgbsonSequenceGetDocumentBsonValues(const pgbsonsequence * bsonSequence)
 {
 	const uint8_t *data = (const uint8_t *) VARDATA_ANY(bsonSequence);

@@ -10,7 +10,7 @@ use tokio::{sync::RwLock, task::JoinHandle};
 use tokio_postgres::IsolationLevel;
 
 use crate::{
-    configuration::SetupConfiguration,
+    configuration::DynamicConfiguration,
     error::{DocumentDBError, ErrorCode, Result},
     postgres::{self, Connection, PgDataClient},
 };
@@ -40,7 +40,7 @@ pub struct Transaction {
 
 impl Transaction {
     pub async fn start(
-        config: &dyn SetupConfiguration,
+        config: Arc<dyn DynamicConfiguration>,
         request: &RequestTransactionInfo,
         conn: Arc<Connection>,
         isolation_level: IsolationLevel,
@@ -98,7 +98,7 @@ impl Drop for Transaction {
                 tokio::spawn(async move {
                     if let Some(mut t) = this {
                         if let Err(e) = t.abort().await {
-                            log::error!("Failed to drop a transaction: {e}")
+                            tracing::error!("Failed to drop a transaction: {e}")
                         }
                     }
                 });
@@ -224,7 +224,7 @@ impl TransactionStore {
             }
 
             let transaction = Transaction::start(
-                connection_context.service_context.setup_configuration(),
+                connection_context.service_context.dynamic_configuration(),
                 transaction_info,
                 Arc::new(
                     pg_data_client

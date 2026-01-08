@@ -891,8 +891,15 @@ UpdatePathsWithExtensionStreamingCursorPlans(PlannerInfo *root, RelOptInfo *rel,
 			{
 				IndexPath *indexPath = (IndexPath *) inputPath;
 
-				isPrimaryKeyPath = EnablePrimaryKeyCursorScan && IsBtreePrimaryKeyIndex(
+				bool isPrimaryKeyIndex = IsBtreePrimaryKeyIndex(
 					indexPath->indexinfo);
+				isPrimaryKeyPath = EnablePrimaryKeyCursorScan && isPrimaryKeyIndex;
+
+				if (isPrimaryKeyIndex && !isPrimaryKeyPath)
+				{
+					ReportFeatureUsage(FEATURE_CURSOR_CAN_USE_PRIMARY_KEY_SCAN);
+				}
+
 				bool isIndexPathCostZero = inputPath->total_cost == 0;
 				if (!isPrimaryKeyPath &&
 					indexPath->indexinfo->amhasgetbitmap)
@@ -911,8 +918,7 @@ UpdatePathsWithExtensionStreamingCursorPlans(PlannerInfo *root, RelOptInfo *rel,
 					}
 				}
 			}
-			else if (EnablePrimaryKeyCursorScan &&
-					 inputPath->pathtype == T_BitmapHeapScan)
+			else if (inputPath->pathtype == T_BitmapHeapScan)
 			{
 				BitmapHeapPath *bitmapHeapPath = (BitmapHeapPath *) inputPath;
 				Path *bitmapQualPath = bitmapHeapPath->bitmapqual;
@@ -922,9 +928,13 @@ UpdatePathsWithExtensionStreamingCursorPlans(PlannerInfo *root, RelOptInfo *rel,
 					IndexPath *indexPath = (IndexPath *) bitmapQualPath;
 
 					isPrimaryKeyPath = IsBtreePrimaryKeyIndex(indexPath->indexinfo);
-					if (isPrimaryKeyPath)
+					if (isPrimaryKeyPath && EnablePrimaryKeyCursorScan)
 					{
 						inputPath = (Path *) indexPath;
+					}
+					else if (isPrimaryKeyPath)
+					{
+						ReportFeatureUsage(FEATURE_CURSOR_CAN_USE_PRIMARY_KEY_SCAN);
 					}
 				}
 			}
@@ -933,6 +943,12 @@ UpdatePathsWithExtensionStreamingCursorPlans(PlannerInfo *root, RelOptInfo *rel,
 			{
 				/* See if we can convert to primary key scan */
 				IndexOptInfo *info = GetPrimaryKeyIndexOpt(rel);
+
+				if (info != NULL && !EnablePrimaryKeyCursorScan)
+				{
+					ReportFeatureUsage(FEATURE_CURSOR_CAN_USE_PRIMARY_KEY_SCAN);
+				}
+
 				if (EnablePrimaryKeyCursorScan && info != NULL)
 				{
 					isPrimaryKeyPath = true;
@@ -1874,6 +1890,7 @@ CopyNodeInputContinuation(struct ExtensibleNode *target_node, const struct
 	newNode->continuation = PgbsonCloneFromPgbson(from->continuation);
 	newNode->queryTableId = from->queryTableId;
 	newNode->queryTableName = pstrdup(from->queryTableName);
+	newNode->isPrimaryKeyScan = from->isPrimaryKeyScan;
 }
 
 
@@ -1889,6 +1906,7 @@ OutInputContinuation(StringInfo str, const struct ExtensibleNode *raw_node)
 	WRITE_STRING_FIELD_VALUE(continuation, string);
 	WRITE_OID_FIELD(queryTableId);
 	WRITE_STRING_FIELD(queryTableName);
+	WRITE_BOOL_FIELD(isPrimaryKeyScan);
 }
 
 
@@ -1908,6 +1926,7 @@ ReadCustomScanContinuationExtensionScanNode(struct ExtensibleNode *node)
 	READ_STRING_FIELD_VALUE(continuationStr);
 	READ_OID_FIELD(queryTableId);
 	READ_STRING_FIELD(queryTableName);
+	READ_BOOL_FIELD(isPrimaryKeyScan);
 	if (continuationStr != NULL)
 	{
 		local_node->continuation = PgbsonInitFromHexadecimalString(continuationStr);

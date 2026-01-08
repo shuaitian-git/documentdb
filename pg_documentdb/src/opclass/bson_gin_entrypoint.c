@@ -89,12 +89,14 @@ gin_bson_single_path_extract_value(PG_FUNCTION_ARGS)
 		(BsonGinSinglePathOptions *) PG_GET_OPCLASS_OPTIONS();
 
 	GenerateTermsContext context = { 0 };
-	GenerateSinglePathTermsCore(bson, &context, options);
+	GinEntryPathData pathData = { 0 };
+	pathData.termMetadata = GetIndexTermMetadata(options);
+	GenerateSinglePathTermsCore(bson, &context, &pathData, options);
 
-	*nentries = context.totalTermCount;
+	*nentries = pathData.terms.index;
 
 	PG_FREE_IF_COPY(bson, 0);
-	PG_RETURN_POINTER(context.terms.entries);
+	PG_RETURN_POINTER(pathData.terms.entries);
 }
 
 
@@ -112,6 +114,7 @@ gin_bson_wildcard_project_extract_value(PG_FUNCTION_ARGS)
 	pgbson *bson = PG_GETARG_PGBSON_PACKED(0);
 	int32_t *nentries = (int32_t *) PG_GETARG_POINTER(1);
 	GenerateTermsContext context = { 0 };
+	GinEntryPathData pathData = { 0 };
 	if (!PG_HAS_OPCLASS_OPTIONS())
 	{
 		ereport(ERROR, (errmsg("Index does not have options")));
@@ -120,11 +123,12 @@ gin_bson_wildcard_project_extract_value(PG_FUNCTION_ARGS)
 	BsonGinWildcardProjectionPathOptions *options =
 		(BsonGinWildcardProjectionPathOptions *) PG_GET_OPCLASS_OPTIONS();
 
-	GenerateWildcardPathTermsCore(bson, &context, options);
-	*nentries = context.totalTermCount;
+	pathData.termMetadata = GetIndexTermMetadata(options);
+	GenerateWildcardPathTermsCore(bson, &context, &pathData, options);
+	*nentries = pathData.terms.index;
 
 	PG_FREE_IF_COPY(bson, 0);
-	PG_RETURN_POINTER(context.terms.entries);
+	PG_RETURN_POINTER(pathData.terms.entries);
 }
 
 
@@ -406,6 +410,7 @@ gin_bson_get_single_path_generated_terms(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext;
 	GenerateTermsContext *context;
+	GinEntryPathData *pathData;
 
 	if (SRF_IS_FIRSTCALL())
 	{
@@ -435,18 +440,23 @@ gin_bson_get_single_path_generated_terms(PG_FUNCTION_ARGS)
 		options->base.wildcardIndexTruncatedPathLimit = truncateLimit > 0 ?
 														MaxWildcardIndexKeySize : 0;
 
-		GenerateSinglePathTermsCore(document, context, options);
-		context->index = 0;
+		pathData = (GinEntryPathData *) palloc0(sizeof(GinEntryPathData));
+		pathData->termMetadata = GetIndexTermMetadata(options);
+
+		GenerateSinglePathTermsCore(document, context, pathData, options);
+		pathData->terms.entryCapacity = pathData->terms.index;
+		pathData->terms.index = 0;
 		MemoryContextSwitchTo(oldcontext);
 		functionContext->user_fctx = (void *) context;
 	}
 
 	functionContext = SRF_PERCALL_SETUP();
 	context = (GenerateTermsContext *) functionContext->user_fctx;
+	pathData = context->pathDataState;
 
-	if (context->index < context->totalTermCount)
+	if (pathData->terms.index < pathData->terms.entryCapacity)
 	{
-		Datum next = context->terms.entries[context->index++];
+		Datum next = pathData->terms.entries[pathData->terms.index++];
 		BsonIndexTerm term = { 0 };
 		bytea *serializedTerm = DatumGetByteaPP(next);
 		InitializeBsonIndexTerm(serializedTerm, &term);
@@ -489,6 +499,7 @@ gin_bson_get_wildcard_project_generated_terms(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext;
 	GenerateTermsContext *context;
+	GinEntryPathData *pathData;
 
 	if (SRF_IS_FIRSTCALL())
 	{
@@ -499,6 +510,7 @@ gin_bson_get_wildcard_project_generated_terms(PG_FUNCTION_ARGS)
 		oldcontext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
 
 		context = (GenerateTermsContext *) palloc0(sizeof(GenerateTermsContext));
+		pathData = (GinEntryPathData *) palloc0(sizeof(GinEntryPathData));
 
 		const char *prefixStr = text_to_cstring(PG_GETARG_TEXT_P(1));
 		Size fieldSize = FillWildcardProjectPathSpec(prefixStr, NULL);
@@ -518,19 +530,22 @@ gin_bson_get_wildcard_project_generated_terms(PG_FUNCTION_ARGS)
 		options->base.wildcardIndexTruncatedPathLimit = truncateLimit > 0 ?
 														MaxWildcardIndexKeySize : 0;
 
-		GenerateWildcardPathTermsCore(document, context, options);
+		pathData->termMetadata = GetIndexTermMetadata(options);
+		GenerateWildcardPathTermsCore(document, context, pathData, options);
 
-		context->index = 0;
+		pathData->terms.entryCapacity = pathData->terms.index;
+		pathData->terms.index = 0;
 		MemoryContextSwitchTo(oldcontext);
 		functionContext->user_fctx = (void *) context;
 	}
 
 	functionContext = SRF_PERCALL_SETUP();
 	context = (GenerateTermsContext *) functionContext->user_fctx;
+	pathData = context->pathDataState;
 
-	if (context->index < context->totalTermCount)
+	if (pathData->terms.index < pathData->terms.entryCapacity)
 	{
-		Datum next = context->terms.entries[context->index++];
+		Datum next = pathData->terms.entries[pathData->terms.index++];
 		BsonIndexTerm term = { 0 };
 		bytea *serializedTerm = DatumGetByteaPP(next);
 		InitializeBsonIndexTerm(serializedTerm, &term);
@@ -961,11 +976,13 @@ ValidateIndexForQualifierElement(bytea *indexOptions, pgbsonelement *filterEleme
 				}
 			}
 
+			int32_t pathIndexInnerIgnore = 0;
 			traverse = GetSinglePathIndexTraverseOption(options,
 														filterElement->path,
 														filterElement->pathLength,
 														filterElement->bsonValue.
-														value_type);
+														value_type,
+														&pathIndexInnerIgnore);
 			break;
 		}
 
@@ -998,12 +1015,14 @@ ValidateIndexForQualifierElement(bytea *indexOptions, pgbsonelement *filterEleme
 
 		case IndexOptionsType_Wildcard:
 		{
+			int32_t pathIndexInnerIgnore = 0;
 			traverse = GetWildcardProjectionPathIndexTraverseOption(options,
 																	filterElement->path,
 																	filterElement->
 																	pathLength,
 																	filterElement->
-																	bsonValue.value_type);
+																	bsonValue.value_type,
+																	&pathIndexInnerIgnore);
 			break;
 		}
 
@@ -1074,10 +1093,12 @@ ValidateIndexForQualifierPathForEquality(bytea *indexOptions, const StringView *
 				}
 			}
 
+			int32_t pathIndexInnerIgnore;
 			traverse = GetSinglePathIndexTraverseOption(options,
 														queryPath->string,
 														queryPath->length,
-														BSON_TYPE_EOD);
+														BSON_TYPE_EOD,
+														&pathIndexInnerIgnore);
 			break;
 		}
 
@@ -1092,10 +1113,12 @@ ValidateIndexForQualifierPathForEquality(bytea *indexOptions, const StringView *
 
 		case IndexOptionsType_Wildcard:
 		{
+			int32_t pathIndexInnerIgnore = 0;
 			traverse = GetWildcardProjectionPathIndexTraverseOption(options,
 																	queryPath->string,
 																	queryPath->length,
-																	BSON_TYPE_EOD);
+																	BSON_TYPE_EOD,
+																	&pathIndexInnerIgnore);
 			break;
 		}
 
@@ -1150,9 +1173,11 @@ GetIndexTermMetadata(void *indexOptions)
 	{
 		StringView pathPrefix = { 0 };
 		bool isWildcard = false;
+		bool hasWildcardPath = false;
 		bool isWildcardProjection = false;
 		bool allowValueOnly = false;
 		int32_t truncationLimit = options->indexTermTruncateLimit;
+		uint32_t wildcardIndexTruncatedPathLimit = UINT32_MAX;
 		if (options->type == IndexOptionsType_SinglePath)
 		{
 			/* For single path indexes, we can elide the index path prefix */
@@ -1172,9 +1197,12 @@ GetIndexTermMetadata(void *indexOptions)
 		}
 		else if (options->type == IndexOptionsType_Composite)
 		{
+			BsonGinCompositePathOptions *compositeOptions =
+				(BsonGinCompositePathOptions *) options;
+			hasWildcardPath = compositeOptions->wildcardPathIndex >= 0;
 			pathPrefix.string = "$";
 			pathPrefix.length = 1;
-			allowValueOnly = EnableValueOnlyIndexTerms;
+			allowValueOnly = EnableValueOnlyIndexTerms && !hasWildcardPath;
 			if (allowValueOnly)
 			{
 				/* Since we lose one character on valueOnly scenarios for the path,
@@ -1195,8 +1223,7 @@ GetIndexTermMetadata(void *indexOptions)
 								"Index version V1 is not supported by hashed, text or 2d sphere indexes")));
 		}
 
-		uint32_t wildcardIndexTruncatedPathLimit = UINT32_MAX;
-		if (isWildcard)
+		if (isWildcard || hasWildcardPath)
 		{
 			wildcardIndexTruncatedPathLimit = options->wildcardIndexTruncatedPathLimit ==
 											  0 ?
@@ -1233,21 +1260,24 @@ GetIndexTermMetadata(void *indexOptions)
  * a wildcard, and/or suffix of the given path.
  * The method assumes that the options provided is a BsonGinWildcardProjectionPathOptions
  */
-pg_attribute_no_sanitize_alignment() IndexTraverseOption
+IndexTraverseOption
 GetWildcardProjectionPathIndexTraverseOption(void *contextOptions, const
 											 char *currentPath, uint32_t
 											 currentPathLength,
-											 bson_type_t bsonType)
+											 bson_type_t bsonType,
+											 int32_t *pathIndex)
 {
 	BsonGinWildcardProjectionPathOptions *option =
 		(BsonGinWildcardProjectionPathOptions *) contextOptions;
 
+	*pathIndex = 0;
 	uint32_t pathCount;
 	const char *pathSpecBytes;
 	Get_Index_Path_Option(option, pathSpec, pathSpecBytes, pathCount);
 	for (uint32_t i = 0; i < pathCount; i++)
 	{
-		uint32_t indexPathLength = *(uint32_t *) pathSpecBytes;
+		uint32_t indexPathLength;
+		memcpy(&indexPathLength, pathSpecBytes, sizeof(uint32_t));
 		const char *indexPath = pathSpecBytes + sizeof(uint32_t);
 		pathSpecBytes += indexPathLength + sizeof(uint32_t);
 
@@ -1298,12 +1328,14 @@ GetWildcardProjectionPathIndexTraverseOption(void *contextOptions, const
 IndexTraverseOption
 GetSinglePathIndexTraverseOption(void *contextOptions,
 								 const char *currentPath, uint32_t currentPathLength,
-								 bson_type_t bsonType)
+								 bson_type_t bsonType, int32_t *pathIndex)
 {
 	BsonGinSinglePathOptions *option = (BsonGinSinglePathOptions *) contextOptions;
 	uint32_t indexPathLength;
 	const char *indexPath;
 	Get_Index_Path_Option(option, path, indexPath, indexPathLength);
+
+	*pathIndex = 0;
 	return GetSinglePathIndexTraverseOptionCore(indexPath, indexPathLength,
 												currentPath, currentPathLength,
 												option->isWildcard);
@@ -1480,7 +1512,7 @@ ValidateWildcardProjectPathSpec(const char *prefix)
  * Here we parse the jsonified path options to build a serialized path
  * structure that is more efficiently parsed during term generation.
  */
-pg_attribute_no_sanitize_alignment() static Size
+static Size
 FillWildcardProjectPathSpec(const char *prefix, void *buffer)
 {
 	if (prefix == NULL)
@@ -1534,7 +1566,7 @@ FillWildcardProjectPathSpec(const char *prefix, void *buffer)
 			const char *path = bson_iter_utf8(&bsonIterator, &pathLength);
 
 			/* add the prefixed path length */
-			*((uint32_t *) bufferPtr) = pathLength;
+			memcpy(bufferPtr, &pathLength, sizeof(uint32_t));
 			bufferPtr += sizeof(uint32_t);
 
 			/* add the serialized string */

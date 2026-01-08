@@ -4,7 +4,7 @@ SET documentdb.next_collection_id TO 5600;
 SET documentdb.next_collection_index_id TO 5600;
 
 
-CREATE FUNCTION documentdb_test_helpers.gin_bson_get_composite_path_generated_terms(documentdb_core.bson, text, int4, bool)
+CREATE OR REPLACE FUNCTION documentdb_test_helpers.gin_bson_get_composite_path_generated_terms(document documentdb_core.bson, pathSpec text, termLimit int4, addMetadata bool, wildcardIndex int4 = -1)
     RETURNS SETOF documentdb_core.bson LANGUAGE C IMMUTABLE PARALLEL SAFE STRICT AS '$libdir/pg_documentdb',
 $$gin_bson_get_composite_path_generated_terms$$;
 
@@ -20,6 +20,9 @@ SELECT * FROM documentdb_test_helpers.gin_bson_get_composite_path_generated_term
 
 -- test when one gets truncated (a has 29 letters, truncation limit is 50 /2 so 25 per path)
 SELECT * FROM documentdb_test_helpers.gin_bson_get_composite_path_generated_terms('{ "a": "aaaaaaaaaaaaaaaaaaaaaaaaaaaa", "b": 1 }', '[ "a", "b" ]', 50, true);
+
+-- nested paths
+SELECT * FROM documentdb_test_helpers.gin_bson_get_composite_path_generated_terms('{ "a": { "b": { "c": 1 } } }', '[ "a.b", "a.b.c" ]', 2000, true);
 
 -- create a table and insert some data.
 

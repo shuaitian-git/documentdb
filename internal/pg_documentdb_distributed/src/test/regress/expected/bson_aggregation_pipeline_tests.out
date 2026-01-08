@@ -2368,3 +2368,108 @@ EXPLAIN (COSTS OFF, VERBOSE ON) SELECT document FROM bson_aggregation_pipeline('
                                  Index Cond: (collection_0_1.shard_key_value = '4117'::bigint)
 (23 rows)
 
+-- $in: [] with bson_dollar_project_find
+SELECT documentdb_api.insert_one('db', 'collTestEmptyIn', '{"_id": 1, "name": "sheep", "sound": "baa"}');
+NOTICE:  creating collection
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db', 'collTestEmptyIn', '{"_id": 2, "name": "duck", "sound": "quack"}');
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('db', 'collTestEmptyIn', '{"_id": 3, "sound": "quack"}');
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+-- unsharded
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": { "$in": [] }
+  },                     
+  "projection": { "name": true }
+}');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": { "$in": [] },
+    "name": "sheep"
+  },                     
+  "projection": { "name": true }
+}');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": 2,
+    "name": {"$in": [] }
+  },                     
+  "projection": { "sound": true }
+}');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- sharded
+SELECT documentdb_api.shard_collection('db', 'collTestEmptyIn', '{"name": "hashed"}', false);
+ shard_collection 
+---------------------------------------------------------------------
+ 
+(1 row)
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": { "$in": [] }
+  },                     
+  "projection": { "name": true }
+}');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": { "$in": [] },
+    "name": "sheep"
+  },                     
+  "projection": { "name": true }
+}');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT document FROM bson_aggregation_find('db', '{
+  "find": "collTestEmptyIn",
+  "filter": {
+    "_id": 2,
+    "name": {"$in": [] }
+  },                     
+  "projection": { "sound": true }
+}');
+ document 
+---------------------------------------------------------------------
+(0 rows)
+
+-- drop collection
+SELECT documentdb_api.drop_collection('db', 'collTestEmptyIn')
+ drop_collection 
+---------------------------------------------------------------------
+ t
+(1 row)
+

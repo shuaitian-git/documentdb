@@ -15,7 +15,7 @@ use std::{
 use bson::RawDocumentBuf;
 use tokio::{sync::RwLock, task::JoinHandle};
 
-use crate::{configuration::SetupConfiguration, postgres::Connection};
+use crate::{configuration::DynamicConfiguration, postgres::Connection};
 
 #[derive(Debug)]
 pub struct Cursor {
@@ -29,6 +29,7 @@ pub struct CursorStoreEntry {
     pub db: String,
     pub collection: String,
     pub timestamp: Instant,
+    pub cursor_timeout: Duration,
     pub session_id: Option<Vec<u8>>,
 }
 
@@ -39,19 +40,26 @@ pub struct CursorStore {
 }
 
 impl CursorStore {
-    pub fn new(config: &dyn SetupConfiguration, use_reaper: bool) -> Self {
+    pub fn new(config: Arc<dyn DynamicConfiguration>, use_reaper: bool) -> Self {
         let cursors: Arc<RwLock<HashMap<(i64, String), CursorStoreEntry>>> =
             Arc::new(RwLock::new(HashMap::new()));
-        let cursor_timeout = Duration::from_secs(config.cursor_timeout_secs());
-
         let cursors_clone = cursors.clone();
         let reaper = if use_reaper {
             Some(tokio::spawn(async move {
-                let mut interval = tokio::time::interval(cursor_timeout / 10);
+                let mut cursor_timeout_resolution =
+                    Duration::from_secs(config.cursor_resolution_interval().await);
+                let mut interval = tokio::time::interval(cursor_timeout_resolution);
                 loop {
                     interval.tick().await;
                     let mut cursors = cursors_clone.write().await;
-                    cursors.retain(|_, v| v.timestamp.elapsed() < cursor_timeout)
+                    cursors.retain(|_, v| v.timestamp.elapsed() < v.cursor_timeout);
+
+                    let new_timeout_interval =
+                        Duration::from_secs(config.cursor_resolution_interval().await);
+                    if new_timeout_interval != cursor_timeout_resolution {
+                        cursor_timeout_resolution = new_timeout_interval;
+                        interval = tokio::time::interval(cursor_timeout_resolution);
+                    }
                 }
             }))
         } else {

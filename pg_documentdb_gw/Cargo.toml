@@ -1,7 +1,16 @@
 [package]
 name = "documentdb_gateway"
+description = "A gateway component for DocumentDB."
 version = "0.1.0"
 edition = "2021"
+
+[package.metadata.deb]
+name = "documentdb_gateway"
+maintainer = "documentdb-packaging-maintainers@microsoft.com"
+depends = []
+assets = [
+ ["target/release-with-symbols/documentdb_gateway", "usr/bin/", "755"],
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -27,17 +36,16 @@ async-trait = "0.1.88"
 dyn-clone = "1.0.19"
 whoami = "1.6.0"
 arc-swap = "1.7.1"
-simple_logger = { version = "4.2.0", default-features = false, features = [
-    "timestamps",
-] }
-# do not add any *_max_level_info features unless the max_level wants to be applied to the whole project
-log = { version = "0.4.20", features = ["kv"] }
 tokio-postgres = { version = "0.7.10", features = [
     "with-serde_json-1",
     "array-impls",
 ] }
 serde = { version = "1.0.125", features = ["derive", "rc"] }
 uuid = { version = "1.12.1", features = ["v4"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+tracing = "0.1.41"
+
+[dev-dependencies]
 mongodb = { version = "3.2.0", default-features = false, features = [
     "dns-resolver",
     "openssl-tls",

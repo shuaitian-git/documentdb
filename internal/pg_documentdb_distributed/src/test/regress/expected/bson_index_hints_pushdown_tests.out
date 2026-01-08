@@ -104,19 +104,21 @@ EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregati
                                  QUERY PLAN                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: a_1
    ->  Index Scan using a_1 on documents_69501_695002 collection
          Index Cond: (document @<> '{ "a" : { "fullScan" : true } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": "b_1_c_1" }');
                                  QUERY PLAN                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: b_1_c_1
    ->  Index Scan using b_1_c_1 on documents_69501_695002 collection
          Index Cond: (document @<> '{ "b" : { "fullScan" : true } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 -- this pushes to a seqscan because the index is hashed
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": "d_hashed" }');
@@ -134,10 +136,11 @@ EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregati
                                QUERY PLAN                               
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: f_1
    ->  Index Scan using f_1 on documents_69501_695002 collection
          Index Cond: (document @>= '{ "f" : { "$minKey" : 1 } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 -- cannot push to wildcard index since it is a wildcard index
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": "g_1" }');
@@ -146,48 +149,53 @@ EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregati
                                  QUERY PLAN                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: i_1_j_1
    ->  Index Scan using i_1_j_1 on documents_69501_695002 collection
          Index Cond: (document @<> '{ "i" : { "fullScan" : true } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 -- pushes as an exists true query since the index is sparse
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": "h_1" }');
                                QUERY PLAN                               
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: h_1
    ->  Index Scan using h_1 on documents_69501_695002 collection
          Index Cond: (document @>= '{ "h" : { "$minKey" : 1 } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": "k_1_l_1" }');
                                QUERY PLAN                               
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: k_1_l_1
    ->  Index Scan using k_1_l_1 on documents_69501_695002 collection
          Index Cond: (document @>= '{ "k" : { "$minKey" : 1 } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 -- query index hint by key - works the same as name
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": { "a": 1 } }');
                                  QUERY PLAN                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: a_1
    ->  Index Scan using a_1 on documents_69501_695002 collection
          Index Cond: (document @<> '{ "a" : { "fullScan" : true } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": { "b": 1, "c": 1 } }');
                                  QUERY PLAN                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: b_1_c_1
    ->  Index Scan using b_1_c_1 on documents_69501_695002 collection
          Index Cond: (document @<> '{ "b" : { "fullScan" : true } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 -- this pushes to a seqscan because the index is hashed
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": { "d": "hashed" } }');
@@ -205,10 +213,11 @@ EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregati
                                QUERY PLAN                               
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: f_1
    ->  Index Scan using f_1 on documents_69501_695002 collection
          Index Cond: (document @>= '{ "f" : { "$minKey" : 1 } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 -- cannot push to wildcard index since it is a wildcard index
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": { "g.$**": 1 } }');
@@ -217,29 +226,32 @@ EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregati
                                  QUERY PLAN                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: i_1_j_1
    ->  Index Scan using i_1_j_1 on documents_69501_695002 collection
          Index Cond: (document @<> '{ "i" : { "fullScan" : true } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 -- pushes as an exists true query since the index is sparse
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": { "h": 1 } }');
                                QUERY PLAN                               
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: h_1
    ->  Index Scan using h_1 on documents_69501_695002 collection
          Index Cond: (document @>= '{ "h" : { "$minKey" : 1 } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": { "k": 1, "l": 1 } }');
                                QUERY PLAN                               
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: k_1_l_1
    ->  Index Scan using k_1_l_1 on documents_69501_695002 collection
          Index Cond: (document @>= '{ "k" : { "$minKey" : 1 } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 -- hints when no index exists
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": "nonexistent" }');
@@ -281,19 +293,21 @@ EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregati
                                QUERY PLAN                               
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: a_2
    ->  Index Scan using a_2 on documents_69501_695002 collection
          Index Cond: (document @>= '{ "a" : { "$minKey" : 1 } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": "a_1" }');
                                  QUERY PLAN                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: a_1
    ->  Index Scan using a_1 on documents_69501_695002 collection
          Index Cond: (document @<> '{ "a" : { "fullScan" : true } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(5 rows)
 
 -- try with composite indexes.
 SELECT documentdb_api_internal.create_indexes_non_concurrently('hint_db', '{ "createIndexes": "query_index_hints", "indexes": [ { "key": { "a": 1 }, "enableCompositeTerm": true, "name": "a_3" }] }', true);
@@ -312,19 +326,27 @@ EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregati
                                  QUERY PLAN                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: a_3
+   indexKey: {"a": 1}
+   isMultiKey: false
+   indexBounds: ["a": (MinKey, MaxKey)]
    ->  Index Scan using a_3 on documents_69501_695002 collection
          Index Cond: (document @<> '{ "a" : { "fullScan" : true } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(8 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE OFF, TIMING OFF) SELECT document from bson_aggregation_find('hint_db', '{ "find": "query_index_hints", "filter": { "x": 1 }, "hint": "k_1_l_1-2" }');
                                  QUERY PLAN                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: k_1_l_1-2
+   indexKey: {"k": 1,"l": 1}
+   isMultiKey: false
+   indexBounds: ["k": (MinKey, MaxKey), "l": (MinKey, MaxKey)]
    ->  Index Scan using "k_1_l_1-2" on documents_69501_695002 collection
          Index Cond: (document @<> '{ "k" : { "fullScan" : true } }'::bson)
          Filter: (document @= '{ "x" : { "$numberInt" : "1" } }'::bson)
-(4 rows)
+(8 rows)
 
 -- try natural and id hint with no filters on sharded collections.
 SELECT documentdb_api.shard_collection('hint_db', 'query_index_hints', '{"_id": "hashed"}', FALSE);

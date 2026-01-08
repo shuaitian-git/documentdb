@@ -1560,6 +1560,24 @@ GenerateRootMultiKeyTerm(const IndexTermCreateMetadata *termData)
 }
 
 
+Datum
+GenerateCorrelatedRootArrayTerm(const IndexTermCreateMetadata *termData)
+{
+	bson_iter_t iter;
+	pgbson_writer writer;
+	PgbsonWriterInit(&writer);
+	PgbsonWriterAppendInt32(&writer, "", 0, RootMetadataKind_CorrelatedRootArray);
+
+	PgbsonWriterGetIterator(&writer, &iter);
+
+	pgbsonelement element = { 0 };
+	BsonIterToSinglePgbsonElement(&iter, &element);
+	IndexTermMetadata termMetadata = IndexTermIsMetadata;
+	return PointerGetDatum(SerializeBsonIndexTermCore(&element, termData,
+													  termMetadata).indexTermVal);
+}
+
+
 /*
  * This is a marker term that is generated when a given document has a term
  * that is truncated.

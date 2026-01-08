@@ -10,10 +10,9 @@ use crate::{
     context::ConnectionContext,
     error::{DocumentDBError, Result},
     protocol::{header::Header, opcode::OpCode},
-    responses::constant::bson_serialize_error_message,
     CommandError, GwStream, Response,
 };
-use bson::{to_raw_document_buf, RawDocument};
+use bson::RawDocument;
 use tokio::io::AsyncWriteExt;
 
 /// Write a server response to the client stream
@@ -98,31 +97,15 @@ pub async fn write_message(
     Ok(())
 }
 
-pub async fn write_error(
-    connection_context: &ConnectionContext,
-    header: &Header,
-    err: DocumentDBError,
-    stream: &mut GwStream,
-    activity_id: &str,
-) -> Result<()> {
-    let response =
-        to_raw_document_buf(&CommandError::from_error(connection_context, &err, activity_id).await)
-            .map_err(|e| DocumentDBError::internal_error(bson_serialize_error_message(e)))?;
-
-    write_and_flush(header, &response, stream).await?;
-
-    Ok(())
-}
-
 pub async fn write_error_without_header(
     connection_context: &ConnectionContext,
     err: DocumentDBError,
     stream: &mut GwStream,
     activity_id: &str,
 ) -> Result<()> {
-    let response =
-        to_raw_document_buf(&CommandError::from_error(connection_context, &err, activity_id).await)
-            .map_err(|e| DocumentDBError::internal_error(bson_serialize_error_message(e)))?;
+    let response = CommandError::from_error(connection_context, &err, activity_id)
+        .await
+        .to_raw_document_buf();
 
     let header = Header {
         length: (response.as_bytes().len() + 1) as i32,

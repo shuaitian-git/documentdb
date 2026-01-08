@@ -6,19 +6,19 @@
  *-------------------------------------------------------------------------
  */
 
-use simple_logger::SimpleLogger;
 use std::{env, path::PathBuf, sync::Arc};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use documentdb_gateway::{
     configuration::{DocumentDBSetupConfiguration, PgConfiguration, SetupConfiguration},
-    postgres::{create_query_catalog, DocumentDBDataClient},
+    postgres::{
+        create_query_catalog, DocumentDBDataClient, AUTHENTICATION_MAX_CONNECTIONS,
+        SYSTEM_REQUESTS_MAX_CONNECTIONS,
+    },
     run_gateway,
     service::TlsProvider,
     shutdown_controller::SHUTDOWN_CONTROLLER,
-    startup::{
-        create_postgres_object, get_service_context, get_system_connection_pool,
-        AUTHENTICATION_MAX_CONNECTIONS, SYSTEM_REQUESTS_MAX_CONNECTIONS,
-    },
+    startup::{create_postgres_object, get_service_context, get_system_connection_pool},
 };
 
 use tokio::signal;
@@ -36,13 +36,12 @@ fn main() {
     let setup_configuration =
         DocumentDBSetupConfiguration::new(&cfg_file).expect("Failed to load configuration.");
 
-    SimpleLogger::new()
-        .with_level(log::LevelFilter::Info)
-        .with_module_level("tokio_postgres", log::LevelFilter::Info)
-        .init()
-        .expect("Failed to start logger");
+    tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
-    log::info!("Starting server with configuration: {setup_configuration:?}");
+    tracing::info!("Starting server with configuration: {setup_configuration:?}");
 
     // Create Tokio runtime with configured worker threads
     let async_runtime_worker_threads = setup_configuration.async_runtime_worker_threads();
@@ -52,7 +51,7 @@ fn main() {
         .build()
         .expect("Failed to create Tokio runtime");
 
-    log::info!("Created Tokio runtime with {async_runtime_worker_threads} worker threads");
+    tracing::info!("Created Tokio runtime with {async_runtime_worker_threads} worker threads");
 
     // Run the async main logic
     runtime.block_on(start_gateway(setup_configuration));
@@ -63,7 +62,7 @@ async fn start_gateway(setup_configuration: DocumentDBSetupConfiguration) {
 
     tokio::spawn(async move {
         signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
-        log::info!("Ctrl+C received. Shutting down Rust gateway.");
+        tracing::info!("Ctrl+C received. Shutting down Rust gateway.");
         SHUTDOWN_CONTROLLER.shutdown();
     });
 
@@ -86,7 +85,7 @@ async fn start_gateway(setup_configuration: DocumentDBSetupConfiguration) {
         )
         .await,
     );
-    log::info!("System requests pool initialized");
+    tracing::info!("System requests pool initialized");
 
     let dynamic_configuration = create_postgres_object(
         || async {
@@ -109,7 +108,7 @@ async fn start_gateway(setup_configuration: DocumentDBSetupConfiguration) {
         AUTHENTICATION_MAX_CONNECTIONS,
     )
     .await;
-    log::info!("Authentication pool initialized");
+    tracing::info!("Authentication pool initialized");
 
     let service_context = get_service_context(
         Box::new(setup_configuration),

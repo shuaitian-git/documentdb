@@ -11,9 +11,7 @@ use std::fmt::Debug;
 use async_trait::async_trait;
 use bson::RawBson;
 
-use crate::startup::{AUTHENTICATION_MAX_CONNECTIONS, SYSTEM_REQUESTS_MAX_CONNECTIONS};
-
-use super::version::Version;
+use crate::{configuration::Version, postgres};
 
 pub const POSTGRES_RECOVERY_KEY: &str = "IsPostgresInRecovery";
 
@@ -23,6 +21,7 @@ pub trait DynamicConfiguration: Send + Sync + Debug {
     async fn get_str(&self, key: &str) -> Option<String>;
     async fn get_bool(&self, key: &str, default: bool) -> bool;
     async fn get_i32(&self, key: &str, default: i32) -> i32;
+    async fn get_u64(&self, key: &str, default: u64) -> u64;
     async fn equals_value(&self, key: &str, value: &str) -> bool;
     fn topology(&self) -> RawBson;
     async fn enable_developer_explain(&self) -> bool;
@@ -85,9 +84,27 @@ pub trait DynamicConfiguration: Send + Sync + Debug {
             .unwrap_or(Version::Seven)
     }
 
+    async fn enable_stateless_cursor_timeout(&self) -> bool {
+        self.get_bool("enableStatelessCursorTimeout", false).await
+    }
+
+    async fn default_cursor_idle_timeout_sec(&self) -> u64 {
+        self.get_u64("mongoCursorIdleTimeoutInSeconds", 60).await
+    }
+
+    async fn stateless_cursor_idle_timeout_sec(&self) -> u64 {
+        self.get_u64("mongoCursorStatelessIdleTimeoutInSeconds", 600)
+            .await
+    }
+
+    async fn cursor_resolution_interval(&self) -> u64 {
+        self.get_u64("mongoCursorIdleResolutionIntervalSeconds", 5)
+            .await
+    }
+
     async fn system_connection_budget(&self) -> usize {
-        let min_system_connections =
-            (SYSTEM_REQUESTS_MAX_CONNECTIONS + AUTHENTICATION_MAX_CONNECTIONS) as i32;
+        let min_system_connections = (postgres::SYSTEM_REQUESTS_MAX_CONNECTIONS
+            + postgres::AUTHENTICATION_MAX_CONNECTIONS) as i32;
         let system_connection_budget = self
             .get_i32("systemConnectionBudget", min_system_connections)
             .await;

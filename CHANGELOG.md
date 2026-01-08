@@ -1,3 +1,5 @@
+### documentdb v1.110-0 (Unreleased) ###
+
 ### documentdb v0.109-0 (Unreleased) ###
 * Support collation with find positional queries *[Feature]*
 * Short-circuit in `$cond` runtime evaluation *[Perf]*
@@ -7,8 +9,10 @@
 * Performance improvements for $addToSet update operator up to ~70x for large existing and update arrays. *[Perf]*
 * Removed feature flags `documentdb.enableCompact`, `documentdb.enableBucketAutoStage` and `documentdb.enableIndexHintSupport`
 * Fix use-after-free segmentation fault in `$let` *[Bugfix]* 
+* Optimize `$makeArray` on constant expressions.*[Perf]*
 * Short-circuit in `$switch` at parse time *[Perf]*
 * Enable ordered indexes by default. Can be turned off by specifying "storageEngine": {"enableOrderedIndex": false} for a single index or by turning off the `documentdb.defaultUseCompositeOpClass` GUC.
+* Fix NULL document crash from `$in: []` optimization on sharded collections.
 
 ### documentdb v0.108-0 (Unreleased) ###
 * Top-level `let` variables and `$$NOW` supported by default.

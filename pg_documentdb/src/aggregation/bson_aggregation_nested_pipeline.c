@@ -3299,7 +3299,7 @@ BuildInputExpressionForQuery(Expr *origExpr, const StringView *connectToField, c
 								   MakeBsonConst(inputExpr),
 								   falseConst,
 								   context->variableSpec ? context->variableSpec :
-								   (Expr *) makeNullConst(BsonTypeId(), -1, InvalidOid),
+								   (Expr *) MakeBsonConst(PgbsonInitEmpty()),
 								   collationConst);
 	}
 	else if (context->variableSpec != NULL)

@@ -6,14 +6,12 @@
  *-------------------------------------------------------------------------
  */
 
-use std::path::Path;
+use std::{fs::File, path::Path};
 
 use serde::Deserialize;
-use std::fs::File;
 
-use super::SetupConfiguration;
 use crate::{
-    configuration::CertificateOptions,
+    configuration::{CertificateOptions, SetupConfiguration},
     error::{DocumentDBError, Result},
 };
 
@@ -38,7 +36,6 @@ pub struct DocumentDBSetupConfiguration {
     #[serde(default)]
     pub allow_transaction_snapshot: Option<bool>,
     pub transaction_timeout_secs: Option<u64>,
-    pub cursor_timeout_secs: Option<u64>,
     pub certificate_options: CertificateOptions,
 
     #[serde(default)]
@@ -46,6 +43,7 @@ pub struct DocumentDBSetupConfiguration {
     pub dynamic_configuration_refresh_interval_secs: Option<u32>,
     pub postgres_command_timeout_secs: Option<u64>,
     pub postgres_startup_wait_time_seconds: Option<u64>,
+    pub postgres_idle_connection_timeout_minutes: Option<u64>,
 
     // Runtime configuration
     pub async_runtime_worker_threads: Option<usize>,
@@ -93,10 +91,6 @@ impl SetupConfiguration for DocumentDBSetupConfiguration {
             .unwrap_or(60 * 5)
     }
 
-    fn cursor_timeout_secs(&self) -> u64 {
-        self.cursor_timeout_secs.unwrap_or(600)
-    }
-
     fn transaction_timeout_secs(&self) -> u64 {
         self.transaction_timeout_secs.unwrap_or(30)
     }
@@ -141,5 +135,9 @@ impl SetupConfiguration for DocumentDBSetupConfiguration {
                 .map(|p| p.get())
                 .unwrap_or(1)
         })
+    }
+
+    fn postgres_idle_connection_timeout_minutes(&self) -> u64 {
+        self.postgres_idle_connection_timeout_minutes.unwrap_or(5)
     }
 }

@@ -78,7 +78,7 @@ impl PgResponse {
     /// If 'writeErrors' is present, it transforms each error by potentially mapping them to the known DocumentDB error codes.
     pub async fn transform_write_errors(
         self,
-        context: &ConnectionContext,
+        connection_context: &ConnectionContext,
         activity_id: &str,
     ) -> Result<Response> {
         if let Ok(Some(_)) = self.as_raw_document()?.get("writeErrors") {
@@ -89,7 +89,8 @@ impl PgResponse {
             })?;
 
             for value in write_errors {
-                self.transform_error(context, value, activity_id).await?;
+                self.transform_error(connection_context, value, activity_id)
+                    .await?;
             }
             let raw = RawDocumentBuf::from_document(&response)?;
             return Ok(Response::Raw(RawResponse(raw)));
@@ -100,10 +101,10 @@ impl PgResponse {
     async fn transform_error(
         &self,
         context: &ConnectionContext,
-        bson: &mut Bson,
+        error_bson: &mut Bson,
         activity_id: &str,
     ) -> Result<()> {
-        let doc = bson
+        let doc = error_bson
             .as_document_mut()
             .ok_or(DocumentDBError::internal_error(
                 "Failed to convert BSON write error into BSON document.".to_string(),
@@ -196,14 +197,17 @@ impl PgResponse {
         match *state {
             SqlState::UNIQUE_VIOLATION | SqlState::EXCLUSION_VIOLATION => {
                 if connection_context.transaction.is_some() {
-                    log::error!(activity_id = activity_id; "Duplicate key error during transaction.");
+                    tracing::error!(
+                        activity_id = activity_id,
+                        "Duplicate key error during transaction."
+                    );
                     Some((
                         ErrorCode::WriteConflict as i32,
                         Some(format!("{:?}", SqlState::UNIQUE_VIOLATION)),
                         duplicate_key_violation_message(),
                     ))
                 } else {
-                    log::error!(activity_id = activity_id; "Duplicate key error.");
+                    tracing::error!(activity_id = activity_id, "Duplicate key error.");
                     Some((
                         ErrorCode::DuplicateKey as i32,
                         Some(format!("{:?}", SqlState::UNIQUE_VIOLATION)),
@@ -223,23 +227,29 @@ impl PgResponse {
             )),
             SqlState::QUERY_CANCELED => {
                 if connection_context.transaction.is_some() {
-                    log::error!(activity_id = activity_id; "Query canceled during transaction.");
+                    tracing::error!(
+                        activity_id = activity_id,
+                        "Query canceled during transaction."
+                    );
                     Some((ErrorCode::ExceededTimeLimit as i32, Some(format!("{:?}", SqlState::QUERY_CANCELED)), "The command being executed was terminated due to a command timeout. This may be due to concurrent transactions."))
                 } else {
-                    log::error!(activity_id = activity_id; "Query canceled.");
+                    tracing::error!(activity_id = activity_id, "Query canceled.");
                     Some((ErrorCode::ExceededTimeLimit as i32, Some(format!("{:?}", SqlState::QUERY_CANCELED)), "The command being executed was terminated due to a command timeout. This may be due to concurrent transactions. Consider increasing the maxTimeMS on the command."))
                 }
             }
             SqlState::LOCK_NOT_AVAILABLE => {
                 if connection_context.transaction.is_some() {
-                    log::error!(activity_id = activity_id; "Lock not available error during transaction.");
+                    tracing::error!(
+                        activity_id = activity_id,
+                        "Lock not available error during transaction."
+                    );
                     Some((
                         ErrorCode::WriteConflict as i32,
                         Some(format!("{:?}", SqlState::LOCK_NOT_AVAILABLE)),
                         msg,
                     ))
                 } else {
-                    log::error!(activity_id = activity_id; "Lock not available error.");
+                    tracing::error!(activity_id = activity_id, "Lock not available error.");
                     Some((
                         ErrorCode::LockTimeout as i32,
                         Some(format!("{:?}", SqlState::LOCK_NOT_AVAILABLE)),
@@ -254,7 +264,10 @@ impl PgResponse {
             )),
             SqlState::DATA_EXCEPTION => {
                 if msg.contains("dimensions, not") || msg.contains("not allowed in vector") {
-                    log::error!(activity_id = activity_id; "Dimensions are not allowed in vector error.");
+                    tracing::error!(
+                        activity_id = activity_id,
+                        "Dimensions are not allowed in vector error."
+                    );
                     Some((
                         ErrorCode::BadValue as i32,
                         Some(format!("{:?}", SqlState::DATA_EXCEPTION)),
@@ -270,7 +283,7 @@ impl PgResponse {
             }
             SqlState::PROGRAM_LIMIT_EXCEEDED => {
                 if msg.contains("MB, maintenance_work_mem is") {
-                    log::error!(activity_id = activity_id; "Index creation requires resources too large to fit in the resource memory limit.");
+                    tracing::error!(activity_id = activity_id, "Index creation requires resources too large to fit in the resource memory limit.");
                     Some((
                         ErrorCode::ExceededMemoryLimit as i32,
                         Some(format!("{:?}", SqlState::PROGRAM_LIMIT_EXCEEDED)),
@@ -278,7 +291,7 @@ impl PgResponse {
                     ))
                 } else if msg.contains("index row size") && msg.contains("exceeds maximum") {
                     let error_message = "Index key is too large";
-                    log::error!(activity_id = activity_id; "{error_message}");
+                    tracing::error!(activity_id = activity_id, "{error_message}");
                     Some((
                         ErrorCode::CannotBuildIndexKeys as i32,
                         Some(format!("{:?}", SqlState::PROGRAM_LIMIT_EXCEEDED)),
@@ -297,7 +310,7 @@ impl PgResponse {
             {
                 let error_message =
                     "Some values in the vector are out of range for half vector index";
-                log::error!(activity_id = activity_id; "{error_message}");
+                tracing::error!(activity_id = activity_id, "{error_message}");
                 Some((
                     ErrorCode::BadValue as i32,
                     Some(format!("{:?}", SqlState::NUMERIC_VALUE_OUT_OF_RANGE)),
@@ -308,18 +321,32 @@ impl PgResponse {
                 if msg.contains("diskann index needs to be upgraded to version") =>
             {
                 let error_message = "The diskann index needs to be upgraded to the latest version, please drop and recreate the index";
-                log::error!(activity_id = activity_id; "{error_message}");
+                tracing::error!(activity_id = activity_id, "{error_message}");
                 Some((
                     ErrorCode::InvalidOptions as i32,
                     Some(format!("{:?}", SqlState::OBJECT_NOT_IN_PREREQUISITE_STATE)),
                     error_message,
                 ))
             }
-            SqlState::INTERNAL_ERROR => Some((
-                ErrorCode::InternalError as i32,
-                Some(format!("{:?}", SqlState::INTERNAL_ERROR)),
-                msg,
-            )),
+            SqlState::INTERNAL_ERROR => {
+                if msg.contains("tsquery stack too small") {
+                    // When the search terms have more than 32 nested levels, tsquery raises the PG internal error with message "tsquery stack too small".
+                    // This can happen in find commands or $match aggregation stages with $text filter.
+                    let error_message = "$text query is exceeding the maximum allowed depth(32), please simplify the query";
+                    tracing::error!(activity_id = activity_id, "{error_message}");
+                    Some((
+                        ErrorCode::BadValue as i32,
+                        Some(format!("{:?}", SqlState::INTERNAL_ERROR)),
+                        error_message,
+                    ))
+                } else {
+                    Some((
+                        ErrorCode::InternalError as i32,
+                        Some(format!("{:?}", SqlState::INTERNAL_ERROR)),
+                        msg,
+                    ))
+                }
+            }
             SqlState::INVALID_TEXT_REPRESENTATION => Some((
                 ErrorCode::BadValue as i32,
                 Some(format!("{:?}", SqlState::INVALID_TEXT_REPRESENTATION)),
@@ -342,7 +369,7 @@ impl PgResponse {
                     .await =>
             {
                 let error_message = "Cannot execute the operation on this replica cluster";
-                log::error!(activity_id = activity_id; "{error_message}");
+                tracing::error!(activity_id = activity_id, "{error_message}");
                 Some((
                     ErrorCode::IllegalOperation as i32,
                     Some("IllegalOperation".to_string()),

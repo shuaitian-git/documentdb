@@ -2,6 +2,17 @@ SET search_path TO documentdb_api_catalog, documentdb_core, documentdb_api, publ
 SET citus.next_shard_id TO 6750000;
 SET documentdb.next_collection_id TO 67500;
 SET documentdb.next_collection_index_id TO 67500;
+-- Delete all other indexes from previous tests to reduce flakiness
+WITH deleted AS (
+  DELETE FROM documentdb_api_catalog.collection_indexes
+  WHERE collection_id != 67500
+  RETURNING 1
+) SELECT true FROM deleted UNION ALL SELECT true LIMIT 1;
+ ?column? 
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- Reset the counters by making a call to the counter and discarding the results
 select count(*)*0 as count from documentdb_api_internal.command_feature_counter_stats(true);
  count 
@@ -213,16 +224,16 @@ SELECT documentdb_api.validate('db', '{ "validate" : "validatecoll", "repair" : 
 ERROR:  Running the validate command with { repair: true } is not supported yet.
 -- Print without resetting the counters
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(false);
-                                                                                                                                                                                                                                                                                                    get_feature_counter_pretty                                                                                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                                                                         get_feature_counter_pretty                                                                                                                                                                                                                                                                                                                                                          
 ---------------------------------------------------------------------
- {"Feature_usage":[{"agg_operator_eq" : 1}, {"agg_operator_mod" : 5}, {"agg_operator_toint" : 5}, {"collation" : 2}, {"validate_repair" : 1}, {"create_index_ttl" : 1}, {"query_operator_eq" : 4}, {"query_operator_gt" : 4}, {"query_operator_or" : 2}, {"add_fields" : 5}, {"count" : 1}, {"group" : 5}, {"firstN_acc" : 2}, {"firstN_acc_GT10" : 1}, {"lastN_acc" : 2}, {"lastN_acc_GT10" : 1}, {"limit" : 3}, {"lookup" : 2}, {"match" : 6}, {"project" : 3}, {"replace_root" : 2}, {"replace_with" : 1}, {"skip" : 3}, {"sort" : 6}, {"sort_by_count" : 1}, {"sort_by_id" : 5}, {"unset" : 1}, {"vector_search_native" : 3}]}
+ {"Feature_usage":[{"agg_operator_eq" : 1}, {"agg_operator_mod" : 5}, {"agg_operator_toint" : 5}, {"group_count" : 1}, {"group_first" : 1}, {"group_first_n" : 2}, {"group_last" : 1}, {"group_last_n" : 2}, {"group_max" : 1}, {"group_sum" : 1}, {"collation" : 2}, {"validate_repair" : 1}, {"create_index_ttl" : 1}, {"query_operator_eq" : 4}, {"query_operator_gt" : 4}, {"query_operator_or" : 2}, {"add_fields" : 5}, {"count" : 1}, {"group" : 5}, {"firstN_acc_GT10" : 1}, {"lastN_acc_GT10" : 1}, {"limit" : 3}, {"lookup" : 2}, {"match" : 6}, {"project" : 3}, {"replace_root" : 2}, {"replace_with" : 1}, {"skip" : 3}, {"sort" : 6}, {"sort_by_count" : 1}, {"sort_by_id" : 5}, {"unset" : 1}, {"vector_search_native" : 3}]}
 (1 row)
 
 -- print and reset the counters
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
-                                                                                                                                                                                                                                                                                                    get_feature_counter_pretty                                                                                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                                                                         get_feature_counter_pretty                                                                                                                                                                                                                                                                                                                                                          
 ---------------------------------------------------------------------
- {"Feature_usage":[{"agg_operator_eq" : 1}, {"agg_operator_mod" : 5}, {"agg_operator_toint" : 5}, {"collation" : 2}, {"validate_repair" : 1}, {"create_index_ttl" : 1}, {"query_operator_eq" : 4}, {"query_operator_gt" : 4}, {"query_operator_or" : 2}, {"add_fields" : 5}, {"count" : 1}, {"group" : 5}, {"firstN_acc" : 2}, {"firstN_acc_GT10" : 1}, {"lastN_acc" : 2}, {"lastN_acc_GT10" : 1}, {"limit" : 3}, {"lookup" : 2}, {"match" : 6}, {"project" : 3}, {"replace_root" : 2}, {"replace_with" : 1}, {"skip" : 3}, {"sort" : 6}, {"sort_by_count" : 1}, {"sort_by_id" : 5}, {"unset" : 1}, {"vector_search_native" : 3}]}
+ {"Feature_usage":[{"agg_operator_eq" : 1}, {"agg_operator_mod" : 5}, {"agg_operator_toint" : 5}, {"group_count" : 1}, {"group_first" : 1}, {"group_first_n" : 2}, {"group_last" : 1}, {"group_last_n" : 2}, {"group_max" : 1}, {"group_sum" : 1}, {"collation" : 2}, {"validate_repair" : 1}, {"create_index_ttl" : 1}, {"query_operator_eq" : 4}, {"query_operator_gt" : 4}, {"query_operator_or" : 2}, {"add_fields" : 5}, {"count" : 1}, {"group" : 5}, {"firstN_acc_GT10" : 1}, {"lastN_acc_GT10" : 1}, {"limit" : 3}, {"lookup" : 2}, {"match" : 6}, {"project" : 3}, {"replace_root" : 2}, {"replace_with" : 1}, {"skip" : 3}, {"sort" : 6}, {"sort_by_count" : 1}, {"sort_by_id" : 5}, {"unset" : 1}, {"vector_search_native" : 3}]}
 (1 row)
 
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
@@ -639,15 +650,25 @@ SELECT * FROM documentdb_distributed_test_helpers.get_collection_indexes('db', '
 (2 rows)
 
 -- 4. Call ttl purge procedure with a batch size of 2
+SET documentdb.repeatPurgeIndexesForTTLTask to off;
 CALL documentdb_api_internal.delete_expired_rows(3);
 CALL documentdb_api_internal.delete_expired_rows(3);
 CALL documentdb_api_internal.delete_expired_rows(3);
 SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true);
-                                                                                           get_feature_counter_pretty                                                                                           
+                                                                                                          get_feature_counter_pretty                                                                                                           
 ---------------------------------------------------------------------
- {"Feature_usage":[{"command_insert" : 10}, {"command_insert_one" : 10}, {"command_list_indexes_cursor_first_page" : 1}, {"create_index_ttl" : 1}, {"cursor_type_single_batch" : 1}, {"ttl_purger_calls" : 3}]}
+ {"Feature_usage":[{"command_insert" : 10}, {"command_insert_one" : 10}, {"command_list_indexes_cursor_first_page" : 1}, {"create_index_ttl" : 1}, {"cursor_type_single_batch" : 1}, {"ttl_purger_calls" : 3}, {"ttl_saturated_batches" : 2}]}
 (1 row)
 
+SET documentdb.TTLSlowBatchDeleteThresholdInMS to 0; /* 0 makes all batches slow*/
+CALL documentdb_api_internal.delete_expired_rows(300);
+SELECT documentdb_distributed_test_helpers.get_feature_counter_pretty(true); /* 8 shards each for 2 indexes*/
+          get_feature_counter_pretty           
+---------------------------------------------------------------------
+ {"Feature_usage":[{"ttl_slow_batches" : 16}]}
+(1 row)
+
+RESET documentdb.TTLSlowBatchDeleteThresholdInMS;
 -- Feature counter for _internalInhibitOptimization
 SELECT document FROM bson_aggregation_pipeline('db', '{ "aggregate": "feature_usage_inhibit", "pipeline": [ { "$addFields": { "e": {  "f": "$a.b" } } }, { "$_internalInhibitOptimization": 1 }, { "$replaceWith": "$e" } ], "cursor": {} }');
  document 

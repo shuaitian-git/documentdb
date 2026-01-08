@@ -6,7 +6,7 @@
  *-------------------------------------------------------------------------
  */
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use bson::{rawdoc, RawArrayBuf};
 
@@ -27,6 +27,13 @@ pub async fn save_cursor(
 ) -> Result<()> {
     if let Some((persist, cursor)) = response.get_cursor()? {
         let connection = if persist { Some(connection) } else { None };
+        let dynamic_config = connection_context.service_context.dynamic_configuration();
+        let cursor_timeout =
+            if dynamic_config.enable_stateless_cursor_timeout().await && connection.is_none() {
+                Duration::from_secs(dynamic_config.stateless_cursor_idle_timeout_sec().await)
+            } else {
+                Duration::from_secs(dynamic_config.default_cursor_idle_timeout_sec().await)
+            };
         connection_context
             .add_cursor(
                 connection,
@@ -34,6 +41,7 @@ pub async fn save_cursor(
                 connection_context.auth_state.username()?,
                 request_info.db()?,
                 request_info.collection()?,
+                cursor_timeout,
                 request_info.session_id.map(|v| v.to_vec()),
             )
             .await;
@@ -130,6 +138,7 @@ pub async fn process_get_more(
         db,
         collection,
         session_id,
+        mut cursor_timeout,
         ..
     } = connection_context
         .get_cursor(id, connection_context.auth_state.username()?)
@@ -149,6 +158,21 @@ pub async fn process_get_more(
         )
         .await?;
 
+    if !connection_context
+        .service_context
+        .dynamic_configuration()
+        .enable_stateless_cursor_timeout()
+        .await
+    {
+        cursor_timeout = Duration::from_secs(
+            connection_context
+                .service_context
+                .dynamic_configuration()
+                .default_cursor_idle_timeout_sec()
+                .await,
+        );
+    }
+
     if let Some(row) = results.first() {
         let continuation: Option<PgDocument> = row.try_get(1)?;
         if let Some(continuation) = continuation {
@@ -162,6 +186,7 @@ pub async fn process_get_more(
                     connection_context.auth_state.username()?,
                     &db,
                     &collection,
+                    cursor_timeout,
                     session_id,
                 )
                 .await;

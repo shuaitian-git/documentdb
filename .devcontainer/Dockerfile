@@ -44,8 +44,10 @@ RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg m
     rm -rf /var/lib/apt/lists/*
 
 # install mongosh
-RUN curl https://downloads.mongodb.com/compass/mongodb-mongosh_2.5.6_amd64.deb -o mongodb-mongosh_2.5.6_amd64.deb \
-         && dpkg -i mongodb-mongosh_2.5.6_amd64.deb && rm mongodb-mongosh_2.5.6_amd64.deb
+RUN ARCH=$(dpkg --print-architecture) && \
+    curl https://downloads.mongodb.com/compass/mongodb-mongosh_2.5.6_${ARCH}.deb -o mongodb-mongosh_2.5.6_${ARCH}.deb && \
+    dpkg -i mongodb-mongosh_2.5.6_${ARCH}.deb && \
+    rm mongodb-mongosh_2.5.6_${ARCH}.deb
 
 # Prepare for running install scripts
 ENV CLEANUP_SETUP=1

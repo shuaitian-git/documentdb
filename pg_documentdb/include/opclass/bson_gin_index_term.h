@@ -125,11 +125,17 @@ BsonIndexTermSerialized SerializeCompositeBsonIndexTerm(bytea **individualTerms,
 BsonCompressableIndexTermSerialized SerializeCompositeBsonIndexTermWithCompression(
 	bytea **individualTerms, int32_t numTerms);
 
+typedef enum RootMetadataKind
+{
+	RootMetadataKind_CorrelatedRootArray = 1
+} RootMetadataKind;
+
 Datum GenerateRootTerm(const IndexTermCreateMetadata *);
 Datum GenerateRootExistsTerm(const IndexTermCreateMetadata *);
 Datum GenerateRootNonExistsTerm(const IndexTermCreateMetadata *);
 Datum GenerateRootTruncatedTerm(const IndexTermCreateMetadata *);
 Datum GenerateRootMultiKeyTerm(const IndexTermCreateMetadata *);
+Datum GenerateCorrelatedRootArrayTerm(const IndexTermCreateMetadata *);
 Datum GenerateValueUndefinedTerm(const IndexTermCreateMetadata *termData);
 Datum GenerateValueMaybeUndefinedTerm(const IndexTermCreateMetadata *termData);
 int32_t CompareBsonIndexTerm(const BsonIndexTerm *left, const BsonIndexTerm *right,

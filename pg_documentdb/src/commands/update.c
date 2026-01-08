@@ -1984,17 +1984,17 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 
 	Oid *argTypes = palloc0(argCount * sizeof(Oid));
 	Datum *argValues = palloc0(argCount * sizeof(Datum));
+
 	char *argNulls = palloc0(argCount * sizeof(char));
+	memset(argNulls, ' ', argCount);
 
 	Oid bsonTypeId = BsonTypeId();
 	argTypes[0] = BYTEAOID;
 	argValues[0] = PointerGetDatum(CastPgbsonToBytea(updateDoc));
-	argNulls[0] = ' ';
 
 	pgbson *queryDoc = PgbsonInitFromDocumentBsonValue(currentUpdate->query);
 	argTypes[1] = bsonTypeId;
 	argValues[1] = PointerGetDatum(queryDoc);
-	argNulls[1] = ' ';
 
 	argTypes[2] = BYTEAOID;
 	if (arrayFilters == NULL)
@@ -2005,18 +2005,15 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 	else
 	{
 		argValues[2] = PointerGetDatum(CastPgbsonToBytea(arrayFilters));
-		argNulls[2] = ' ';
 	}
 
 	if (applyVariablSpec)
 	{
 		argTypes[3] = BsonTypeId();
 		argValues[3] = PointerGetDatum(variableSpecBson);
-		argNulls[3] = ' ';
 
 		argTypes[4] = TEXTOID;
 		argValues[4] = CStringGetTextDatum("");
-		argNulls[4] = 'n';
 	}
 
 	/* set shard key value filter, if any */
@@ -2024,7 +2021,6 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 	{
 		argTypes[shardKeyArgIndex] = INT8OID;
 		argValues[shardKeyArgIndex] = Int64GetDatum(shardKeyHash);
-		argNulls[shardKeyArgIndex] = ' ';
 	}
 
 	/* set the objectId filter, if any */
@@ -2033,7 +2029,6 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 		argTypes[objectIdArgIndex] = BYTEAOID;
 		argValues[objectIdArgIndex] = PointerGetDatum(CastPgbsonToBytea(
 														  objectIdFilter));
-		argNulls[objectIdArgIndex] = ' ';
 	}
 
 	/* set the schema validation state, if any */
@@ -2046,7 +2041,6 @@ UpdateAllMatchingDocuments(MongoCollection *collection,
 
 		argTypes[validationLevelArgIndex] = BYTEAOID;
 		argValues[validationLevelArgIndex] = PointerGetDatum(input_bytea);
-		argNulls[validationLevelArgIndex] = ' ';
 	}
 
 	bool readOnly = false;
@@ -4301,17 +4295,17 @@ UpdateAllMatchingDocumentsLegacy(MongoCollection *collection,
 
 	Oid *argTypes = palloc0(argCount * sizeof(Oid));
 	Datum *argValues = palloc0(argCount * sizeof(Datum));
+
 	char *argNulls = palloc0(argCount * sizeof(char));
+	memset(argNulls, ' ', argCount);
 
 	Oid bsonTypeId = BsonTypeId();
 	argTypes[0] = BYTEAOID;
 	argValues[0] = PointerGetDatum(CastPgbsonToBytea(updateDoc));
-	argNulls[0] = ' ';
 
 	pgbson *queryDoc = PgbsonInitFromDocumentBsonValue(currentUpdate->query);
 	argTypes[1] = bsonTypeId;
 	argValues[1] = PointerGetDatum(queryDoc);
-	argNulls[1] = ' ';
 
 	argTypes[2] = BYTEAOID;
 	if (arrayFilters == NULL)
@@ -4322,18 +4316,15 @@ UpdateAllMatchingDocumentsLegacy(MongoCollection *collection,
 	else
 	{
 		argValues[2] = PointerGetDatum(CastPgbsonToBytea(arrayFilters));
-		argNulls[2] = ' ';
 	}
 
 	if (applyVariablSpec)
 	{
 		argTypes[3] = BsonTypeId();
 		argValues[3] = PointerGetDatum(variableSpecBson);
-		argNulls[3] = ' ';
 
 		argTypes[4] = TEXTOID;
 		argValues[4] = CStringGetTextDatum("");
-		argNulls[4] = 'n';
 	}
 
 	/* set shard key value filter, if any */
@@ -4341,7 +4332,6 @@ UpdateAllMatchingDocumentsLegacy(MongoCollection *collection,
 	{
 		argTypes[shardKeyArgIndex] = INT8OID;
 		argValues[shardKeyArgIndex] = Int64GetDatum(shardKeyHash);
-		argNulls[shardKeyArgIndex] = ' ';
 	}
 
 	/* set the objectId filter, if any */
@@ -4350,7 +4340,6 @@ UpdateAllMatchingDocumentsLegacy(MongoCollection *collection,
 		argTypes[objectIdArgIndex] = BYTEAOID;
 		argValues[objectIdArgIndex] = PointerGetDatum(CastPgbsonToBytea(
 														  objectIdFilter));
-		argNulls[objectIdArgIndex] = ' ';
 	}
 
 	/* set the schema validation state, if any */
@@ -4363,7 +4352,6 @@ UpdateAllMatchingDocumentsLegacy(MongoCollection *collection,
 
 		argTypes[validationLevelArgIndex] = BYTEAOID;
 		argValues[validationLevelArgIndex] = PointerGetDatum(input_bytea);
-		argNulls[validationLevelArgIndex] = ' ';
 	}
 
 	bool readOnly = false;

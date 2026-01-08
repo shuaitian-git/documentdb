@@ -10,9 +10,8 @@ use std::{backtrace::Backtrace, fmt::Display, io};
 
 use bson::raw::ValueAccessError;
 use deadpool_postgres::{BuildError, CreatePoolError, PoolError};
-use openssl::error::ErrorStack;
-
 use documentdb_macros::documentdb_error_code_enum;
+use openssl::error::ErrorStack;
 
 use crate::responses::constant::pg_returned_invalid_response_message;
 
@@ -47,11 +46,15 @@ impl DocumentDBError {
     }
 
     pub fn sasl_payload_invalid() -> Self {
-        DocumentDBError::unauthorized("Sasl payload invalid.".to_string())
+        DocumentDBError::authentication_failed("Sasl payload invalid.".to_string())
     }
 
     pub fn unauthorized(msg: String) -> Self {
         DocumentDBError::DocumentDBError(ErrorCode::Unauthorized, msg, Backtrace::capture())
+    }
+
+    pub fn authentication_failed(msg: String) -> Self {
+        DocumentDBError::DocumentDBError(ErrorCode::AuthenticationFailed, msg, Backtrace::capture())
     }
 
     pub fn bad_value(msg: String) -> Self {
@@ -64,6 +67,22 @@ impl DocumentDBError {
 
     pub fn type_mismatch(msg: String) -> Self {
         DocumentDBError::DocumentDBError(ErrorCode::TypeMismatch, msg, Backtrace::capture())
+    }
+
+    pub fn user_not_found(msg: String) -> Self {
+        DocumentDBError::DocumentDBError(ErrorCode::UserNotFound, msg, Backtrace::capture())
+    }
+
+    pub fn role_not_found(msg: String) -> Self {
+        DocumentDBError::DocumentDBError(ErrorCode::RoleNotFound, msg, Backtrace::capture())
+    }
+
+    pub fn duplicate_user(msg: String) -> Self {
+        DocumentDBError::DocumentDBError(ErrorCode::Location51003, msg, Backtrace::capture())
+    }
+
+    pub fn duplicate_role(msg: String) -> Self {
+        DocumentDBError::DocumentDBError(ErrorCode::Location51002, msg, Backtrace::capture())
     }
 
     pub fn reauthentication_required(msg: String) -> Self {

@@ -143,6 +143,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=16 loops=1)
                Output: '{ "" : "1" }'::bson
                indexName: country_1
+               indexKey: {"country": 1}
                isMultiKey: false
                indexBounds: ["country": ["Brazil", { })]
                innerScanLoops: 7 loops
@@ -151,7 +152,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=16 loops=1)
                      Index Cond: (collection.document @>= '{ "country" : "Brazil" }'::bson)
                      Heap Fetches: 16
-(16 rows)
+(17 rows)
 
 SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$gte": "Brazil"}} }, { "$group" : { "_id" : "1", "n" : { "$sum" : 1 } } }]}');
                     document                    
@@ -170,6 +171,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=7 loops=1)
                Output: '{ "" : "1" }'::bson
                indexName: country_1
+               indexKey: {"country": 1}
                isMultiKey: false
                indexBounds: ["country": ["", "Mexico")]
                innerScanLoops: 6 loops
@@ -178,7 +180,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=7 loops=1)
                      Index Cond: (collection.document @< '{ "country" : "Mexico" }'::bson)
                      Heap Fetches: 7
-(16 rows)
+(17 rows)
 
 SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$lt": "Mexico"}} }, { "$group" : { "_id" : "1", "n" : { "$sum" : 1 } } }]}');
                    document                    
@@ -193,6 +195,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bsoncommandcount(1)
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["USA", "USA"]]
          innerScanLoops: 1 loops
@@ -201,7 +204,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=4 loops=1)
                Index Cond: (collection.document @= '{ "country" : "USA" }'::bson)
                Heap Fetches: 4
-(12 rows)
+(13 rows)
 
 SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_only_scan_coll", "query": {"country": {"$eq": "USA"}}}');
                                document                               
@@ -218,6 +221,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bsoncommandcount(1)
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["USA", "USA"]]
          innerScanLoops: 1 loops
@@ -226,7 +230,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=4 loops=1)
                Index Cond: (collection.document @= '{ "country" : "USA" }'::bson)
                Heap Fetches: 0
-(12 rows)
+(13 rows)
 
 -- now update a document to change the country
 SELECT documentdb_api.update('idx_only_scan_db', '{"update": "decimal128", "updates":[{"q": {"_id": 8},"u":{"$set":{"country": "Italy"}},"multi":false}]}');
@@ -242,6 +246,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bsoncommandcount(1)
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["USA", "USA"]]
          innerScanLoops: 1 loops
@@ -250,7 +255,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=4 loops=1)
                Index Cond: (collection.document @= '{ "country" : "USA" }'::bson)
                Heap Fetches: 0
-(12 rows)
+(13 rows)
 
 SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_only_scan_coll", "query": {"country": {"$eq": "USA"}}}');
                                document                               
@@ -265,6 +270,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bsoncommandcount(1)
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["USA", "USA"]], ["country": ["Italy", "Italy"]]
          innerScanLoops: 3 loops
@@ -273,7 +279,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=5 loops=1)
                Index Cond: (collection.document @*= '{ "country" : [ "USA", "Italy" ] }'::bson)
                Heap Fetches: 0
-(12 rows)
+(13 rows)
 
 SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{"count": "idx_only_scan_coll", "query": {"country": {"$in": ["USA", "Italy"]}}}');
                                document                               
@@ -289,6 +295,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=7 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["", "Mexico")]
          innerScanLoops: 6 loops
@@ -297,7 +304,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=7 loops=1)
                Index Cond: (collection.document @< '{ "country" : "Mexico" }'::bson)
                Heap Fetches: 0
-(12 rows)
+(13 rows)
 
 SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$lt": "Mexico"}} }, { "$count": "count" }]}');
                document               
@@ -313,6 +320,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ("Brazil", "Mexico")]
          innerScanLoops: 6 loops
@@ -321,7 +329,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=5 loops=1)
                Index Cond: ((collection.document @> '{ "country" : "Brazil" }'::bson) AND (collection.document @< '{ "country" : "Mexico" }'::bson))
                Heap Fetches: 0
-(12 rows)
+(13 rows)
 
 SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$gt": "Brazil"}, "country": {"$lt": "Mexico"}} }, { "$count": "count" }]}');
                document               
@@ -339,6 +347,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
                Output: NULL::bson
                indexName: country_1
+               indexKey: {"country": 1}
                isMultiKey: false
                indexBounds: ["country": ("Brazil", "Mexico")]
                innerScanLoops: 6 loops
@@ -347,7 +356,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=5 loops=1)
                      Index Cond: ((collection.document @> '{ "country" : "Brazil" }'::bson) AND (collection.document @< '{ "country" : "Mexico" }'::bson))
                      Heap Fetches: 0
-(15 rows)
+(16 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{"$match": { "country": {"$gt": "Brazil"}, "country": {"$lt": "Mexico"} }}, { "$limit": 10 }, { "$group": { "_id": 1, "c": { "$sum": 1 } } }]}');
                                                                               QUERY PLAN                                                                               
@@ -364,6 +373,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                      ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
                            Output: NULL::bson
                            indexName: country_1
+                           indexKey: {"country": 1}
                            isMultiKey: false
                            indexBounds: ["country": ("Brazil", "Mexico")]
                            innerScanLoops: 6 loops
@@ -372,7 +382,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                            ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=5 loops=1)
                                  Index Cond: ((collection.document @> '{ "country" : "Brazil" }'::bson) AND (collection.document @< '{ "country" : "Mexico" }'::bson))
                                  Heap Fetches: 0
-(20 rows)
+(21 rows)
 
 -- No filters and not sharded should use _id_ index
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{"$match": {}}, { "$count": "count" }]}');
@@ -461,6 +471,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=3 loops=1)
          indexName: country_provider_1
+         indexKey: {"country": 1,"provider": 1}
          isMultiKey: false
          indexBounds: ["country": ["Mexico", "Mexico"], "provider": ["AWS", "AWS"]]
          innerScanLoops: 2 loops
@@ -469,7 +480,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Only Scan using country_provider_1 on documentdb_data.documents_69001_690002 collection (actual rows=3 loops=1)
                Index Cond: ((collection.document @= '{ "country" : "Mexico" }'::bson) AND (collection.document @= '{ "provider" : "AWS" }'::bson))
                Heap Fetches: 0
-(12 rows)
+(13 rows)
 
 SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$eq": "Mexico"}, "provider": {"$eq": "AWS"}} }, { "$count": "count" }]}');
                document               
@@ -484,6 +495,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
          indexName: country_provider_1
+         indexKey: {"country": 1,"provider": 1}
          isMultiKey: false
          indexBounds: ["country": ["Mexico", "Mexico"], "provider": ["GCP", "GCP"]]
          innerScanLoops: 2 loops
@@ -492,7 +504,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Only Scan using country_provider_1 on documentdb_data.documents_69001_690002 collection (actual rows=1 loops=1)
                Index Cond: ((collection.document @= '{ "country" : "Mexico" }'::bson) AND (collection.document @= '{ "provider" : "GCP" }'::bson))
                Heap Fetches: 0
-(12 rows)
+(13 rows)
 
 SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$eq": "Mexico"}, "provider": {"$eq": "GCP"}} }, { "$count": "count" }]}');
                document               
@@ -525,6 +537,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=9 loops=1)
                Output: bson_expression_get(collection.document, '{ "" : "$country" }'::bson, true, '{ "now" : NOW_SYS_VARIABLE }'::bson)
                indexName: country_1
+               indexKey: {"country": 1}
                isMultiKey: false
                indexBounds: ["country": ["Mexico", { })]
                innerScanLoops: 3 loops
@@ -534,7 +547,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                      Output: collection.document
                      Index Cond: (collection.document @>= '{ "country" : "Mexico" }'::bson)
                      Order By: (collection.document |-<> '{ "country" : { "$numberInt" : "1" } }'::bson)
-(17 rows)
+(18 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$eq": "Mexico"}} }]}');
                                                   QUERY PLAN                                                   
@@ -542,6 +555,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
    Output: document
    indexName: country_1
+   indexKey: {"country": 1}
    isMultiKey: false
    indexBounds: ["country": ["Mexico", "Mexico"]]
    innerScanLoops: 4 loops
@@ -550,7 +564,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    ->  Index Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=4 loops=1)
          Output: document
          Index Cond: (collection.document @= '{ "country" : "Mexico" }'::bson)
-(11 rows)
+(12 rows)
 
 -- negation, elemMatch, type and size queries should not use index only scan
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$ne": "Mexico"}} }, { "$count": "count" }]}');
@@ -560,6 +574,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=12 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": [MinKey, MaxKey]]
          innerScanLoops: 7 loops
@@ -567,7 +582,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 12)]
          ->  Index Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=12 loops=1)
                Index Cond: (collection.document @!= '{ "country" : "Mexico" }'::bson)
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$type": "string"}} }, { "$count": "count" }]}');
                                                       QUERY PLAN                                                      
@@ -576,6 +591,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=16 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["", { })]
          innerScanLoops: 7 loops
@@ -583,7 +599,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 16)]
          ->  Index Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=16 loops=1)
                Index Cond: (collection.document @# '{ "country" : "string" }'::bson)
-(11 rows)
+(12 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$size": 2}} }, { "$count": "count" }]}');
                                                      QUERY PLAN                                                      
@@ -592,6 +608,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": [MinKey, MaxKey]]
          innerScanLoops: 7 loops
@@ -600,7 +617,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=0 loops=1)
                Index Cond: (collection.document @@# '{ "country" : { "$numberInt" : "2" } }'::bson)
                Rows Removed by Index Recheck: 16
-(12 rows)
+(13 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$elemMatch": {"$eq": "Mexico"}}} }, { "$count": "count" }]}');
                                                                                      QUERY PLAN                                                                                      
@@ -609,6 +626,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["Mexico", "Mexico"]]
          innerScanLoops: 4 loops
@@ -618,7 +636,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                Index Cond: (collection.document @<> '{ "country" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "1" }, "value" : "Mexico", "isTopLevel" : true } ] } }'::bson)
                Filter: (collection.document @#? '{ "country" : { "$eq" : "Mexico" } }'::bson)
                Rows Removed by Filter: 4
-(13 rows)
+(14 rows)
 
 -- if we turn the GUC off by it shouldn't use index only scan
 set documentdb.enableIndexOnlyScan to off;
@@ -629,6 +647,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=7 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["", "Mexico")]
          innerScanLoops: 6 loops
@@ -636,9 +655,10 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 7)]
          ->  Index Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=7 loops=1)
                Index Cond: (collection.document @< '{ "country" : "Mexico" }'::bson)
-(11 rows)
+(12 rows)
 
 set documentdb.enableIndexOnlyScan to on;
+set documentdb.forceIndexOnlyScanIfAvailable to on;
 -- if we insert a multi-key value, it shouldn't use index only scan
 SELECT documentdb_api.insert_one('idx_only_scan_db', 'idx_only_scan_coll', '{"_id": 17, "country": "Mexico", "provider": ["AWS", "GCP"]}');
                               insert_one                              
@@ -653,6 +673,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
          indexName: country_provider_1
+         indexKey: {"country": 1,"provider": 1}
          isMultiKey: true
          indexBounds: ["country": ["Mexico", "Mexico"], "provider": [[ "AWS", "GCP" ], [ "AWS", "GCP" ]]], ["country": ["Mexico", "Mexico"], "provider": ["AWS", "AWS"]]
          innerScanLoops: 4 loops
@@ -661,7 +682,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Scan using country_provider_1 on documentdb_data.documents_69001_690002 collection (actual rows=1 loops=1)
                Index Cond: ((collection.document @= '{ "country" : "Mexico" }'::bson) AND (collection.document @= '{ "provider" : [ "AWS", "GCP" ] }'::bson))
                Rows Removed by Index Recheck: 3
-(12 rows)
+(13 rows)
 
 CALL documentdb_api.drop_indexes('idx_only_scan_db', '{ "dropIndexes": "idx_only_scan_coll", "index": "country_provider_1" }');
                           retval                          
@@ -683,6 +704,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["Mexico", "Mexico"]]
          innerScanLoops: 5 loops
@@ -690,7 +712,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          scanKeyDetails: key 1: [(isInequality: false, estimatedEntryCount: 5)]
          ->  Index Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=5 loops=1)
                Index Cond: (collection.document @= '{ "country" : "Mexico" }'::bson)
-(11 rows)
+(12 rows)
 
 -- if we delete it and vacuum it should use index only scan again
 SELECT documentdb_api.delete('idx_only_scan_db', '{ "delete": "idx_only_scan_coll", "deletes": [ {"q": {"_id": {"$eq": 18} }, "limit": 0} ]}');
@@ -707,6 +729,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["Mexico", "Mexico"]]
          innerScanLoops: 2 loops
@@ -715,7 +738,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=5 loops=1)
                Index Cond: (collection.document @= '{ "country" : "Mexico" }'::bson)
                Heap Fetches: 0
-(12 rows)
+(13 rows)
 
 -- test _id index only scans
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"_id": {"$gt": 5 }} }, { "$count": "count" }]}');
@@ -747,6 +770,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsoncount(1))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": [MinKey, MaxKey]]
          innerScanLoops: 8 loops
@@ -756,7 +780,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                Index Cond: (collection.document @< '{ "country" : { "$maxKey" : 1 } }'::bson)
                Filter: ((collection.document @> '{ "_id" : { "$numberInt" : "5" } }'::bson) AND (collection.document @< '{ "_id" : { "$numberInt" : "8" } }'::bson) AND (collection.object_id > '{ "" : { "$numberInt" : "5" } }'::bson) AND (collection.object_id <= '{ "" : { "$numberDouble" : "Infinity" } }'::bson) AND (collection.object_id < '{ "" : { "$numberInt" : "8" } }'::bson) AND (collection.object_id >= '{ "" : { "$numberDouble" : "-Infinity" } }'::bson))
                Rows Removed by Filter: 15
-(13 rows)
+(14 rows)
 
 -- count with legacy count aggregates
 set documentdb.enableNewCountAggregates to off;
@@ -767,6 +791,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
    Output: bson_repath_and_build('count'::text, bsonsum('{ "" : { "$numberInt" : "1" } }'::bson))
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
          indexName: country_1
+         indexKey: {"country": 1}
          isMultiKey: false
          indexBounds: ["country": ["Mexico", "Mexico"]]
          innerScanLoops: 2 loops
@@ -775,7 +800,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=5 loops=1)
                Index Cond: (collection.document @= '{ "country" : "Mexico" }'::bson)
                Heap Fetches: 0
-(12 rows)
+(13 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$gte": "Brazil"}} }, { "$group" : { "_id" : "1", "n" : { "$sum" : 1 } } }]}');
                                                            QUERY PLAN                                                            
@@ -788,6 +813,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=17 loops=1)
                Output: '{ "" : "1" }'::bson
                indexName: country_1
+               indexKey: {"country": 1}
                isMultiKey: false
                indexBounds: ["country": ["Brazil", { })]
                innerScanLoops: 8 loops
@@ -796,7 +822,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=17 loops=1)
                      Index Cond: (collection.document @>= '{ "country" : "Brazil" }'::bson)
                      Heap Fetches: 0
-(16 rows)
+(17 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_pipeline('idx_only_scan_db', '{ "aggregate" : "idx_only_scan_coll", "pipeline" : [{ "$match" : {"country": {"$gte": "Brazil"}} }, { "$group" : { "_id" : null, "n" : { "$sum" : 1 } } }]}');
                                                            QUERY PLAN                                                            
@@ -809,6 +835,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=17 loops=1)
                Output: '{ "" : null }'::bson
                indexName: country_1
+               indexKey: {"country": 1}
                isMultiKey: false
                indexBounds: ["country": ["Brazil", { })]
                innerScanLoops: 8 loops
@@ -817,7 +844,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF) SELECT docu
                ->  Index Only Scan using country_1 on documentdb_data.documents_69001_690002 collection (actual rows=17 loops=1)
                      Index Cond: (collection.document @>= '{ "country" : "Brazil" }'::bson)
                      Heap Fetches: 0
-(16 rows)
+(17 rows)
 
 set documentdb.enableNewCountAggregates to on;
 -- TODO support sharded collections, currently we don't because of the shard_key_value filter
@@ -872,3 +899,61 @@ EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF)
 (15 rows)
 
 ROLLBACK;
+-- test index only scan is not enabled for wildcard indexes
+set documentdb.enableCompositeWildcardIndex to on;
+SELECT documentdb_api.insert_one('idx_only_scan_db', 'compwildcard2', '{ "a": { "b": 1, "c": 5 }}');
+NOTICE:  creating collection
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('idx_only_scan_db', 'compwildcard2', '{ "a": { "b": 1, "c": 6 }}');
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('idx_only_scan_db', 'compwildcard2', '{ "a": { "b": 2, "c": 6 }}');
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('idx_only_scan_db', 'compwildcard2', '{ "a": { "b": 2, "c": 7 }}');
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api.insert_one('idx_only_scan_db', 'compwildcard2', '{ "a": { "b": 3, "c": 7 }}');
+                              insert_one                              
+---------------------------------------------------------------------
+ { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
+(1 row)
+
+SELECT documentdb_api_internal.create_indexes_non_concurrently('idx_only_scan_db', '{ "createIndexes": "compwildcard2", "indexes": [ { "key": { "$**": 1 }, "name": "$**_1", "enableOrderedIndex": true }]}', TRUE);
+                                                                                                   create_indexes_non_concurrently                                                                                                    
+---------------------------------------------------------------------
+ { "raw" : { "defaultShard" : { "numIndexesBefore" : { "$numberInt" : "1" }, "numIndexesAfter" : { "$numberInt" : "2" }, "createdCollectionAutomatically" : false, "ok" : { "$numberInt" : "1" } } }, "ok" : { "$numberInt" : "1" } }
+(1 row)
+
+set documentdb.forceIndexOnlyScanIfAvailable to on;
+EXPLAIN (ANALYZE ON, COSTS OFF, VERBOSE ON, TIMING OFF, SUMMARY OFF)
+    SELECT document FROM bson_aggregation_count('idx_only_scan_db', '{ "count" : "compwildcard2", "query" : { "a.b": { "$gt": 2 } } }');
+                                                    QUERY PLAN                                                     
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   Output: bsoncommandcount(1)
+   ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
+         indexName: $**_1
+         indexKey: {"$**": 1}
+         isMultiKey: false
+         indexBounds: ["a.b": ( { "a.b": 2 } ,  { "a.b": Infinity } ]]
+         innerScanLoops: 5 loops
+         scanType: ordered
+         scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 1)]
+         ->  Index Scan using "$**_1" on documentdb_data.documents_69003_690014 collection (actual rows=1 loops=1)
+               Index Cond: (collection.document @> '{ "a.b" : { "$numberInt" : "2" } }'::bson)
+(12 rows)
+

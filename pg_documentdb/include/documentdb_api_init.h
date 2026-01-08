@@ -17,4 +17,5 @@ void InitializeDocumentDBBackgroundWorker(char *libraryName, char *gucPrefix,
 										  char *extensionObjectPrefix);
 void InitializeSharedMemoryHooks(void);
 void InitializeBackgroundWorkerJobAllowedCommands(void);
+void RegisterDocumentDBBackgroundWorkerJobs(void);
 #endif

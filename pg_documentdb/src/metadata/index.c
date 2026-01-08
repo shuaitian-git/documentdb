@@ -37,6 +37,8 @@
 #include "utils/version_utils.h"
 #include "metadata/metadata_cache.h"
 #include "utils/hashset_utils.h"
+#include "infrastructure/job_management.h"
+#include "utils/error_utils.h"
 
 extern int MaxNumActiveUsersIndexBuilds;
 extern int IndexBuildScheduleInSec;
@@ -72,6 +74,16 @@ static const MongoIndexSupport MongoIndexSupportedList[] =
 
 static const int NumberOfMongoIndexTypes = sizeof(MongoIndexSupportedList) /
 										   sizeof(MongoIndexSupport);
+
+/*
+ * Returns the GUC for the index build schedule.
+ */
+inline static int
+GetIndexBuildScheduleInSec(void)
+{
+	return IndexBuildScheduleInSec;
+}
+
 
 /* --------------------------------------------------------- */
 /* Top level exports */
@@ -2013,6 +2025,62 @@ ScheduleIndexBuildTasks(char *extensionPrefix)
 		ExtensionExecuteQueryViaSPI(scheduleStr->data, readOnly, SPI_OK_SELECT,
 									&isNull);
 	}
+}
+
+
+/*
+ * Register index build jobs with the background worker infrastructure.
+ */
+void
+RegisterIndexBuildBackgroundWorkerJobs(void)
+{
+	if (!EnableBackgroundWorker || !EnableBackgroundWorkerJobs)
+	{
+		return;
+	}
+
+	if (!process_shared_preload_libraries_in_progress)
+	{
+		ereport(ERROR, (errmsg(
+							"Registering a new background worker job must happen during shared_preload_libraries")));
+	}
+
+	BackgroundWorkerJob indexBuildJob1 = {
+		.jobId = DOCUMENTDB_INDEX_BUILD_JOB1_JOBID,
+		.jobName = "documentdb_index_build_background_job_1",
+		.command = {
+			.schema = ApiInternalSchemaName,
+			.name = "build_index_background"
+		},
+		.get_schedule_interval_in_seconds_hook = GetIndexBuildScheduleInSec,
+		.argument = {
+			.argType = INT4OID,
+			.argValue = "1",
+			.isNull = false
+		},
+		.timeoutInSeconds = 300,     /* 5 minutes timeout */
+		.toBeExecutedOnMetadataCoordinatorOnly = true
+	};
+
+	BackgroundWorkerJob indexBuildJob2 = {
+		.jobId = DOCUMENTDB_INDEX_BUILD_JOB2_JOBID,
+		.jobName = "documentdb_index_build_background_job_2",
+		.command = {
+			.schema = ApiInternalSchemaName,
+			.name = "build_index_background"
+		},
+		.get_schedule_interval_in_seconds_hook = GetIndexBuildScheduleInSec,
+		.argument = {
+			.argType = INT4OID,
+			.argValue = "2",
+			.isNull = false
+		},
+		.timeoutInSeconds = 300,     /* 5 minutes timeout */
+		.toBeExecutedOnMetadataCoordinatorOnly = true
+	};
+
+	RegisterBackgroundWorkerJob(indexBuildJob1);
+	RegisterBackgroundWorkerJob(indexBuildJob2);
 }
 
 
