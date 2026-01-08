@@ -79,17 +79,23 @@ jobs:
           name: deb-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ env.DOCUMENTDB_VERSION }}
           path: |
             packaging/*postgresql*.deb
-          retention-days: 7
+          retention-days: 90
           if-no-files-found: error
           compression-level: 0
 
+      - name: Download a DocumentDB package for testing
+        uses: actions/download-artifact@v4
+        with:
+          name: documentdb-${{ env.DOCUMENTDB_VERSION }}-${{ matrix.os }}-pg${{ matrix.pg_version }}-${{ matrix.arch }}
+          path: packaging/
 
       - name: Build Gateway Debian Package
         # Just to avoid building gateway packages twice for pg version.
         # keep pg version when building gateway in case we need it for gateway build process in the future.
         if: matrix.pg_version == '17'
         run: |
-          ./packaging/build_gateway_packages.sh --os ${{ matrix.os }} --pg 17 --version ${{ env.DOCUMENTDB_VERSION }} --test-clean-install
+          deb_package=$(ls packaging/ | grep -E "${{ matrix.os }}-postgresql-17-documentdb_" | grep -v "dbg" | head -n1)
+          ./packaging/build_gateway_packages.sh --test-clean-install --documentdb-package "packaging/${deb_package}"
 
       - name: Upload Gateway Debian Package as Artifact
         if: matrix.pg_version == '17'
