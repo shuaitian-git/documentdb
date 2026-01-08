@@ -112,30 +112,29 @@ jobs:
         id: changelog
         run: |
           VERSION_DASH="${{ env.VERSION_DASH }}"
-          # Extract the changelog section for this version
           CHANGELOG_FILE="CHANGELOG.md"
           
           if ! grep -q "### documentdb v${VERSION_DASH}" "$CHANGELOG_FILE"; then
             echo "Warning: Version v${VERSION_DASH} not found in CHANGELOG.md"
-            CHANGELOG_TEXT="Release ${VERSION_DASH}"
+            echo "Release ${VERSION_DASH}" > changelog_excerpt.md
           else
-            # Extract from this version header to the next version header (or end of file)
-            CHANGELOG_TEXT=$(awk "/^### documentdb v${VERSION_DASH}/,/^### documentdb v[0-9]/ {
-              if (/^### documentdb v[0-9]/ && !/^### documentdb v${VERSION_DASH}/) {
-                exit
-              }
-              print
-            }" "$CHANGELOG_FILE")
+            # Extract from this version header to the next version header
+            # The pattern matches from the target version to any line starting with "### documentdb v"
+            # Then we remove the last line (which is the next version header)
+            sed -n "/^### documentdb v${VERSION_DASH}/,/^### documentdb v[0-9]/p" "$CHANGELOG_FILE" | \
+              sed '$d' > changelog_excerpt.md
             
-            # If extraction failed, just get the header
-            if [ -z "$CHANGELOG_TEXT" ]; then
-              CHANGELOG_TEXT="### documentdb v${VERSION_DASH}"
+            # If extraction is empty or too short, add fallback
+            if [ ! -s changelog_excerpt.md ] || [ $(wc -l < changelog_excerpt.md) -le 1 ]; then
+              echo "### documentdb v${VERSION_DASH}" > changelog_excerpt.md
+              echo "" >> changelog_excerpt.md
+              echo "Release ${VERSION_DASH}" >> changelog_excerpt.md
             fi
           fi
           
-          # Save to file for GitHub release
-          echo "$CHANGELOG_TEXT" > changelog_excerpt.md
+          echo "=== Changelog excerpt ==="
           cat changelog_excerpt.md
+          echo "========================"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
