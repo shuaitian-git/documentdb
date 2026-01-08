@@ -315,7 +315,7 @@ impl TlsProvider {
                         continue;
                     }
 
-                    log::info!("Reloading TLS certificates since they have been modified.");
+                    tracing::info!("Reloading TLS certificates since they have been modified.");
 
                     match CertificateBundle::from_cert_store(&cert_store).await {
                         Ok(new_bundle) => {
@@ -328,12 +328,12 @@ impl TlsProvider {
                                     last_key_modified = key_m;
                                     certificate_bundle_clone.store(Arc::new(new_bundle));
 
-                                    log::info!("TLS certificates reloaded.");
+                                    tracing::info!("TLS certificates reloaded.");
                                 }
-                                Err(e) => log::error!("Failed to create TLS acceptor: {e:?}."),
+                                Err(e) => tracing::error!("Failed to create TLS acceptor: {e:?}."),
                             }
                         }
-                        Err(e) => log::error!("Failed to reload TLS certificates: {e:?}."),
+                        Err(e) => tracing::error!("Failed to reload TLS certificates: {e:?}."),
                     }
                 }
             }
@@ -384,7 +384,7 @@ impl TlsProvider {
         let pubkey = match bundle.certificate.public_key() {
             Ok(k) => k,
             Err(_) => {
-                log::error!("Detected invalid certificate. Failed to obtain public key.");
+                tracing::error!("Detected invalid certificate. Failed to obtain public key.");
                 return false;
             }
         };
@@ -398,8 +398,8 @@ impl TlsProvider {
 
         if !result {
             match TlsProvider::sha1_thumbprint(&certificate) {
-                Ok(thumbprint) => log::error!("Detected invalid certificate. Thumbprint: {thumbprint:?}"),
-                Err(e) => log::error!("Detected invalid certificate. Failed to generate certificate. Thumbprint: {e:?}"),
+                Ok(thumbprint) => tracing::error!("Detected invalid certificate. Thumbprint: {thumbprint:?}"),
+                Err(e) => tracing::error!("Detected invalid certificate. Failed to generate certificate. Thumbprint: {e:?}"),
             }
         }
 

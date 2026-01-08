@@ -118,7 +118,7 @@ where
                     .await;
 
                     if let Err(conn_err) = conn_res {
-                        log::error!("Failed to accept a connection: {conn_err:?}.");
+                        tracing::error!("Failed to accept a connection: {conn_err:?}.");
                     }
                 });
             }
@@ -164,7 +164,10 @@ where
     let (tcp_stream, peer_address) = stream_and_address?;
 
     let connection_id = Uuid::new_v4();
-    log::info!(activity_id = connection_id.to_string().as_str(); "Accepted new TCP connection");
+    tracing::info!(
+        activity_id = connection_id.to_string().as_str(),
+        "Accepted new TCP connection"
+    );
 
     // Configure TCP stream
     tcp_stream.set_nodelay(true)?;
@@ -181,7 +184,7 @@ where
     let mut tls_stream = SslStream::new(ssl_session, tcp_stream)?;
 
     if let Err(ssl_error) = SslStream::accept(Pin::new(&mut tls_stream)).await {
-        log::error!("Failed to create TLS connection: {ssl_error:?}.");
+        tracing::error!("Failed to create TLS connection: {ssl_error:?}.");
         return Err(DocumentDBError::internal_error(format!(
             "SSL handshake failed: {ssl_error:?}."
         )));
@@ -199,8 +202,8 @@ where
         }
     };
 
-    log::info!(
-        activity_id = connection_id.to_string().as_str();
+    tracing::info!(
+        activity_id = connection_id.to_string().as_str(),
         "TCP connection established - Connection Id {connection_id}, client IP {ip_address}"
     );
 
@@ -256,14 +259,20 @@ where
                     )
                     .await
                     {
-                        log::error!(activity_id = request_activity_id.as_str(); "Couldn't reply with error {e:?}.");
+                        tracing::error!(
+                            activity_id = request_activity_id.as_str(),
+                            "Couldn't reply with error {e:?}."
+                        );
                         break;
                     }
                 }
             }
 
             Ok(None) => {
-                log::info!(activity_id = connection_activity_id_as_str; "Connection closed.");
+                tracing::info!(
+                    activity_id = connection_activity_id_as_str,
+                    "Connection closed."
+                );
                 break;
             }
 
@@ -276,7 +285,10 @@ where
                 )
                 .await
                 {
-                    log::warn!(activity_id = connection_activity_id_as_str; "Couldn't reply with error {e:?}.");
+                    tracing::warn!(
+                        activity_id = connection_activity_id_as_str,
+                        "Couldn't reply with error {e:?}."
+                    );
                     break;
                 }
             }
@@ -391,7 +403,10 @@ where
         {
             Ok(command_error) => Some(command_error),
             Err(write_err) => {
-                log::error!(activity_id = activity_id; "Couldn't reply with error {write_err:?}.");
+                tracing::error!(
+                    activity_id = activity_id,
+                    "Couldn't reply with error {write_err:?}."
+                );
                 None
             }
         }
@@ -479,12 +494,12 @@ async fn log_and_write_error(
     activity_id: &str,
 ) -> Result<CommandError> {
     let command_error = CommandError::from_error(connection_context, e, activity_id).await;
-    let response = command_error.to_raw_document_buf()?;
+    let response = command_error.to_raw_document_buf();
 
     responses::writer::write_and_flush(header, &response, stream).await?;
 
     // telemetry can block so do it after write and flush.
-    log::error!(activity_id = activity_id; "Request failure: {e}");
+    tracing::error!(activity_id = activity_id, "Request failure: {e}");
 
     if let Some(telemetry) = connection_context.telemetry_provider.as_ref() {
         telemetry
@@ -520,9 +535,9 @@ async fn log_verbose_latency(
         (200, 0)
     };
 
-    log::info!(
+    tracing::info!(
         activity_id = request_context.activity_id,
-        event_id = EventId::RequestTrace;
+        event_id = EventId::RequestTrace.code(),
         "Latency for Mongo Request with interval timings (ns): BufferRead={}, HandleRequest={}, FormatRequest={}, ProcessRequest={}, PostgresBeginTransaction={}, PostgresSetStatementTimeout={}, PostgresTransactionCommit={}, FormatResponse={}, Address={}, TransportProtocol={}, DatabaseName={}, CollectionName={}, OperationName={}, StatusCode={}, SubStatusCode={}, ErrorCode={}",
         request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::BufferRead),
         request_context.tracker.get_interval_elapsed_time(RequestIntervalKind::HandleRequest),

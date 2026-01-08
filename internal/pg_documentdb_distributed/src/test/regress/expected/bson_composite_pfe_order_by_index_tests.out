@@ -152,60 +152,88 @@ EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "f
                                  QUERY PLAN                                  
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: b_1
+   indexKey: {"b": 1}
+   isMultiKey: false
+   indexBounds: ["b": [1, 1]]
    ->  Index Scan using b_1 on documents_68701_687002 collection
          Index Cond: (document @= '{ "b" : { "$numberInt" : "1" } }'::bson)
          Filter: (document @= '{ "pfe_a" : { "$numberInt" : "15" } }'::bson)
-(4 rows)
+(8 rows)
 
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "d": 10, "pfe_a": 10 } }');
                                  QUERY PLAN                                  
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: d_1
+   indexKey: {"d": 1}
+   isMultiKey: false
+   indexBounds: ["d": [10, 10]]
    ->  Index Scan using d_1 on documents_68701_687002 collection
          Index Cond: (document @= '{ "d" : { "$numberInt" : "10" } }'::bson)
-(3 rows)
+(7 rows)
 
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "e": 10 } }');
                                   QUERY PLAN                                   
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: e_1
+   indexKey: {"e": 1}
+   isMultiKey: false
+   indexBounds: ["e": (MinKey, MaxKey)]
    ->  Bitmap Heap Scan on documents_68701_687002 collection
          Recheck Cond: (document @= '{ "e" : { "$numberInt" : "10" } }'::bson)
          ->  Bitmap Index Scan on e_1
-(4 rows)
+(8 rows)
 
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "f": 20 } }');
                                  QUERY PLAN                                  
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: f_1
+   indexKey: {"f": 1}
+   isMultiKey: false
+   indexBounds: ["f": [20, 20]]
    ->  Index Scan using f_1 on documents_68701_687002 collection
          Index Cond: (document @= '{ "f" : { "$numberInt" : "20" } }'::bson)
-(3 rows)
+(7 rows)
 
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "f": { "$gt": 10 } } }');
                                   QUERY PLAN                                   
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: f_1
+   indexKey: {"f": 1}
+   isMultiKey: false
+   indexBounds: ["f": (MinKey, MaxKey)]
    ->  Bitmap Heap Scan on documents_68701_687002 collection
          Recheck Cond: (document @> '{ "f" : { "$numberInt" : "10" } }'::bson)
          ->  Bitmap Index Scan on f_1
-(4 rows)
+(8 rows)
 
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "g": { "$gt": 10 }, "h": 10 } }');
-                                 QUERY PLAN                                  
+                                     QUERY PLAN                                     
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: ghi_1
+   indexKey: {"g": 1,"h": 1,"i": 1}
+   isMultiKey: false
+   indexBounds: ["g": (10, Infinity], "h": (MinKey, MaxKey), "i": (MinKey, MaxKey)]
    ->  Index Scan using ghi_1 on documents_68701_687002 collection
          Index Cond: (document @> '{ "g" : { "$numberInt" : "10" } }'::bson)
-(3 rows)
+(7 rows)
 
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "g": { "$gt": 10 }, "h": 10, "i": { "$gt": 15 } } }');
                                                                 QUERY PLAN                                                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan)
+   indexName: ghi_1
+   indexKey: {"g": 1,"h": 1,"i": 1}
+   isMultiKey: false
+   indexBounds: ["g": (10, Infinity], "h": (MinKey, MaxKey), "i": (15, Infinity]]
    ->  Index Scan using ghi_1 on documents_68701_687002 collection
          Index Cond: ((document @> '{ "g" : { "$numberInt" : "10" } }'::bson) AND (document @> '{ "i" : { "$numberInt" : "15" } }'::bson))
-(3 rows)
+(7 rows)
 
 -- retry the same ones with order by on the index fields 
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "b": 1, "pfe_a": 15 }, "sort": { "b": 1 } }');
@@ -213,6 +241,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
    indexName: b_1
+   indexKey: {"b": 1}
    isMultiKey: false
    indexBounds: ["b": [1, 1]]
    innerScanLoops: 1 loops
@@ -222,13 +251,14 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
          Index Cond: (document @= '{ "b" : { "$numberInt" : "1" } }'::bson)
          Order By: (document |-<> '{ "b" : { "$numberInt" : "1" } }'::bson)
          Filter: (document @= '{ "pfe_a" : { "$numberInt" : "15" } }'::bson)
-(11 rows)
+(12 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "d": 10, "pfe_a": 10 }, "sort": { "d": 1 } }');
                                        QUERY PLAN                                        
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: d_1
+   indexKey: {"d": 1}
    isMultiKey: false
    indexBounds: ["d": [10, 10]]
    innerScanLoops: 1 loops
@@ -237,13 +267,14 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
    ->  Index Scan using d_1 on documents_68701_687002 collection (actual rows=1 loops=1)
          Index Cond: (document @= '{ "d" : { "$numberInt" : "10" } }'::bson)
          Order By: (document |-<> '{ "d" : { "$numberInt" : "1" } }'::bson)
-(10 rows)
+(11 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "f": 20 }, "sort": { "f": 1 } }');
                                        QUERY PLAN                                        
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: f_1
+   indexKey: {"f": 1}
    isMultiKey: false
    indexBounds: ["f": [20, 20]]
    innerScanLoops: 2 loops
@@ -252,7 +283,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
    ->  Index Scan using f_1 on documents_68701_687002 collection (actual rows=1 loops=1)
          Index Cond: (document @= '{ "f" : { "$numberInt" : "20" } }'::bson)
          Order By: (document |-<> '{ "f" : { "$numberInt" : "1" } }'::bson)
-(10 rows)
+(11 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "f": { "$gt": 10 } }, "sort": { "f": 1 } }');
                                                                              QUERY PLAN                                                                             
@@ -262,6 +293,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
    Sort Method: quicksort  Memory: 38kB
    ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=90 loops=1)
          indexName: f_1
+         indexKey: {"f": 1}
          isMultiKey: false
          indexBounds: ["f": (MinKey, MaxKey)]
          innerScanLoops: 90 loops
@@ -272,13 +304,14 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
                Heap Blocks: exact=2
                ->  Bitmap Index Scan on f_1 (actual rows=90 loops=1)
                      Index Cond: (document @<> '{ "f" : { "orderByScan" : { "$numberInt" : "1" } } }'::bson)
-(15 rows)
+(16 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "g": { "$gt": 10 }, "h": 10 }, "sort": { "g": 1 } }');
                                         QUERY PLAN                                         
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
    indexName: ghi_1
+   indexKey: {"g": 1,"h": 1,"i": 1}
    isMultiKey: false
    indexBounds: ["g": (10, Infinity], "h": (MinKey, MaxKey), "i": (MinKey, MaxKey)]
    innerScanLoops: 1 loops
@@ -287,13 +320,14 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
    ->  Index Scan using ghi_1 on documents_68701_687002 collection (actual rows=0 loops=1)
          Index Cond: (document @> '{ "g" : { "$numberInt" : "10" } }'::bson)
          Order By: (document |-<> '{ "g" : { "$numberInt" : "1" } }'::bson)
-(10 rows)
+(11 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_pfe', '{ "find": "query_orderby_pfe", "filter": { "g": { "$gt": 10 }, "h": 10, "i": { "$gt": 15 } }, "sort": { "g": 1 } }');
                                                                 QUERY PLAN                                                                 
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
    indexName: ghi_1
+   indexKey: {"g": 1,"h": 1,"i": 1}
    isMultiKey: false
    indexBounds: ["g": (10, Infinity], "h": (MinKey, MaxKey), "i": (15, Infinity]]
    innerScanLoops: 1 loops
@@ -302,7 +336,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
    ->  Index Scan using ghi_1 on documents_68701_687002 collection (actual rows=0 loops=1)
          Index Cond: ((document @> '{ "g" : { "$numberInt" : "10" } }'::bson) AND (document @> '{ "i" : { "$numberInt" : "15" } }'::bson))
          Order By: (document |-<> '{ "g" : { "$numberInt" : "1" } }'::bson)
-(10 rows)
+(11 rows)
 
 BEGIN;
 set local enable_bitmapscan to off;
@@ -350,6 +384,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
    indexName: ghi_1
+   indexKey: {"g": 1,"h": 1,"i": 1}
    isMultiKey: false
    indexBounds: ["g": [10, 10], "h": (MinKey, MaxKey), "i": (15, Infinity]]
    innerScanLoops: 1 loops
@@ -358,5 +393,5 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
    ->  Index Scan using ghi_1 on documents_68701_687002 collection (actual rows=0 loops=1)
          Index Cond: ((document @= '{ "g" : { "$numberInt" : "10" } }'::bson) AND (document @> '{ "i" : { "$numberInt" : "15" } }'::bson))
          Order By: (document |-<> '{ "i" : { "$numberInt" : "1" } }'::bson)
-(10 rows)
+(11 rows)
 

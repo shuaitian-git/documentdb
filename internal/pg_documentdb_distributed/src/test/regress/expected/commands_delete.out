@@ -164,7 +164,7 @@ select documentdb_api.delete('db', '{"delete":"notexists", "deletes":[{"q":{},"l
 
 -- query syntax errors are added the response
 select documentdb_api.delete('db', '{"delete":"removeme", "deletes":[{"q":{"a":{"$ltr":5}},"limit":0}]}');
-                                                                                                                     delete                                                                                                                      
+                                                                                                                             delete                                                                                                                             
 ---------------------------------------------------------------------
  ("{ ""n"" : { ""$numberInt"" : ""0"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""16777245"" }, ""errmsg"" : ""Unrecognized operator specified: $ltr"" } ] }",f)
 (1 row)
@@ -1179,6 +1179,29 @@ SELECT document from documentdb_api.collection('db', 'coll_delete');
 (1 row)
 
 ROLLBACK;
+-- $in: []
+BEGIN;
+SELECT document from documentdb_api.collection('db', 'coll_delete');
+                       document                       
+---------------------------------------------------------------------
+ { "_id" : { "$numberInt" : "1" }, "a" : "dog" }
+ { "_id" : { "$numberInt" : "2" }, "a" : "cat" }
+ { "_id" : { "$numberInt" : "3" }, "a" : "$$varRef" }
+(3 rows)
+
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": { "$expr": {"$in": [] } }, "limit": 0}], "let": {"varRef": 2} }');
+                                                                                                                                                       delete                                                                                                                                                       
+---------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""0"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""654573597"" }, ""errmsg"" : ""The expression $in requires exactly 2 arguments, but 0 arguments were actually provided."" } ] }",f)
+(1 row)
+
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": { "$expr": {"$in": [] } }, "limit": 1}], "let": {"varRef": 2} }');
+                                                                                                                                                       delete                                                                                                                                                       
+---------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""0"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""654573597"" }, ""errmsg"" : ""The expression $in requires exactly 2 arguments, but 0 arguments were actually provided."" } ] }",f)
+(1 row)
+
+ROLLBACK;
 -- sharded collection
 SELECT documentdb_api.shard_collection('db', 'coll_delete', '{ "a": "hashed" }', false);
  shard_collection 
@@ -1272,6 +1295,29 @@ SELECT document from documentdb_api.collection('db', 'coll_delete');
  document 
 ---------------------------------------------------------------------
 (0 rows)
+
+ROLLBACK;
+-- $in: []
+BEGIN;
+SELECT document from documentdb_api.collection('db', 'coll_delete');
+                       document                       
+---------------------------------------------------------------------
+ { "_id" : { "$numberInt" : "2" }, "a" : "cat" }
+ { "_id" : { "$numberInt" : "1" }, "a" : "dog" }
+ { "_id" : { "$numberInt" : "3" }, "a" : "$$varRef" }
+(3 rows)
+
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": { "$expr": {"$in": [] } }, "limit": 0}], "let": {"varRef": 2} }');
+                                                                                                                                                       delete                                                                                                                                                       
+---------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""0"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""654573597"" }, ""errmsg"" : ""The expression $in requires exactly 2 arguments, but 0 arguments were actually provided."" } ] }",f)
+(1 row)
+
+SELECT documentdb_api.delete('db', '{ "delete": "coll_delete", "deletes": [ { "q": { "$expr": {"$in": [] } }, "limit": 1}], "let": {"varRef": 2} }');
+                                                                                                                                           delete                                                                                                                                           
+---------------------------------------------------------------------
+ ("{ ""n"" : { ""$numberInt"" : ""0"" }, ""ok"" : { ""$numberDouble"" : ""1.0"" }, ""writeErrors"" : [ { ""index"" : { ""$numberInt"" : ""0"" }, ""code"" : { ""$numberInt"" : ""1088"" }, ""errmsg"" : ""delete query with limit 1 must include either _id or shard key filter"" } ] }",f)
+(1 row)
 
 ROLLBACK;
 RESET documentdb.enableVariablesSupportForWriteCommands;

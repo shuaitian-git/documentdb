@@ -53,6 +53,10 @@ impl DynamicConfiguration for MaxConnectionConfig {
         i32::default()
     }
 
+    async fn get_u64(&self, _: &str, _: u64) -> u64 {
+        u64::default()
+    }
+
     async fn equals_value(&self, _: &str, _: &str) -> bool {
         false
     }

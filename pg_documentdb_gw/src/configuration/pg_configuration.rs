@@ -57,7 +57,7 @@ impl PgConfigurationInner {
                     host_config.send_shutdown_responses.to_lowercase(),
                 );
             }
-            Err(e) => log::warn!("Host Config file not able to be loaded: {e}"),
+            Err(e) => tracing::warn!("Host Config file not able to be loaded: {e}"),
         }
 
         let mut request_tracker = RequestTracker::new();
@@ -101,7 +101,7 @@ impl PgConfigurationInner {
         let in_recovery: bool = pg_is_in_recovery_row.first().is_some_and(|row| row.get(0));
         configs.insert(POSTGRES_RECOVERY_KEY.to_string(), in_recovery.to_string());
 
-        log::info!("Dynamic configurations loaded: {configs:?}");
+        tracing::info!("Dynamic configurations loaded: {configs:?}");
         Ok(configs)
     }
 
@@ -145,11 +145,11 @@ impl PgConfiguration {
                             .reload_configuration_with_connection(&connection)
                             .await
                         {
-                            log::error!("Failed to refresh configuration: {e}");
+                            tracing::error!("Failed to refresh configuration: {e}");
                         }
                     }
                     Err(e) => {
-                        log::error!(
+                        tracing::error!(
                             "Failed to acquire postgres connection to refresh configuration: {e}"
                         )
                     }
@@ -196,7 +196,7 @@ impl PgConfiguration {
         let new_config = match self.inner.load_configurations(conn).await {
             Ok(config) => config,
             Err(e) => {
-                log::error!("Failed to reload configuration: {e}");
+                tracing::error!("Failed to reload configuration: {e}");
                 return Err(e);
             }
         };
@@ -243,6 +243,17 @@ impl DynamicConfiguration for PgConfiguration {
         ret
     }
 
+    async fn get_u64(&self, key: &str, default: u64) -> u64 {
+        let ret = self
+            .values
+            .read()
+            .await
+            .get(key)
+            .map(|v| v.parse::<u64>().unwrap_or(default))
+            .unwrap_or(default);
+        ret
+    }
+
     async fn equals_value(&self, key: &str, value: &str) -> bool {
         let ret = self
             .values
@@ -268,7 +279,7 @@ impl DynamicConfiguration for PgConfiguration {
         match max_connections {
             n if n < 0 => {
                 // theoretically we can't end up here, since Postgres always provide values
-                log::error!("GUC max_connections is not setup correctly");
+                tracing::error!("GUC max_connections is not setup correctly");
                 return 25usize;
             }
             n => n as usize,

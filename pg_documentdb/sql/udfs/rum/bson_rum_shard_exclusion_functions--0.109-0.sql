@@ -44,3 +44,9 @@ CREATE OR REPLACE FUNCTION __API_SCHEMA_INTERNAL_V2__.gin_bson_unique_shard_opti
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS 'MODULE_PATHNAME', $function$bson_unique_shard_path_options$function$;
+
+
+CREATE OR REPLACE FUNCTION __API_SCHEMA_INTERNAL_V2__.generate_unique_shard_document(p_document __CORE_SCHEMA__.bson, p_shard_key_value bigint, p_unique_spec __CORE_SCHEMA__.bson, p_sparse boolean, p_generate_composite boolean)
+ RETURNS __CORE_SCHEMA__.bson
+ LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE
+AS 'MODULE_PATHNAME', $function$generate_unique_shard_document$function$;

@@ -1414,7 +1414,7 @@ CursorHashEntryCompareFunc(const void *obj1, const void *obj2,
 /*
  * Updates a single shard's cursor document into the cursor map.
  */
-pg_attribute_no_sanitize_alignment() static void
+static void
 UpdateCursorInContinuationMapCore(bson_iter_t *singleContinuationDoc, HTAB *cursorMap)
 {
 	bson_value_t continuationBinaryValue = { 0 };
@@ -1478,8 +1478,9 @@ UpdateCursorInContinuationMapCore(bson_iter_t *singleContinuationDoc, HTAB *curs
 		 */
 		hashEntry->tableName = pnstrdup(hashEntry->tableName, hashEntry->tableNameLength);
 	}
-	hashEntry->continuation =
-		*(ItemPointerData *) continuationBinaryValue.value.v_binary.data;
+
+	memcpy(&hashEntry->continuation, continuationBinaryValue.value.v_binary.data,
+		   sizeof(ItemPointerData));
 
 	if (EnablePrimaryKeyCursorScan &&
 		primaryKeyValue.value_type != BSON_TYPE_EOD)

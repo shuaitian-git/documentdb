@@ -199,10 +199,26 @@ typedef struct
 	/* Whether or not to skip generating the top level array term */
 	bool skipGenerateTopLevelArrayTerm;
 
+	bool enableCompositeReducedCorrelatedTerms;
+
 	/* Path specific data (per path info) */
 	void *pathDataState;
 
+	/* Get the index term path data struct for the given path index */
 	GinEntryPathData *(*getPathDataFunc)(void *pathDataState, int index);
+
+	/* returns whether or not the path can be matched recursively (as opposed to exactly) */
+	bool (*isRecursivePathMatch)(void *pathDataState, int index);
+
+	/* the number of recursive path terms generated currently */
+	int (*currentRecursivePathIndex)(void *pathDataState);
+
+	/*
+	 * Update correlated term path index terms. When this is not null, it means we should
+	 * consider nested document terms as correlated for term generation.
+	 */
+	void (*updateCorrelatedTermPaths)(void *pathDataState, int32_t *previousTermIndex,
+									  bool *termMatchStatus);
 
 	int maxPaths;
 } GenerateTermsContext;

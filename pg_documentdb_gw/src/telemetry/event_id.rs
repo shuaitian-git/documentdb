@@ -6,8 +6,6 @@
  *-------------------------------------------------------------------------
  */
 
-use log::kv::{ToValue, Value};
-
 #[repr(u64)]
 #[derive(Copy, Clone, Debug)]
 pub enum EventId {
@@ -20,11 +18,5 @@ pub enum EventId {
 impl EventId {
     pub const fn code(self) -> u64 {
         self as u64
-    }
-}
-
-impl ToValue for EventId {
-    fn to_value<'a>(&'a self) -> Value<'a> {
-        Value::from(self.code())
     }
 }

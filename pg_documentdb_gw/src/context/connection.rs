@@ -9,7 +9,7 @@
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use bson::RawDocumentBuf;
@@ -97,6 +97,7 @@ impl ConnectionContext {
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn add_cursor(
         &self,
         conn: Option<Arc<Connection>>,
@@ -104,6 +105,7 @@ impl ConnectionContext {
         username: &str,
         db: &str,
         collection: &str,
+        cursor_timeout: Duration,
         session_id: Option<Vec<u8>>,
     ) {
         let key = (cursor.cursor_id, username.to_string());
@@ -113,6 +115,7 @@ impl ConnectionContext {
             db: db.to_string(),
             collection: collection.to_string(),
             timestamp: Instant::now(),
+            cursor_timeout,
             session_id,
         };
 

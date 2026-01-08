@@ -21,6 +21,7 @@ pub trait DynamicConfiguration: Send + Sync + Debug {
     async fn get_str(&self, key: &str) -> Option<String>;
     async fn get_bool(&self, key: &str, default: bool) -> bool;
     async fn get_i32(&self, key: &str, default: i32) -> i32;
+    async fn get_u64(&self, key: &str, default: u64) -> u64;
     async fn equals_value(&self, key: &str, value: &str) -> bool;
     fn topology(&self) -> RawBson;
     async fn enable_developer_explain(&self) -> bool;
@@ -81,6 +82,24 @@ pub trait DynamicConfiguration: Send + Sync + Debug {
             .as_deref()
             .and_then(Version::parse)
             .unwrap_or(Version::Seven)
+    }
+
+    async fn enable_stateless_cursor_timeout(&self) -> bool {
+        self.get_bool("enableStatelessCursorTimeout", false).await
+    }
+
+    async fn default_cursor_idle_timeout_sec(&self) -> u64 {
+        self.get_u64("mongoCursorIdleTimeoutInSeconds", 60).await
+    }
+
+    async fn stateless_cursor_idle_timeout_sec(&self) -> u64 {
+        self.get_u64("mongoCursorStatelessIdleTimeoutInSeconds", 600)
+            .await
+    }
+
+    async fn cursor_resolution_interval(&self) -> u64 {
+        self.get_u64("mongoCursorIdleResolutionIntervalSeconds", 5)
+            .await
     }
 
     async fn system_connection_budget(&self) -> usize {

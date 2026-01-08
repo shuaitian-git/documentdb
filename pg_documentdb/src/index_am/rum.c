@@ -79,6 +79,8 @@ typedef struct DocumentDBRumIndexState
 
 	IndexMultiKeyStatus multiKeyStatus;
 
+	bool hasCorrelatedReducedTerms;
+
 	void *indexArrayState;
 
 	int32_t numDuplicates;
@@ -100,6 +102,8 @@ static bool ValidateMatchForOrderbyQuals(IndexPath *path);
 
 static bool IsTextIndexMatch(IndexPath *path);
 
+static bool CheckIndexHasReducedTerms(Relation indexRelation,
+									  IndexAmRoutine *coreRoutine);
 static IndexMultiKeyStatus CheckIndexHasArrays(Relation indexRelation,
 											   IndexAmRoutine *coreRoutine);
 
@@ -667,6 +671,30 @@ CompositeIndexSupportsIndexOnlyScan(const IndexPath *indexPath)
 		return false;
 	}
 
+	if (indexPath->indexinfo->opclassoptions != NULL)
+	{
+		BsonGinIndexOptionsBase *options =
+			(BsonGinIndexOptionsBase *) indexPath->indexinfo->opclassoptions[0];
+		if (options->type != IndexOptionsType_Composite)
+		{
+			return false;
+		}
+
+		BsonGinCompositePathOptions *compositeOptions =
+			(BsonGinCompositePathOptions *) options;
+		if (compositeOptions->wildcardPathIndex >= 0)
+		{
+			/* Wildcard indexes don't support index only scans for now.
+			 * This is because wildcard indexes don't index documents and so we don't have full
+			 * fidelity recreation of index terms.
+			 * We can technically do better if the filter ranges don't overlap with nulls, arrays
+			 * and documents but that needs to be considered as part of the cost function +
+			 * order by integration.
+			 */
+			return false;
+		}
+	}
+
 	Relation indexRelation = index_open(indexPath->indexinfo->indexoid, NoLock);
 	bool multiKeyStatus = getMultiKeyStatusFunc(indexRelation);
 	bool hasTruncatedTerms = getTruncationStatusFunc(indexRelation);
@@ -975,6 +1003,8 @@ extension_rumrescan_core(IndexScanDesc scan, ScanKey scankey, int nscankeys,
 		DocumentDBRumIndexState *outerScanState =
 			(DocumentDBRumIndexState *) scan->opaque;
 
+		int numColumns = GetCompositeOpClassPathCount(
+			scan->indexRelation->rd_opcoptions[0]);
 		if (outerScanState->multiKeyStatus == IndexMultiKeyStatus_Unknown)
 		{
 			if (multiKeyStatusFunc != NULL)
@@ -985,6 +1015,18 @@ extension_rumrescan_core(IndexScanDesc scan, ScanKey scankey, int nscankeys,
 			{
 				outerScanState->multiKeyStatus =
 					CheckIndexHasArrays(scan->indexRelation, coreRoutine);
+			}
+
+			/* Check if we are producing reduced index terms in this index */
+			BsonGinCompositePathOptions *options =
+				(BsonGinCompositePathOptions *) scan->indexRelation->rd_opcoptions[0];
+			if (options->enableCompositeReducedCorrelatedTerms &&
+				outerScanState->multiKeyStatus == IndexMultiKeyStatus_HasArrays &&
+				numColumns > 1)
+			{
+				/* Check if we have correlated reduced terms */
+				outerScanState->hasCorrelatedReducedTerms = CheckIndexHasReducedTerms(
+					scan->indexRelation, coreRoutine);
 			}
 		}
 
@@ -1012,6 +1054,7 @@ extension_rumrescan_core(IndexScanDesc scan, ScanKey scankey, int nscankeys,
 										   &outerScanState->compositeKey,
 										   outerScanState->multiKeyStatus ==
 										   IndexMultiKeyStatus_HasArrays,
+										   outerScanState->hasCorrelatedReducedTerms,
 										   nInnerorderbys > 0,
 										   outerScanState->scanDirection))
 		{
@@ -1291,6 +1334,26 @@ RumGetMultiKeyStatusSlow(Relation indexRelation)
 }
 
 
+static bool
+CheckIndexHasReducedTerms(Relation indexRelation, IndexAmRoutine *coreRoutine)
+{
+	/* Start a nested query lookup */
+	IndexScanDesc innerDesc = coreRoutine->ambeginscan(indexRelation, 1, 0);
+
+	ScanKeyData arrayKey = { 0 };
+	arrayKey.sk_attno = 1;
+	arrayKey.sk_collation = InvalidOid;
+	arrayKey.sk_strategy = BSON_INDEX_STRATEGY_HAS_CORRELATED_REDUCED_TERMS;
+	arrayKey.sk_argument = PointerGetDatum(PgbsonInitEmpty());
+
+	innerDesc->parallel_scan = NULL;
+	coreRoutine->amrescan(innerDesc, &arrayKey, 1, NULL, 0);
+	bool hasReducedArrayTerms = coreRoutine->amgettuple(innerDesc, ForwardScanDirection);
+	coreRoutine->amendscan(innerDesc);
+	return hasReducedArrayTerms;
+}
+
+
 static IndexMultiKeyStatus
 CheckIndexHasArrays(Relation indexRelation, IndexAmRoutine *coreRoutine)
 {
@@ -1338,74 +1401,149 @@ RumGetTruncationStatus(Relation indexRelation)
 }
 
 
+static List *
+GetIndexBoundsForExplain(Relation index_rel, Datum compositeArgDatum, bool hasOrderBy)
+{
+	uint32_t nentries = 0;
+	bool *partialMatch = NULL;
+	Pointer *extraData = NULL;
+
+	/* From the composite keys, get the lower bounds of the scans */
+	/* Call extract_query to get the index details */
+	int32_t ginScanType = hasOrderBy ? GIN_SEARCH_MODE_ALL :
+						  GIN_SEARCH_MODE_DEFAULT;
+	LOCAL_FCINFO(fcinfo, 7);
+	fcinfo->flinfo = palloc(sizeof(FmgrInfo));
+	fmgr_info_copy(fcinfo->flinfo,
+				   index_getprocinfo(index_rel, 1,
+									 GIN_EXTRACTQUERY_PROC),
+				   CurrentMemoryContext);
+
+	fcinfo->args[0].value = compositeArgDatum;
+	fcinfo->args[1].value = PointerGetDatum(&nentries);
+	fcinfo->args[2].value = Int16GetDatum(BSON_INDEX_STRATEGY_COMPOSITE_QUERY);
+	fcinfo->args[3].value = PointerGetDatum(&partialMatch);
+	fcinfo->args[4].value = PointerGetDatum(&extraData);
+	fcinfo->args[6].value = PointerGetDatum(&ginScanType);
+
+	Datum *entryRes = (Datum *) gin_bson_composite_path_extract_query(fcinfo);
+
+	/* Now write out the result for explain */
+	List *boundsList = NIL;
+	for (uint32_t i = 0; i < nentries; i++)
+	{
+		bytea *entry = DatumGetByteaPP(entryRes[i]);
+
+		char *serializedBound = SerializeBoundsStringForExplain(entry,
+																extraData[i],
+																fcinfo);
+		boundsList = lappend(boundsList, serializedBound);
+	}
+
+	return boundsList;
+}
+
+
+void
+ExplainRawCompositeScan(Relation index_rel, List *indexQuals, List *indexOrderBy,
+						ScanDirection indexScanDir, struct ExplainState *es)
+{
+	if (!IsCompositeOpClass(index_rel))
+	{
+		return;
+	}
+
+	bool enableCompositeReducedCorrelatedTerms = false;
+	if (index_rel->rd_opcoptions != NULL)
+	{
+		BsonGinCompositePathOptions *options =
+			(BsonGinCompositePathOptions *) index_rel->rd_opcoptions[0];
+		const char *keyString = SerializeCompositeIndexKeyForExplain(
+			index_rel->rd_opcoptions[0]);
+		ExplainPropertyText("indexKey", keyString, es);
+		enableCompositeReducedCorrelatedTerms =
+			options->enableCompositeReducedCorrelatedTerms;
+	}
+
+	bool isMultiKey = RumGetMultiKeyStatusSlow(index_rel);
+	ExplainPropertyBool("isMultiKey", isMultiKey, es);
+
+	bool hasCorrelatedTerms = false;
+	if (enableCompositeReducedCorrelatedTerms && isMultiKey)
+	{
+		/* Check if we have correlated reduced terms */
+		EnsureRumLibLoaded();
+		hasCorrelatedTerms = CheckIndexHasReducedTerms(index_rel, &rum_index_routine);
+	}
+
+	if (hasCorrelatedTerms)
+	{
+		ExplainPropertyBool("hasCorrelatedTerms", true, es);
+	}
+
+	Datum compositeDatum = FormCompositeDatumFromQuals(indexQuals, indexOrderBy,
+													   isMultiKey, hasCorrelatedTerms);
+	if (compositeDatum != 0)
+	{
+		List *boundsList = GetIndexBoundsForExplain(index_rel, compositeDatum,
+													list_length(indexOrderBy) > 0);
+		ExplainPropertyList("indexBounds", boundsList, es);
+	}
+}
+
+
 void
 ExplainCompositeScan(IndexScanDesc scan, ExplainState *es)
 {
-	if (IsCompositeOpClass(scan->indexRelation))
+	if (!IsCompositeOpClass(scan->indexRelation))
 	{
-		DocumentDBRumIndexState *outerScanState =
-			(DocumentDBRumIndexState *) scan->opaque;
-
-		ExplainPropertyBool("isMultiKey",
-							outerScanState->multiKeyStatus ==
-							IndexMultiKeyStatus_HasArrays, es);
-
-		/* From the composite keys, get the lower bounds of the scans */
-		/* Call extract_query to get the index details */
-		uint32_t nentries = 0;
-		bool *partialMatch = NULL;
-		Pointer *extraData = NULL;
-		int32_t ginScanType = scan->numberOfOrderBys > 0 ? GIN_SEARCH_MODE_ALL :
-							  GIN_SEARCH_MODE_DEFAULT;
-
-		if (outerScanState->compositeKey.sk_argument != (Datum) 0)
-		{
-			LOCAL_FCINFO(fcinfo, 7);
-			fcinfo->flinfo = palloc(sizeof(FmgrInfo));
-			fmgr_info_copy(fcinfo->flinfo,
-						   index_getprocinfo(scan->indexRelation, 1,
-											 GIN_EXTRACTQUERY_PROC),
-						   CurrentMemoryContext);
-
-			fcinfo->args[0].value = outerScanState->compositeKey.sk_argument;
-			fcinfo->args[1].value = PointerGetDatum(&nentries);
-			fcinfo->args[2].value = Int16GetDatum(BSON_INDEX_STRATEGY_COMPOSITE_QUERY);
-			fcinfo->args[3].value = PointerGetDatum(&partialMatch);
-			fcinfo->args[4].value = PointerGetDatum(&extraData);
-			fcinfo->args[6].value = PointerGetDatum(&ginScanType);
-
-			Datum *entryRes = (Datum *) gin_bson_composite_path_extract_query(fcinfo);
-
-			/* Now write out the result for explain */
-			List *boundsList = NIL;
-			for (uint32_t i = 0; i < nentries; i++)
-			{
-				bytea *entry = DatumGetByteaPP(entryRes[i]);
-
-				char *serializedBound = SerializeBoundsStringForExplain(entry,
-																		extraData[i],
-																		fcinfo);
-				boundsList = lappend(boundsList, serializedBound);
-			}
-
-			ExplainPropertyList("indexBounds", boundsList, es);
-		}
-
-		if (outerScanState->numDuplicates > 0)
-		{
-			/* If we have duplicates, explain the number of duplicates */
-			ExplainPropertyInteger("numDuplicates", "entries",
-								   outerScanState->numDuplicates, es);
-		}
-
-		if (ScanDirectionIsBackward(outerScanState->scanDirection))
-		{
-			ExplainPropertyBool("isBackwardScan", true, es);
-		}
-
-		/* Explain the inner scan using underlying am */
-		TryExplainByIndexAm(outerScanState->innerScan, es);
+		return;
 	}
+
+	DocumentDBRumIndexState *outerScanState =
+		(DocumentDBRumIndexState *) scan->opaque;
+
+	if (scan->indexRelation->rd_opcoptions != NULL)
+	{
+		const char *keyString = SerializeCompositeIndexKeyForExplain(
+			scan->indexRelation->rd_opcoptions[0]);
+		ExplainPropertyText("indexKey", keyString, es);
+	}
+
+	ExplainPropertyBool("isMultiKey",
+						outerScanState->multiKeyStatus == IndexMultiKeyStatus_HasArrays,
+						es);
+
+	if (outerScanState->hasCorrelatedReducedTerms)
+	{
+		ExplainPropertyBool("hasCorrelatedTerms", true, es);
+	}
+
+	if (outerScanState->compositeKey.sk_argument != (Datum) 0)
+	{
+		List *boundsList = GetIndexBoundsForExplain(
+			scan->indexRelation,
+			outerScanState->compositeKey.sk_argument,
+			scan->numberOfOrderBys > 0);
+
+		/* Now write out the result for explain */
+		ExplainPropertyList("indexBounds", boundsList, es);
+	}
+
+	if (outerScanState->numDuplicates > 0)
+	{
+		/* If we have duplicates, explain the number of duplicates */
+		ExplainPropertyInteger("numDuplicates", "entries",
+							   outerScanState->numDuplicates, es);
+	}
+
+	if (ScanDirectionIsBackward(outerScanState->scanDirection))
+	{
+		ExplainPropertyBool("isBackwardScan", true, es);
+	}
+
+	/* Explain the inner scan using underlying am */
+	TryExplainByIndexAm(outerScanState->innerScan, es);
 }
 
 

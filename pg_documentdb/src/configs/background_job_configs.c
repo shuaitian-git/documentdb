@@ -68,7 +68,7 @@ int BackgroundWorkerJobTimeoutThresholdSec = DEFAULT_BG_WORKER_JOB_TIMEOUT_THRES
 #define DEFAULT_BG_DATABASE_NAME "postgres"
 char *BackgroundWorkerDatabaseName = DEFAULT_BG_DATABASE_NAME;
 
-#define DEFAULT_BG_LATCH_TIMEOUT_SEC 10
+#define DEFAULT_BG_LATCH_TIMEOUT_SEC 1
 int LatchTimeOutSec = DEFAULT_BG_LATCH_TIMEOUT_SEC;
 
 #define DEFAULT_LOG_TTL_PROGRESS_ACTIVITY false

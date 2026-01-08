@@ -137,6 +137,8 @@ List * MergeSingleVariableBounds(List *variableBounds, const char **wildcardPath
 								 CompositeIndexBounds *mergedBounds);
 List * MergeWildCardSingleVariableBounds(List *variableBounds);
 
+void TrimSecondaryVariableBounds(VariableIndexBounds *variableBounds,
+								 CompositeQueryRunData *runData);
 void PickVariableBoundsForOrderedScan(VariableIndexBounds *variableBounds,
 									  CompositeQueryRunData *runData);
 

@@ -189,6 +189,12 @@ typedef struct
 	 * path (or -1 if there isn't).
 	 */
 	int wildcardPathIndex;
+
+	/* Whether or not to emit a reduced termset
+	 * for correlated documents in arrays for composite
+	 * indexes.
+	 */
+	bool enableCompositeReducedCorrelatedTerms;
 } BsonGinCompositePathOptions;
 
 bool ValidateIndexForQualifierElement(bytea *indexOptions,

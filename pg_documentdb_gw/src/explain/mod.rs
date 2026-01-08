@@ -931,7 +931,7 @@ fn get_stage_from_plan(
                     }
                 }
             }
-            log::warn!("Unknown stage aggregate found");
+            tracing::warn!("Unknown stage aggregate found");
             ("GENERIC_AGGREGATE".to_owned(), None)
         }
         "Gather" => ("Parallel Merge".to_owned(), None),
@@ -954,12 +954,12 @@ fn get_stage_from_plan(
                         ("FETCH".to_owned(), None)
                     }
                     _ => {
-                        log::warn!("Unknown scan: {cpp}");
+                        tracing::warn!("Unknown scan: {cpp}");
                         ("".to_owned(), None)
                     }
                 }
             } else {
-                log::warn!("Custom scan without provider.");
+                tracing::warn!("Custom scan without provider.");
                 ("".to_owned(), None)
             }
         }
@@ -990,7 +990,7 @@ fn get_stage_from_plan(
                     _ => {}
                 }
             };
-            log::warn!(
+            tracing::warn!(
                 "Unknown function found: {}",
                 plan.function_name.as_deref().unwrap_or("None")
             );
@@ -1016,7 +1016,7 @@ fn get_stage_from_plan(
             }
         }
         _ => {
-            log::warn!("Unknown stage found: {}", plan.node_type);
+            tracing::warn!("Unknown stage found: {}", plan.node_type);
             ("COLLSCAN".to_owned(), None)
         }
     }
@@ -1220,12 +1220,12 @@ fn classify_stages(
     }
 
     if prior_stage.is_none() {
-        log::warn!("Found residual unparented aggregation stage {stage_name}");
+        tracing::warn!("Found residual unparented aggregation stage {stage_name}");
         processed_stages.push(("$root".to_owned(), plan, stage_name, None));
         return None;
     }
 
-    log::warn!("Unknown aggregation stage {stage_name}");
+    tracing::warn!("Unknown aggregation stage {stage_name}");
     Some(plan)
 }
 
@@ -1420,7 +1420,7 @@ fn query_planner(
                     }
                     doc.append("cosmosSearchCustomParams", vector_search)
                 } else {
-                    log::error!("Failed to parse vector search params: {vector_search_params}")
+                    tracing::error!("Failed to parse vector search params: {vector_search_params}")
                 }
             }
 

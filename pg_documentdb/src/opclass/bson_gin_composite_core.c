@@ -485,6 +485,24 @@ MergeSingleVariableBounds(List *boundsList, const char **wildcardPath,
 
 
 void
+TrimSecondaryVariableBounds(VariableIndexBounds *variableBounds,
+							CompositeQueryRunData *runData)
+{
+	ListCell *cell;
+	foreach(cell, variableBounds->variableBoundsList)
+	{
+		CompositeIndexBoundsSet *set = (CompositeIndexBoundsSet *) lfirst(cell);
+		if (set->indexAttribute > 0)
+		{
+			runData->metaInfo->requiresRuntimeRecheck = true;
+			foreach_delete_current(variableBounds->variableBoundsList, cell);
+			continue;
+		}
+	}
+}
+
+
+void
 PickVariableBoundsForOrderedScan(VariableIndexBounds *variableBounds,
 								 CompositeQueryRunData *runData)
 {

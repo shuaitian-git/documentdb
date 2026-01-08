@@ -112,7 +112,7 @@ pub fn parse_client_info(client_information: Option<&RawDocumentBuf>) -> String 
 
             if parsed_client_information.is_empty() {
                 // Fallback: stringify the whole client doc as JSON
-                log::error!("Failed to parse client information. Client information didn't match expected schema, falling back to raw document");
+                tracing::error!("Failed to parse client information. Client information didn't match expected schema, falling back to raw document");
 
                 match client_information_ref.to_document() {
                     Ok(doc) => serde_json::to_string(&doc).unwrap_or_default(),

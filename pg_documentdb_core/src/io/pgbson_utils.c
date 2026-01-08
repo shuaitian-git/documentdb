@@ -139,7 +139,7 @@ PgbsonDecomposeFields(const pgbson *document)
  * @number: The addend
  * @overflowedFromInt64: Used for AddInt64ToValue(); set if overflow from Int64 occurs, unset otherwise.
  */
-pg_attribute_no_sanitize_alignment() bool
+bool
 AddNumberToBsonValue(bson_value_t *state, const bson_value_t *number,
 					 bool *overflowedFromInt64)
 {
@@ -186,7 +186,7 @@ AddNumberToBsonValue(bson_value_t *state, const bson_value_t *number,
  * Subtracts the number stored in subtrahend to state and modifies state.
  * returns true if subtraction happened (type was supported)
  */
-pg_attribute_no_sanitize_alignment() bool
+bool
 SubtractNumberFromBsonValue(bson_value_t *state, const bson_value_t *subtrahend,
 							bool *overflowedFromInt64)
 {
@@ -762,7 +762,7 @@ TraverseBsonPathStringView(bson_iter_t *documentIterator,
  * the sum as an int64
  * @overflowedFromInt64: Used for AddInt64ToValue(); Set if overflow from Int64 occurs, unset otherwise.
  */
-pg_attribute_no_sanitize_alignment() static void
+static void
 AddInt32ToValue(bson_value_t *current, int32_t value, bool *overflowedFromInt64)
 {
 	if (current->value_type == BSON_TYPE_DOUBLE)
@@ -814,7 +814,7 @@ AddInt32ToValue(bson_value_t *current, int32_t value, bool *overflowedFromInt64)
  * the sum as a double
  * @overflowedFromInt64: Set if overflow from Int64 occurs, unset otherwise.
  */
-pg_attribute_no_sanitize_alignment() static void
+static void
 AddInt64ToValue(bson_value_t *current, int64_t value, bool *overflowedFromInt64)
 {
 	if (current->value_type == BSON_TYPE_DOUBLE)
@@ -867,7 +867,7 @@ AddInt64ToValue(bson_value_t *current, int64_t value, bool *overflowedFromInt64)
  * Adds a double to the current value.
  *
  */
-pg_attribute_no_sanitize_alignment() static void
+static void
 AddDoubleToValue(bson_value_t *current, double value)
 {
 	/* If existing value is decimal128, then needs to convert the value to decimal128 */
@@ -898,7 +898,7 @@ AddDoubleToValue(bson_value_t *current, double value)
 /**
  *  Adds a decimal128 to the current value.
  */
-pg_attribute_no_sanitize_alignment() static void
+static void
 AddDecimal128ToValue(bson_value_t *current, const bson_value_t *value)
 {
 	bson_decimal128_t currentValue = GetBsonValueAsDecimal128Quantized(current);
@@ -913,7 +913,7 @@ AddDecimal128ToValue(bson_value_t *current, const bson_value_t *value)
 /*
  *  Subtract a decimal128 from the current value.
  */
-pg_attribute_no_sanitize_alignment() static void
+static void
 SubtractDecimal128FromValue(bson_value_t *current, const bson_value_t *value)
 {
 	bson_decimal128_t currentValue = GetBsonValueAsDecimal128Quantized(current);

@@ -2598,7 +2598,7 @@ HandleSimpleProjectionStage(const bson_value_t *existingValue, Query *query,
 		args = list_make4(currentProjection,
 						  addFieldsProcessed,
 						  context->variableSpec ? context->variableSpec :
-						  (Expr *) makeNullConst(BsonTypeId(), -1, InvalidOid),
+						  (Expr *) MakeBsonConst(PgbsonInitEmpty()),
 						  collationConst);
 		functionOid = functionOidWithLetAndCollation();
 	}
@@ -3590,7 +3590,7 @@ HandleProjectFind(const bson_value_t *existingValue, const bson_value_t *queryVa
 						  projectProcessed,
 						  MakeBsonConst(queryDoc),
 						  context->variableSpec ? context->variableSpec :
-						  (Expr *) makeNullConst(BsonTypeId(), -1, InvalidOid),
+						  (Expr *) MakeBsonConst(PgbsonInitEmpty()),
 						  collationConst);
 		funcOid = BsonDollarProjectFindWithLetAndCollationFunctionOid();
 	}
@@ -5973,6 +5973,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		};
 		if (StringViewEqualsCString(&accumulatorName, "$avg"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_AVG);
 			repathArgs = AddSimpleGroupAccumulator(query, &accumulatorElement.bsonValue,
 												   repathArgs,
 												   accumulatorText, parseState,
@@ -5983,6 +5984,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$sum"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_SUM);
 			repathArgs = AddSumGroupAccumulator(query, &accumulatorElement.bsonValue,
 												repathArgs,
 												accumulatorText, parseState,
@@ -5993,6 +5995,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$max"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_MAX);
 			repathArgs = AddSimpleGroupAccumulator(query, &accumulatorElement.bsonValue,
 												   repathArgs,
 												   accumulatorText, parseState,
@@ -6003,6 +6006,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$min"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_MIN);
 			repathArgs = AddSimpleGroupAccumulator(query, &accumulatorElement.bsonValue,
 												   repathArgs,
 												   accumulatorText, parseState,
@@ -6013,6 +6017,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$count"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_COUNT);
 			if (CanUseNewCountAggregates())
 			{
 				/* Use the new BSONCOUNT aggregate. */
@@ -6050,6 +6055,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$first"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_FIRST);
 			if (context->sortSpec.value_type == BSON_TYPE_EOD)
 			{
 				repathArgs = AddSimpleGroupAccumulator(query,
@@ -6076,6 +6082,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$last"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_LAST);
 			if (context->sortSpec.value_type == BSON_TYPE_EOD)
 			{
 				repathArgs = AddSimpleGroupAccumulator(query,
@@ -6102,7 +6109,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$firstN"))
 		{
-			ReportFeatureUsage(FEATURE_STAGE_GROUP_ACC_FIRSTN);
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_FIRST_N);
 			bson_value_t input = { 0 };
 			bson_value_t elementsToFetch = { 0 };
 			ParseInputForNGroupAccumulators(&accumulatorElement.bsonValue, &input,
@@ -6137,7 +6144,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$lastN"))
 		{
-			ReportFeatureUsage(FEATURE_STAGE_GROUP_ACC_LASTN);
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_LAST_N);
 			bson_value_t input = { 0 };
 			bson_value_t elementsToFetch = { 0 };
 			ParseInputForNGroupAccumulators(&accumulatorElement.bsonValue, &input,
@@ -6172,6 +6179,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$maxN"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_MAX_N);
 			repathArgs = AddMaxMinNGroupAccumulator(query,
 													&accumulatorElement.bsonValue,
 													repathArgs,
@@ -6184,6 +6192,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$minN"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_MIN_N);
 			repathArgs = AddMaxMinNGroupAccumulator(query,
 													&accumulatorElement.bsonValue,
 													repathArgs,
@@ -6196,6 +6205,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$addToSet"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_ADD_TO_SET);
 			repathArgs = AddSimpleGroupAccumulator(query,
 												   &accumulatorElement.bsonValue,
 												   repathArgs,
@@ -6207,6 +6217,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$mergeObjects"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_MERGE_OBJECTS);
 			if (context->sortSpec.value_type == BSON_TYPE_EOD)
 			{
 				repathArgs = AddSimpleGroupAccumulator(query,
@@ -6234,6 +6245,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$push"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_PUSH);
 			char *fieldPath = "";
 			bool handleSingleValue = true;
 			repathArgs = AddArrayAggGroupAccumulator(query,
@@ -6249,6 +6261,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$stdDevSamp"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_STDDEV_SAMP);
 			if (accumulatorElement.bsonValue.value_type == BSON_TYPE_ARRAY)
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION40237), errmsg(
@@ -6270,6 +6283,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$stdDevPop"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_STDDEV_POP);
 			if (accumulatorElement.bsonValue.value_type == BSON_TYPE_ARRAY)
 			{
 				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_LOCATION40237), errmsg(
@@ -6291,6 +6305,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$top"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_TOP);
 			bson_value_t output = { 0 };
 			bson_value_t elementsToFetch = { 0 };
 			bson_value_t sortSpec = { 0 };
@@ -6310,6 +6325,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$bottom"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_BOTTOM);
 			bson_value_t output = { 0 };
 			bson_value_t elementsToFetch = { 0 };
 			bson_value_t sortSpec = { 0 };
@@ -6329,7 +6345,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$topN"))
 		{
-			ReportFeatureUsage(FEATURE_STAGE_GROUP_ACC_TOPN);
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_TOP_N);
 
 			/* Parse accumulatorValue to pull output, n and sortBy*/
 			bson_value_t input = { 0 };
@@ -6353,7 +6369,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$bottomN"))
 		{
-			ReportFeatureUsage(FEATURE_STAGE_GROUP_ACC_BOTTOMN);
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_BOTTOM_N);
 
 			/* Parse accumulatorValue to pull output, n and sortBy*/
 			bson_value_t input = { 0 };
@@ -6377,6 +6393,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$median"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_MEDIAN);
 			repathArgs = AddPercentileMedianGroupAccumulator(query,
 															 &accumulatorElement.bsonValue,
 															 repathArgs,
@@ -6388,6 +6405,7 @@ HandleGroup(const bson_value_t *existingValue, Query *query,
 		}
 		else if (StringViewEqualsCString(&accumulatorName, "$percentile"))
 		{
+			ReportFeatureUsage(FEATURE_AGGREGATE_GROUP_PERCENTILE);
 			repathArgs = AddPercentileMedianGroupAccumulator(query,
 															 &accumulatorElement.bsonValue,
 															 repathArgs,

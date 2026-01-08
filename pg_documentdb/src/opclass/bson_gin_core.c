@@ -1088,6 +1088,20 @@ GetPathDataDefault(void *state, int index)
 }
 
 
+static bool
+IsRecursivePathMatch(void *state, int index)
+{
+	return false;
+}
+
+
+static int
+GetCurrentRecursivePaths(void *state)
+{
+	return 0;
+}
+
+
 void
 GenerateTermsForPath(pgbson *bson, GenerateTermsContext *context)
 {
@@ -1167,6 +1181,8 @@ GenerateTerms(pgbson *bson, GenerateTermsContext *context, GinEntryPathData *pat
 {
 	context->pathDataState = pathData;
 	context->getPathDataFunc = GetPathDataDefault;
+	context->isRecursivePathMatch = IsRecursivePathMatch;
+	context->currentRecursivePathIndex = GetCurrentRecursivePaths;
 	context->maxPaths = 1;
 
 	GenerateTermsForPath(bson, context);
@@ -1228,9 +1244,22 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 	StringInfoData pathBuilderBuffer = { 0 };
 	initStringInfo(&pathBuilderBuffer);
 	bool useReducedWildcardTerms = true;
+	int32_t termCount[INDEX_MAX_KEYS] = { 0 };
+	bool recursiveMatchStatus[INDEX_MAX_KEYS] = { 0 };
+	int32_t numRecursiveMatches = 0;
+	int32_t currentRecursivePathCount = context->currentRecursivePathIndex(
+		context->pathDataState);
+	bool considerNestedDocumentTerms = context->enableCompositeReducedCorrelatedTerms &&
+									   context->updateCorrelatedTermPaths != NULL &&
+									   context->maxPaths > 1;
 	for (int i = 0; i < context->maxPaths; i++)
 	{
 		GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState, i);
+		termCount[i] = pathData->terms.index;
+		recursiveMatchStatus[i] = context->enableCompositeReducedCorrelatedTerms &&
+								  context->isRecursivePathMatch(context->pathDataState,
+																i);
+		numRecursiveMatches += recursiveMatchStatus[i] ? 1 : 0;
 
 		/* TODO: Handle wildcard and non-wildcard composite indexes:
 		 * in the scenario where we have { a.$**: 1, b: 1, c: 1}
@@ -1241,6 +1270,11 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 		EnsureTermCapacity(&pathData->terms, arrayCapacityEstimate);
 	}
 
+	/* Only consider this path if there's > 1 matches in an array path (otherwise they're all linearly
+	 * independent index terms anyway)
+	 */
+	considerNestedDocumentTerms = considerNestedDocumentTerms && numRecursiveMatches > 1;
+
 	bool someArrayPathsHaveTerms[INDEX_MAX_KEYS] = { 0 };
 	bool someArrayPathsHaveNoTerms[INDEX_MAX_KEYS] = { 0 };
 	while (bson_iter_next(&containerIter))
@@ -1249,12 +1283,6 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 		bool inArrayContextInner = true;
 		bool isArrayTermInner = false;
 		bool isCheckForArrayTermsWithNestedDocumentInner = false;
-		int32_t termCount[INDEX_MAX_KEYS] = { 0 };
-		for (int i = 0; i < context->maxPaths; i++)
-		{
-			termCount[i] = context->getPathDataFunc(context->pathDataState,
-													i)->terms.index;
-		}
 
 		/* For wildcard indexes if there's a match, any path that is a.0, a.2 etc
 		 * can also be reached from 'a'.
@@ -1298,18 +1326,44 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 						 inArrayContextInner, isArrayTermInner, context,
 						 isCheckForArrayTermsWithNestedDocumentInner,
 						 &pathBuilderBuffer);
+
+		bool someArrayPathsHaveTermsOuter = false;
+		int32_t originalTermCount[INDEX_MAX_KEYS] = { 0 };
 		for (int i = 0; i < context->maxPaths; i++)
 		{
-			if (context->getPathDataFunc(context->pathDataState, i)->terms.index >
-				termCount[i])
+			GinEntryPathData *pathData = context->getPathDataFunc(context->pathDataState,
+																  i);
+			if (pathData->terms.index > termCount[i])
 			{
+				someArrayPathsHaveTermsOuter = true;
 				someArrayPathsHaveTerms[i] = true;
 			}
 			else
 			{
 				someArrayPathsHaveNoTerms[i] = true;
 			}
+
+			/* Reset for next iteration of array */
+			originalTermCount[i] = termCount[i];
+			termCount[i] = context->getPathDataFunc(context->pathDataState,
+													i)->terms.index;
 		}
+
+		if (context->enableCompositeReducedCorrelatedTerms &&
+			context->currentRecursivePathIndex(context->pathDataState) ==
+			currentRecursivePathCount &&
+			considerNestedDocumentTerms && someArrayPathsHaveTermsOuter &&
+			context->updateCorrelatedTermPaths)
+		{
+			/* We have multiple terms with a recursive match this means we should treat these terms
+			 * generated as a correlated in terms of terms
+			 */
+			context->updateCorrelatedTermPaths(context->pathDataState, originalTermCount,
+											   recursiveMatchStatus);
+		}
+
+		currentRecursivePathCount = context->currentRecursivePathIndex(
+			context->pathDataState);
 	}
 
 	for (int i = 0; i < context->maxPaths; i++)
@@ -1331,6 +1385,14 @@ GenerateArrayPath(bson_iter_t *bsonIter, const char *pathToInsert,
 	{
 		pfree(pathBuilderBuffer.data);
 	}
+}
+
+
+static void
+NotifyHasArrayAncestors(GenerateTermsContext *context, int pathIndex)
+{
+	context->getPathDataFunc(context->pathDataState,
+							 pathIndex)->hasArrayAncestors = true;
 }
 
 
@@ -1422,9 +1484,7 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 			if (inArrayContext || BSON_ITER_HOLDS_ARRAY(bsonIter))
 			{
 				/* Mark the path as having array ancestors leading to the index path */
-				context->getPathDataFunc(context->pathDataState,
-										 pathIndex)->hasArrayAncestors =
-					true;
+				NotifyHasArrayAncestors(context, pathIndex);
 			}
 
 			break;
@@ -1519,8 +1579,7 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 			 option == IndexTraverse_MatchAndRecurse))
 		{
 			/* Mark the path as having array ancestors leading to the index path */
-			context->getPathDataFunc(context->pathDataState,
-									 pathIndex)->hasArrayAncestors = true;
+			NotifyHasArrayAncestors(context, pathIndex);
 		}
 
 		/*
@@ -1563,9 +1622,7 @@ GenerateTermPath(bson_iter_t *bsonIter, const char *basePath,
 				option == IndexTraverse_MatchAndRecurse)
 			{
 				/* Mark the path as having array ancestors leading to the index path */
-				context->getPathDataFunc(context->pathDataState,
-										 pathIndex)->hasArrayAncestors =
-					true;
+				NotifyHasArrayAncestors(context, pathIndex);
 			}
 
 			bool isPathMatchedRecursively = option == IndexTraverse_MatchAndRecurse;

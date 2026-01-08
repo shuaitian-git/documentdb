@@ -577,6 +577,12 @@ PG_FUNCTION_INFO_V1(bson_expression_map);
 Datum
 bson_expression_get(PG_FUNCTION_ARGS)
 {
+	/* TODO: Remove after v0.110 when function has only STRICT forms */
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
+	{
+		PG_RETURN_NULL();
+	}
+
 	pgbson *document = PG_GETARG_PGBSON(0);
 	pgbson *expression = PG_GETARG_PGBSON(1);
 	bool isNullOnEmpty = PG_GETARG_BOOL(2);
@@ -593,7 +599,7 @@ bson_expression_get(PG_FUNCTION_ARGS)
 	char *collationString = NULL;
 	if (EnableCollation && PG_NARGS() > 4)
 	{
-		collationString = text_to_cstring(PG_GETARG_TEXT_P(4));
+		collationString = PG_ARGISNULL(4) ? NULL : text_to_cstring(PG_GETARG_TEXT_P(4));
 		numArgs = 3;
 		argPositions[2] = 4;
 	}
@@ -673,6 +679,12 @@ bson_expression_get(PG_FUNCTION_ARGS)
 Datum
 bson_expression_partition_get(PG_FUNCTION_ARGS)
 {
+	/* TODO: Remove after v0.110 when function has only STRICT forms */
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
+	{
+		PG_RETURN_NULL();
+	}
+
 	pgbson *document = PG_GETARG_PGBSON(0);
 	pgbson *expression = PG_GETARG_PGBSON(1);
 	bool isNullOnEmpty = PG_GETARG_BOOL(2);

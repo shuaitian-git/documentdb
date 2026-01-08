@@ -36,8 +36,10 @@ impl ServiceContext {
         connection_pool_manager: PoolManager,
         tls_provider: TlsProvider,
     ) -> Self {
+        tracing::info!("Initial dynamic configuration: {dynamic_configuration:?}");
+
         let timeout_secs = setup_configuration.transaction_timeout_secs();
-        let cursor_store = CursorStore::new(setup_configuration.as_ref(), true);
+        let cursor_store = CursorStore::new(dynamic_configuration.clone(), true);
 
         let inner = ServiceContextInner {
             setup_configuration,

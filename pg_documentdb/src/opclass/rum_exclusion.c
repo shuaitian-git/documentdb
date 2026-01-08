@@ -322,6 +322,7 @@ generate_unique_shard_document(PG_FUNCTION_ARGS)
 	pgbson *projectionSpec = PG_GETARG_PGBSON_PACKED(2);
 
 	bool sparse = PG_GETARG_BOOL(3);
+	bool generateCompositeTerms = PG_NARGS() > 4 ? PG_GETARG_BOOL(4) : false;
 
 	Datum *termArray[INDEX_MAX_KEYS] = { 0 };
 	int32_t numTermArray[INDEX_MAX_KEYS] = { 0 };
@@ -357,7 +358,18 @@ generate_unique_shard_document(PG_FUNCTION_ARGS)
 		bool generateRootTerm = false;
 		pathData.termMetadata = GetIndexTermMetadata(singlePathOptions);
 		context.traverseOptionsFunc = &GetSinglePathIndexTraverseOption;
-		context.generateNotFoundTerm = singlePathOptions->generateNotFoundTerm;
+
+		if (generateCompositeTerms)
+		{
+			pathData.generatePathBasedUndefinedTerms =
+				singlePathOptions->generateNotFoundTerm;
+			context.generateNotFoundTerm = false;
+		}
+		else
+		{
+			context.generateNotFoundTerm = singlePathOptions->generateNotFoundTerm;
+		}
+
 		GenerateTerms(document, &context, &pathData, generateRootTerm);
 
 		if (indexColumn >= INDEX_MAX_KEYS)

@@ -607,6 +607,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
                indexName: queryoperator_ab
+               indexKey: {"a.b": 1,"_id": 1}
                isMultiKey: true
                indexBounds: ["a.b": [1, 1], "_id": (MinKey, MaxKey)]
                innerScanLoops: 4 loops
@@ -617,7 +618,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_ab (actual rows=4 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a.b" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a.b": { "$ne" : 1 }}';
                                                                     QUERY PLAN                                                                    
@@ -631,6 +632,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=23 loops=1)
                indexName: queryoperator_ab
+               indexKey: {"a.b": 1,"_id": 1}
                isMultiKey: true
                indexBounds: ["a.b": [MinKey, MaxKey], "_id": (MinKey, MaxKey)]
                innerScanLoops: 26 loops
@@ -642,7 +644,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_ab (actual rows=26 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@!=) '{ "a.b" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(20 rows)
+(21 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a.b": { "$gt" : 1 }}';
                                                                    QUERY PLAN                                                                    
@@ -656,6 +658,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
                indexName: queryoperator_ab
+               indexKey: {"a.b": 1,"_id": 1}
                isMultiKey: true
                indexBounds: ["a.b": (1, Infinity], "_id": (MinKey, MaxKey)]
                innerScanLoops: 4 loops
@@ -666,7 +669,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_ab (actual rows=4 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>) '{ "a.b" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a.b": { "$gte" : 1 }}';
                                                                     QUERY PLAN                                                                    
@@ -680,6 +683,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
                indexName: queryoperator_ab
+               indexKey: {"a.b": 1,"_id": 1}
                isMultiKey: true
                indexBounds: ["a.b": [1, Infinity], "_id": (MinKey, MaxKey)]
                innerScanLoops: 5 loops
@@ -690,7 +694,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_ab (actual rows=5 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>=) '{ "a.b" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a.b": { "$lt" : 1 }}';
                                                                    QUERY PLAN                                                                    
@@ -704,6 +708,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
                indexName: queryoperator_ab
+               indexKey: {"a.b": 1,"_id": 1}
                isMultiKey: true
                indexBounds: ["a.b": [-Infinity, 1), "_id": (MinKey, MaxKey)]
                innerScanLoops: 5 loops
@@ -714,7 +719,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_ab (actual rows=5 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@<) '{ "a.b" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a.b": { "$lte" : 1 }}';
                                                                     QUERY PLAN                                                                    
@@ -728,6 +733,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=6 loops=1)
                indexName: queryoperator_ab
+               indexKey: {"a.b": 1,"_id": 1}
                isMultiKey: true
                indexBounds: ["a.b": [-Infinity, 1], "_id": (MinKey, MaxKey)]
                innerScanLoops: 6 loops
@@ -738,7 +744,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_ab (actual rows=6 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@<=) '{ "a.b" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 /* validate explain for single path index */
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'singlepathindexexists') WHERE document @@ '{ "a": { "$lte" : 1 }}';
@@ -753,6 +759,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
                indexName: a_index
+               indexKey: {"a": 1}
                isMultiKey: false
                indexBounds: ["a": [-Infinity, 1]]
                innerScanLoops: 1 loops
@@ -763,7 +770,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on a_index (actual rows=1 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@<=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'singlepathindexexists') WHERE document @@ '{ "a": { "$exists" : 1 }}';
                                                                 QUERY PLAN                                                                 
@@ -777,6 +784,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=4 loops=1)
                indexName: a_index
+               indexKey: {"a": 1}
                isMultiKey: false
                indexBounds: ["a": [MinKey, MaxKey]]
                innerScanLoops: 4 loops
@@ -787,7 +795,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on a_index (actual rows=4 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>=) '{ "a" : { "$minKey" : 1 } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'singlepathindexexists') WHERE document @@ '{ "a": { "$exists" : 0 }}';
                                                                   QUERY PLAN                                                                   
@@ -801,6 +809,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
                indexName: a_index
+               indexKey: {"a": 1}
                isMultiKey: false
                indexBounds: ["a": (MinKey, null]]
                innerScanLoops: 1 loops
@@ -811,7 +820,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on a_index (actual rows=1 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@?) '{ "a" : { "$numberInt" : "0" } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 /* validate explain for the individual items as well */
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$gt" : { "b": 1 } }}';
@@ -826,6 +835,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=15 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": ({ "b" : 1 }, [  ]), "c": (MinKey, MaxKey)]
                innerScanLoops: 15 loops
@@ -836,7 +846,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=15 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>) '{ "a" : { "b" : { "$numberInt" : "1" } } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$gt" : { "b": [ true, false ] } }}';
                                                                     QUERY PLAN                                                                    
@@ -850,6 +860,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": ({ "b" : [ true, false ] }, [  ]), "c": (MinKey, MaxKey)]
                innerScanLoops: 1 loops
@@ -860,7 +871,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=1 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>) '{ "a" : { "b" : [ true, false ] } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$gt" : [ { "b": [ 2, 3, 4 ] } ] }}';
                                                                                                    QUERY PLAN                                                                                                    
@@ -874,6 +885,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=3 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [{ "b" : [ 2, 3, 4 ] }, MaxKey], "c": (MinKey, MaxKey)]
                innerScanLoops: 6 loops
@@ -885,7 +897,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=6 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>) '{ "a" : [ { "b" : [ { "$numberInt" : "2" }, { "$numberInt" : "3" }, { "$numberInt" : "4" } ] } ] }'::documentdb_core.bson)
-(20 rows)
+(21 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$gte" : { "b": 1 } }}';
                                                                         QUERY PLAN                                                                        
@@ -899,6 +911,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=16 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [{ "b" : 1 }, [  ]), "c": (MinKey, MaxKey)]
                innerScanLoops: 16 loops
@@ -909,7 +922,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=16 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>=) '{ "a" : { "b" : { "$numberInt" : "1" } } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$gte" : { "b": [ true, false ] } }}';
                                                                     QUERY PLAN                                                                     
@@ -923,6 +936,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [{ "b" : [ true, false ] }, [  ]), "c": (MinKey, MaxKey)]
                innerScanLoops: 1 loops
@@ -933,7 +947,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=1 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>=) '{ "a" : { "b" : [ true, false ] } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$gte" : [ { "b": [ 2, 3, 4 ] } ] }}';
                                                                                                     QUERY PLAN                                                                                                    
@@ -947,6 +961,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=3 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [{ "b" : [ 2, 3, 4 ] }, MaxKey], "c": (MinKey, MaxKey)]
                innerScanLoops: 6 loops
@@ -958,7 +973,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=6 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@>=) '{ "a" : [ { "b" : [ { "$numberInt" : "2" }, { "$numberInt" : "3" }, { "$numberInt" : "4" } ] } ] }'::documentdb_core.bson)
-(20 rows)
+(21 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$lt" : { "b": 1 } }}';
                                                                        QUERY PLAN                                                                        
@@ -972,6 +987,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=5 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [{ }, { "b" : 1 }), "c": (MinKey, MaxKey)]
                innerScanLoops: 5 loops
@@ -982,7 +998,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=5 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@<) '{ "a" : { "b" : { "$numberInt" : "1" } } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$lt" : { "b": [ true, false ] } }}';
                                                                     QUERY PLAN                                                                    
@@ -996,6 +1012,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=18 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [{ }, { "b" : [ true, false ] }), "c": (MinKey, MaxKey)]
                innerScanLoops: 18 loops
@@ -1006,7 +1023,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=18 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@<) '{ "a" : { "b" : [ true, false ] } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$lt" : [ { "b": [ 2, 3, 4 ] } ] }}';
                                                                                                    QUERY PLAN                                                                                                    
@@ -1020,6 +1037,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=9 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [MinKey, [ { "b" : [ 2, 3, 4 ] } ]), "c": (MinKey, MaxKey)]
                innerScanLoops: 26 loops
@@ -1031,7 +1049,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=26 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@<) '{ "a" : [ { "b" : [ { "$numberInt" : "2" }, { "$numberInt" : "3" }, { "$numberInt" : "4" } ] } ] }'::documentdb_core.bson)
-(20 rows)
+(21 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$lte" : { "b": 1 } }}';
                                                                         QUERY PLAN                                                                        
@@ -1045,6 +1063,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=6 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [{ }, { "b" : 1 }], "c": (MinKey, MaxKey)]
                innerScanLoops: 6 loops
@@ -1055,7 +1074,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=6 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@<=) '{ "a" : { "b" : { "$numberInt" : "1" } } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$lte" : { "b": [ true, false ] } }}';
                                                                     QUERY PLAN                                                                     
@@ -1069,6 +1088,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=18 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [{ }, { "b" : [ true, false ] }], "c": (MinKey, MaxKey)]
                innerScanLoops: 18 loops
@@ -1079,7 +1099,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=18 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@<=) '{ "a" : { "b" : [ true, false ] } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$lte" : [ { "b": [ 2, 3, 4 ] } ] }}';
                                                                                                     QUERY PLAN                                                                                                    
@@ -1093,6 +1113,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=9 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [MinKey, [ { "b" : [ 2, 3, 4 ] } ]], "c": (MinKey, MaxKey)]
                innerScanLoops: 26 loops
@@ -1104,7 +1125,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=26 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@<=) '{ "a" : [ { "b" : [ { "$numberInt" : "2" }, { "$numberInt" : "3" }, { "$numberInt" : "4" } ] } ] }'::documentdb_core.bson)
-(20 rows)
+(21 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$eq" : { "b": 1 } }}';
                                                                        QUERY PLAN                                                                        
@@ -1118,6 +1139,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [{ "b" : 1 }, { "b" : 1 }], "c": (MinKey, MaxKey)]
                innerScanLoops: 2 loops
@@ -1128,7 +1150,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=2 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "b" : { "$numberInt" : "1" } } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$eq" : { "b": [ true, false ] } }}';
                                                                     QUERY PLAN                                                                    
@@ -1142,6 +1164,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [{ "b" : [ true, false ] }, { "b" : [ true, false ] }], "c": (MinKey, MaxKey)]
                innerScanLoops: 0 loops
@@ -1151,7 +1174,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Recheck Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "b" : [ true, false ] } }'::documentdb_core.bson)
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=0 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "b" : [ true, false ] } }'::documentdb_core.bson)
-(18 rows)
+(19 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$eq" : [ { "b": [ 2, 3, 4 ] } ] }}';
                                                                                                    QUERY PLAN                                                                                                    
@@ -1165,6 +1188,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [[ { "b" : [ 2, 3, 4 ] } ], [ { "b" : [ 2, 3, 4 ] } ]], "c": (MinKey, MaxKey)], ["a": [{ "b" : [ 2, 3, 4 ] }, { "b" : [ 2, 3, 4 ] }], "c": (MinKey, MaxKey)]
                innerScanLoops: 0 loops
@@ -1174,7 +1198,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Recheck Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : [ { "b" : [ { "$numberInt" : "2" }, { "$numberInt" : "3" }, { "$numberInt" : "4" } ] } ] }'::documentdb_core.bson)
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=0 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : [ { "b" : [ { "$numberInt" : "2" }, { "$numberInt" : "3" }, { "$numberInt" : "4" } ] } ] }'::documentdb_core.bson)
-(18 rows)
+(19 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$ne" : { "b": 1 } }}';
                                                                         QUERY PLAN                                                                        
@@ -1188,6 +1212,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=25 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [MinKey, MaxKey], "c": (MinKey, MaxKey)]
                innerScanLoops: 26 loops
@@ -1199,7 +1224,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=26 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@!=) '{ "a" : { "b" : { "$numberInt" : "1" } } }'::documentdb_core.bson)
-(20 rows)
+(21 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$ne" : { "b": [ true, false ] } }}';
                                                                     QUERY PLAN                                                                     
@@ -1213,6 +1238,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=27 loops=1)
                indexName: queryoperator_a_c
+               indexKey: {"a": 1,"c": 1}
                isMultiKey: true
                indexBounds: ["a": [MinKey, MaxKey], "c": (MinKey, MaxKey)]
                innerScanLoops: 27 loops
@@ -1223,7 +1249,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperator_a_c (actual rows=27 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@!=) '{ "a" : { "b" : [ true, false ] } }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a": { "$ne" : [ { "b": [ 2, 3, 4 ] } ] }}';
                                                                                             QUERY PLAN                                                                                            
@@ -1452,6 +1478,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                Sort Method: quicksort  Memory: 25kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
                      indexName: queryoperator_ab
+                     indexKey: {"a.b": 1,"_id": 1}
                      isMultiKey: true
                      indexBounds: ["a.b": ["M", "M"], "_id": (MinKey, MaxKey)]
                      innerScanLoops: 2 loops
@@ -1462,7 +1489,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                            Heap Blocks: exact=1
                            ->  Bitmap Index Scan on queryoperator_ab (actual rows=2 loops=1)
                                  Index Cond: (document OPERATOR(documentdb_api_catalog.@<>) '{ "a.b" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "1" }, "value" : "M", "isTopLevel" : false } ] } }'::documentdb_core.bson)
-(22 rows)
+(23 rows)
 
 -- $or gets converted to $in for simple expressions.
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$or" : [ { "a": 3 }, { "b": 4 } ] }' ORDER BY object_id;
@@ -1480,12 +1507,14 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                Sort Method: quicksort  Memory: 25kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [3, 3], "c": (MinKey, MaxKey)]
                      innerScanLoops: 0 loops
                      scanType: regular
                      scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 0)]
                      indexName: queryoperator_b_a
+                     indexKey: {"b": 1,"a": 1}
                      isMultiKey: true
                      indexBounds: ["b": [4, 4], "a": (MinKey, MaxKey)]
                      innerScanLoops: 0 loops
@@ -1498,7 +1527,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                                        Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson)
                                  ->  Bitmap Index Scan on queryoperator_b_a (actual rows=0 loops=1)
                                        Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "b" : { "$numberInt" : "4" } }'::documentdb_core.bson)
-(30 rows)
+(32 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$or" : [ { "a": 3 }, { "a": { "$gte": 4 } } ] }' ORDER BY object_id;
                                                                                                                           QUERY PLAN                                                                                                                           
@@ -1515,12 +1544,14 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                Sort Method: quicksort  Memory: 25kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [3, 3], "c": (MinKey, MaxKey)]
                      innerScanLoops: 0 loops
                      scanType: regular
                      scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 0)]
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [4, Infinity], "c": (MinKey, MaxKey)]
                      innerScanLoops: 2 loops
@@ -1534,7 +1565,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                                        Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson)
                                  ->  Bitmap Index Scan on queryoperator_a_c (actual rows=2 loops=1)
                                        Index Cond: (document OPERATOR(documentdb_api_catalog.@>=) '{ "a" : { "$numberInt" : "4" } }'::documentdb_core.bson)
-(31 rows)
+(33 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$or" : [ { "a": 3 }, { "a": 5 } ] }' ORDER BY object_id;
                                                                                     QUERY PLAN                                                                                    
@@ -1551,6 +1582,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                Sort Method: quicksort  Memory: 25kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [3, 3], "c": (MinKey, MaxKey)], ["a": [5, 5], "c": (MinKey, MaxKey)]
                      innerScanLoops: 0 loops
@@ -1560,7 +1592,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                            Recheck Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberInt" : "3" }, { "$numberInt" : "5" } ] }'::documentdb_core.bson)
                            ->  Bitmap Index Scan on queryoperator_a_c (actual rows=0 loops=1)
                                  Index Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberInt" : "3" }, { "$numberInt" : "5" } ] }'::documentdb_core.bson)
-(21 rows)
+(22 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$or" : [ { "a": 3 }, { "$and": [ { "a": 5 } ] } ] }' ORDER BY object_id;
                                                                                     QUERY PLAN                                                                                    
@@ -1577,6 +1609,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                Sort Method: quicksort  Memory: 25kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [3, 3], "c": (MinKey, MaxKey)], ["a": [5, 5], "c": (MinKey, MaxKey)]
                      innerScanLoops: 0 loops
@@ -1586,7 +1619,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                            Recheck Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberInt" : "3" }, { "$numberInt" : "5" } ] }'::documentdb_core.bson)
                            ->  Bitmap Index Scan on queryoperator_a_c (actual rows=0 loops=1)
                                  Index Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberInt" : "3" }, { "$numberInt" : "5" } ] }'::documentdb_core.bson)
-(21 rows)
+(22 rows)
 
 -- $and/$or with a single element gets elided
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$or" : [ { "a": { "$gt": 3 } } ] }' ORDER BY object_id;
@@ -1608,6 +1641,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
                      Output: object_id, document
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": (3, Infinity], "c": (MinKey, MaxKey)]
                      innerScanLoops: 2 loops
@@ -1619,7 +1653,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                            Heap Blocks: exact=1
                            ->  Bitmap Index Scan on queryoperator_a_c (actual rows=2 loops=1)
                                  Index Cond: (collection.document OPERATOR(documentdb_api_catalog.@>) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson)
-(27 rows)
+(28 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$and" : [ { "a": { "$gt": 3 } } ] }' ORDER BY object_id;
                                                                                                                                               QUERY PLAN                                                                                                                                              
@@ -1640,6 +1674,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
                      Output: object_id, document
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": (3, Infinity], "c": (MinKey, MaxKey)]
                      innerScanLoops: 2 loops
@@ -1651,7 +1686,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                            Heap Blocks: exact=1
                            ->  Bitmap Index Scan on queryoperator_a_c (actual rows=2 loops=1)
                                  Index Cond: (collection.document OPERATOR(documentdb_api_catalog.@>) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson)
-(27 rows)
+(28 rows)
 
 -- $or of $exists false/$eq: null simplifies
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$and" : [ { "a": 3 }, { "$or": [ { "b": null }, { "b": { "$exists": false }} ] } ] }' ORDER BY object_id;
@@ -1673,6 +1708,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                      Output: object_id, document
                      indexName: queryoperator_b_a
+                     indexKey: {"b": 1,"a": 1}
                      isMultiKey: true
                      indexBounds: ["b": (MinKey, null], "a": [3, 3]]
                      innerScanLoops: 0 loops
@@ -1681,7 +1717,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                      ->  Index Scan using queryoperator_b_a on documentdb_data.documents_1200_1200005 collection (actual rows=0 loops=1)
                            Output: object_id, document
                            Index Cond: ((collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "b" : null }'::documentdb_core.bson))
-(24 rows)
+(25 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$and" : [ { "a": 3 }, { "$or": [ { "b": null }, { "b": { "$exists": true }} ] } ] }' ORDER BY object_id;
                                                                                                                                                                                                                                                     QUERY PLAN                                                                                                                                                                                                                                                     
@@ -1702,12 +1738,14 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                      Output: object_id, document
                      indexName: queryoperator_b_a
+                     indexKey: {"b": 1,"a": 1}
                      isMultiKey: true
                      indexBounds: ["b": (MinKey, null], "a": [3, 3]]
                      innerScanLoops: 0 loops
                      scanType: regular
                      scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 0)]
                      indexName: queryoperator_b_a
+                     indexKey: {"b": 1,"a": 1}
                      isMultiKey: true
                      indexBounds: ["b": [MinKey, MaxKey], "a": [3, 3]]
                      innerScanLoops: 0 loops
@@ -1721,7 +1759,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                                        Index Cond: ((collection.document OPERATOR(documentdb_api_catalog.@=) '{ "b" : null }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson))
                                  ->  Bitmap Index Scan on queryoperator_b_a (actual rows=0 loops=1)
                                        Index Cond: ((collection.document OPERATOR(documentdb_api_catalog.@>=) '{ "b" : { "$minKey" : 1 } }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson))
-(35 rows)
+(37 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$and" : [ { "a": 3 }, { "$or": [ { "b": null }, { "c": { "$exists": false }} ] } ] }' ORDER BY object_id;
                                                                                                                                                                                                                                               QUERY PLAN                                                                                                                                                                                                                                               
@@ -1742,12 +1780,14 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                      Output: object_id, document
                      indexName: queryoperator_b_a
+                     indexKey: {"b": 1,"a": 1}
                      isMultiKey: true
                      indexBounds: ["b": (MinKey, null], "a": [3, 3]]
                      innerScanLoops: 0 loops
                      scanType: regular
                      scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 0)]
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [3, 3], "c": (MinKey, null]]
                      innerScanLoops: 0 loops
@@ -1761,7 +1801,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                                        Index Cond: ((collection.document OPERATOR(documentdb_api_catalog.@=) '{ "b" : null }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson))
                                  ->  Bitmap Index Scan on queryoperator_a_c (actual rows=0 loops=1)
                                        Index Cond: ((collection.document OPERATOR(documentdb_api_catalog.@?) '{ "c" : false }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson))
-(35 rows)
+(37 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$and" : [ { "a": 3 }, { "$or": [ { "b": null }, { "c": null }, { "c": { "$exists": false }} ] } ] }' ORDER BY object_id;
                                                                                                                                                                                                                                                                                                                                                            QUERY PLAN                                                                                                                                                                                                                                                                                                                                                           
@@ -1782,18 +1822,21 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                      Output: object_id, document
                      indexName: queryoperator_b_a
+                     indexKey: {"b": 1,"a": 1}
                      isMultiKey: true
                      indexBounds: ["b": (MinKey, null], "a": [3, 3]]
                      innerScanLoops: 0 loops
                      scanType: regular
                      scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 0)]
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [3, 3], "c": (MinKey, null]]
                      innerScanLoops: 0 loops
                      scanType: regular
                      scanKeyDetails: key 1: [(isInequality: true, estimatedEntryCount: 0)]
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [3, 3], "c": (MinKey, null]]
                      innerScanLoops: 0 loops
@@ -1809,7 +1852,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF, VERBOSE ON) SELECT obje
                                        Index Cond: ((collection.document OPERATOR(documentdb_api_catalog.@=) '{ "c" : null }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson))
                                  ->  Bitmap Index Scan on queryoperator_a_c (actual rows=0 loops=1)
                                        Index Cond: ((collection.document OPERATOR(documentdb_api_catalog.@?) '{ "c" : false }'::documentdb_core.bson) AND (collection.document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "3" } }'::documentdb_core.bson))
-(43 rows)
+(46 rows)
 
 -- $in with 1 element gets converted to $eq
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a" : { "$in": [ 1 ]} }' ORDER BY object_id;
@@ -1827,6 +1870,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                Sort Method: quicksort  Memory: 25kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [1, 1], "c": (MinKey, MaxKey)]
                      innerScanLoops: 2 loops
@@ -1837,7 +1881,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                            Heap Blocks: exact=1
                            ->  Bitmap Index Scan on queryoperator_a_c (actual rows=2 loops=1)
                                  Index Cond: (document OPERATOR(documentdb_api_catalog.@=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(22 rows)
+(23 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a" : { "$in": [ ]} }' ORDER BY object_id;
                         QUERY PLAN                         
@@ -1871,6 +1915,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                Sort Method: quicksort  Memory: 25kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [1, 1], "c": (MinKey, MaxKey)], ["a": [2, 2], "c": (MinKey, MaxKey)]
                      innerScanLoops: 2 loops
@@ -1881,7 +1926,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                            Heap Blocks: exact=1
                            ->  Bitmap Index Scan on queryoperator_a_c (actual rows=2 loops=1)
                                  Index Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberInt" : "1" }, { "$numberInt" : "2" } ] }'::documentdb_core.bson)
-(22 rows)
+(23 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a" : { "$nin": [ 1 ]} }' ORDER BY object_id;
                                                                       QUERY PLAN                                                                      
@@ -1898,6 +1943,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                Sort Method: quicksort  Memory: 27kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=25 loops=1)
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [MinKey, MaxKey], "c": (MinKey, MaxKey)]
                      innerScanLoops: 26 loops
@@ -1909,7 +1955,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                            Heap Blocks: exact=1
                            ->  Bitmap Index Scan on queryoperator_a_c (actual rows=26 loops=1)
                                  Index Cond: (document OPERATOR(documentdb_api_catalog.@!=) '{ "a" : { "$numberInt" : "1" } }'::documentdb_core.bson)
-(23 rows)
+(24 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "a" : { "$nin": [ ]} }' ORDER BY object_id;
                                             QUERY PLAN                                            
@@ -1946,6 +1992,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                Sort Method: quicksort  Memory: 27kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=25 loops=1)
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [MinKey, MaxKey], "c": (MinKey, MaxKey)], ["a": [MinKey, MaxKey], "c": (MinKey, MaxKey)]
                      innerScanLoops: 27 loops
@@ -1957,7 +2004,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                            Heap Blocks: exact=1
                            ->  Bitmap Index Scan on queryoperator_a_c (actual rows=27 loops=1)
                                  Index Cond: (document OPERATOR(documentdb_api_catalog.@!*=) '{ "a" : [ { "$numberInt" : "1" }, { "$numberInt" : "2" } ] }'::documentdb_core.bson)
-(23 rows)
+(24 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, document FROM documentdb_api.collection('db', 'queryoperator') WHERE document @@ '{ "$or" : [ { "a": 3 }, { "a": { "$in": [ 4 ] }} ] }' ORDER BY object_id;
                                                                                     QUERY PLAN                                                                                    
@@ -1974,6 +2021,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                Sort Method: quicksort  Memory: 25kB
                ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                      indexName: queryoperator_a_c
+                     indexKey: {"a": 1,"c": 1}
                      isMultiKey: true
                      indexBounds: ["a": [3, 3], "c": (MinKey, MaxKey)], ["a": [4, 4], "c": (MinKey, MaxKey)]
                      innerScanLoops: 0 loops
@@ -1983,7 +2031,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT object_id, docum
                            Recheck Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberInt" : "3" }, { "$numberInt" : "4" } ] }'::documentdb_core.bson)
                            ->  Bitmap Index Scan on queryoperator_a_c (actual rows=0 loops=1)
                                  Index Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberInt" : "3" }, { "$numberInt" : "4" } ] }'::documentdb_core.bson)
-(21 rows)
+(22 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM documentdb_api.collection('db', 'queryoperatorIn') WHERE document @@ '{ "a" : { "$in" : [ NaN, 1000 ] } }';
                                                                                      QUERY PLAN                                                                                     
@@ -1997,6 +2045,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM do
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
                indexName: queryoperatorin_a
+               indexKey: {"a": 1}
                isMultiKey: true
                indexBounds: ["a": [NaN, NaN]], ["a": [1000, 1000]]
                innerScanLoops: 2 loops
@@ -2007,7 +2056,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM do
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperatorin_a (actual rows=2 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberDouble" : "NaN" }, { "$numberInt" : "1000" } ] }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM documentdb_api.collection('db', 'queryoperatorIn') WHERE document @@ '{ "a" : { "$in" : [ Infinity, 1000  ] } }';
                                                                                        QUERY PLAN                                                                                        
@@ -2021,6 +2070,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM do
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
                indexName: queryoperatorin_a
+               indexKey: {"a": 1}
                isMultiKey: true
                indexBounds: ["a": [Infinity, Infinity]], ["a": [1000, 1000]]
                innerScanLoops: 2 loops
@@ -2031,7 +2081,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM do
                      Heap Blocks: exact=1
                      ->  Bitmap Index Scan on queryoperatorin_a (actual rows=2 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberDouble" : "Infinity" }, { "$numberInt" : "1000" } ] }'::documentdb_core.bson)
-(19 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM documentdb_api.collection('db', 'queryoperatorIn') WHERE document @@ '{ "a" : { "$in" : [ 1.01, 10 ] } }';
                                                                                              QUERY PLAN                                                                                             
@@ -2045,6 +2095,7 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM do
          Node: host=localhost port=58070 dbname=regression
          ->  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
                indexName: queryoperatorin_a
+               indexKey: {"a": 1}
                isMultiKey: true
                indexBounds: ["a": [1.01, 1.01]], ["a": [10, 10]]
                innerScanLoops: 0 loops
@@ -2054,6 +2105,6 @@ EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, TIMING OFF) SELECT document FROM do
                      Recheck Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberDouble" : "1.0100000000000000089" }, { "$numberInt" : "10" } ] }'::documentdb_core.bson)
                      ->  Bitmap Index Scan on queryoperatorin_a (actual rows=0 loops=1)
                            Index Cond: (document OPERATOR(documentdb_api_catalog.@*=) '{ "a" : [ { "$numberDouble" : "1.0100000000000000089" }, { "$numberInt" : "10" } ] }'::documentdb_core.bson)
-(18 rows)
+(19 rows)
 
 COMMIT;
