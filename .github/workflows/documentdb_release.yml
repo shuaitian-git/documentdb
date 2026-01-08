@@ -69,9 +69,16 @@ jobs:
       version: ${{ needs.extract-version.outputs.version }}
       use_full_matrix: true
 
+  build-gateway-images:
+    name: Build Gateway Images
+    needs: extract-version
+    uses: ./.github/workflows/build_gateway.yml
+    with:
+      push_images: true
+
   create-release:
     name: Create GitHub Release
-    needs: [extract-version, build-deb-packages, build-rpm-packages]
+    needs: [extract-version, build-deb-packages, build-rpm-packages, build-gateway-images]
     runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.create_release)
     
