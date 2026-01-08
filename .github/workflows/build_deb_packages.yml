@@ -33,10 +33,9 @@ permissions:
   id-token: write
 
 jobs:
-  # Build DocumentDB packages (per OS, arch, PG version)
-  build-documentdb:
+  build-deb-packages:
     runs-on: ${{ matrix.runner }}
-    name: DEB ${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}
+    name: Debian ${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}
     if: github.event.pull_request.draft == false
     strategy:
       fail-fast: false
@@ -53,8 +52,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract version
-        id: version
+      - name: Extract and Format Default Version
+        id: extract_version
         run: |
           if [ -n "${{ inputs.version }}" ]; then
             DOCUMENTDB_VERSION="${{ inputs.version }}"
@@ -72,9 +71,9 @@ jobs:
 
       - name: Build Debian Package
         run: |
-          ./packaging/build_packages.sh --os ${{ matrix.os }} --pg ${{ matrix.pg_version }} --version ${{ steps.version.outputs.documentdb_version }}
+          ./packaging/build_packages.sh --os ${{ matrix.os }} --pg ${{ matrix.pg_version }} --version ${{ env.DOCUMENTDB_VERSION }}
 
-      - name: Upload Debian Package
+      - name: Upload Debian Package as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: deb-${{ matrix.os }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}-${{ env.DOCUMENTDB_VERSION }}
@@ -84,51 +83,21 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-  # Build Gateway package (once per arch - distro and PG agnostic)
-  build-documentdb-gateway:
-    runs-on: ${{ matrix.runner }}
-    name: Gateway ${{ matrix.arch }}
-    if: github.event.pull_request.draft == false
-    needs: build-documentdb
-    strategy:
-      fail-fast: false
-      matrix:
-        # For PRs: only build amd64 (matches deb12-amd64-pg17 from build-documentdb)
-        # For full builds: build both architectures
-        ${{ fromJson(
-          github.event_name == 'pull_request' &&
-          '{"include":[{"arch":"amd64","runner":"ubuntu-24.04","test_os":"deb12","test_pg":"17"}]}' ||
-          '{"include":[{"arch":"amd64","runner":"ubuntu-24.04","test_os":"deb12","test_pg":"17"},{"arch":"arm64","runner":"ubuntu-24.04-arm","test_os":"deb12","test_pg":"17"}]}'
-        ) }}
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Extract version
-        id: version
+      - name: Build Gateway Debian Package
+        # Just to avoid building gateway packages twice for pg version.
+        # keep pg version when building gateway in case we need it for gateway build process in the future.
+        if: matrix.pg_version == '17'
         run: |
-          GATEWAY_VERSION=$(grep '^version' pg_documentdb_gw/Cargo.toml | head -n1 | sed 's/version *= *"\(.*\)"/\1/')
-          echo "gateway_version=$GATEWAY_VERSION" >> $GITHUB_OUTPUT
-          DOCUMENTDB_VERSION=$(grep -E "^default_version" pg_documentdb_core/documentdb_core.control | sed -E "s/.*'([0-9]+\.[0-9]+-[0-9]+)'.*/\1/" | sed "s/-/./g")
-          echo "documentdb_version=$DOCUMENTDB_VERSION" >> $GITHUB_OUTPUT
+          ./packaging/build_gateway_packages.sh --os ${{ matrix.os }} --pg 17 --version ${{ env.DOCUMENTDB_VERSION }} --test-clean-install
 
-      - name: Download a DocumentDB package for testing
-        uses: actions/download-artifact@v4
-        with:
-          name: documentdb-${{ steps.version.outputs.documentdb_version }}-${{ matrix.test_os }}-pg${{ matrix.test_pg }}-${{ matrix.arch }}
-          path: packaging/
-
-      - name: Build Gateway Package
-        run: |
-          deb_package=$(ls packaging/ | grep -E "${{ matrix.test_os }}-postgresql-${{ matrix.test_pg }}-documentdb_" | grep -v "dbg" | head -n1)
-          ./packaging/build_gateway_packages.sh --test-clean-install --documentdb-package "packaging/${deb_package}"
-
-      - name: Upload Gateway Package
+      - name: Upload Gateway Debian Package as Artifact
+        if: matrix.pg_version == '17'
         uses: actions/upload-artifact@v4
         with:
-          name: documentdb-gateway-${{ steps.version.outputs.gateway_version }}-${{ matrix.arch }}
-          path: packaging/*gateway*.deb
+          name: archive-${{ matrix.os }}-${{ matrix.arch }}-documentdb-gateway-${{ env.GATEWAY_VERSION }}
+          path: |
+            packaging/*gateway*.deb
           retention-days: 90
           if-no-files-found: error
           compression-level: 0
