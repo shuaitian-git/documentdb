@@ -1,0 +1,4 @@
+#include "types/bsonindexterm--0.110-0.sql"
+#include "udfs/index_mgmt/bson_index_term_functions--0.110-0.sql"
+#include "operators/bsonindexterm_btree_operators--0.110-0.sql"
+#include "operators/bsonindexterm_btree_operator_family--0.110-0.sql"
