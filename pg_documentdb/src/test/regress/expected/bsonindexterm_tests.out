@@ -1,0 +1,272 @@
+SET search_path TO documentdb_api,documentdb_api_catalog,documentdb_api_internal,documentdb_core;
+SET documentdb.next_collection_id TO 800;
+SET documentdb.next_collection_index_id TO 800;
+-- test input output functions for bsonindexterm
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+         bson_to_bsonindexterm          
+----------------------------------------
+ BSONITERMHEX000c0000001024000100000000
+(1 row)
+
+SELECT 'BSONITERMHEX000c0000001024000100000000'::bsonindexterm;
+             bsonindexterm              
+----------------------------------------
+ BSONITERMHEX000c0000001024000100000000
+(1 row)
+
+SELECT bsonindexterm_to_bson('BSONITERMHEX000c0000001024000100000000');
+                        bsonindexterm_to_bson                        
+---------------------------------------------------------------------
+ { "$" : { "$numberInt" : "1" }, "$flags" : { "$numberInt" : "0" } }
+(1 row)
+
+-- truncated flag is preserved
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 1 }');
+         bson_to_bsonindexterm          
+----------------------------------------
+ BSONITERMHEX010c0000001024000100000000
+(1 row)
+
+SELECT 'BSONITERMHEX010c0000001024000100000000'::bsonindexterm;
+             bsonindexterm              
+----------------------------------------
+ BSONITERMHEX010c0000001024000100000000
+(1 row)
+
+SELECT bsonindexterm_to_bson('BSONITERMHEX010c0000001024000100000000');
+                        bsonindexterm_to_bson                        
+---------------------------------------------------------------------
+ { "$" : { "$numberInt" : "1" }, "$flags" : { "$numberInt" : "1" } }
+(1 row)
+
+-- value only is preserved and the serialized form is smaller
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 5 }');
+   bson_to_bsonindexterm    
+----------------------------
+ BSONITERMHEX05100001000000
+(1 row)
+
+SELECT 'BSONITERMHEX05100001000000'::bsonindexterm;
+       bsonindexterm        
+----------------------------
+ BSONITERMHEX05100001000000
+(1 row)
+
+SELECT bsonindexterm_to_bson('BSONITERMHEX05100001000000');
+                        bsonindexterm_to_bson                        
+---------------------------------------------------------------------
+ { "$" : { "$numberInt" : "1" }, "$flags" : { "$numberInt" : "5" } }
+(1 row)
+
+-- descending is persisted too
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 128 }');
+         bson_to_bsonindexterm          
+----------------------------------------
+ BSONITERMHEX800c0000001024000100000000
+(1 row)
+
+SELECT 'BSONITERMHEX800c0000001024000100000000'::bsonindexterm;
+             bsonindexterm              
+----------------------------------------
+ BSONITERMHEX800c0000001024000100000000
+(1 row)
+
+SELECT bsonindexterm_to_bson('BSONITERMHEX800c0000001024000100000000');
+                         bsonindexterm_to_bson                         
+-----------------------------------------------------------------------
+ { "$" : { "$numberInt" : "1" }, "$flags" : { "$numberInt" : "128" } }
+(1 row)
+
+-- truncated flag is preserved
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 129 }');
+         bson_to_bsonindexterm          
+----------------------------------------
+ BSONITERMHEX810c0000001024000100000000
+(1 row)
+
+SELECT 'BSONITERMHEX810c0000001024000100000000'::bsonindexterm;
+             bsonindexterm              
+----------------------------------------
+ BSONITERMHEX810c0000001024000100000000
+(1 row)
+
+SELECT bsonindexterm_to_bson('BSONITERMHEX810c0000001024000100000000');
+                         bsonindexterm_to_bson                         
+-----------------------------------------------------------------------
+ { "$" : { "$numberInt" : "1" }, "$flags" : { "$numberInt" : "129" } }
+(1 row)
+
+-- value only is preserved and the serialized form is smaller
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 133 }');
+   bson_to_bsonindexterm    
+----------------------------
+ BSONITERMHEX85100001000000
+(1 row)
+
+SELECT 'BSONITERMHEX85100001000000'::bsonindexterm;
+       bsonindexterm        
+----------------------------
+ BSONITERMHEX85100001000000
+(1 row)
+
+SELECT bsonindexterm_to_bson('BSONITERMHEX85100001000000');
+                         bsonindexterm_to_bson                         
+-----------------------------------------------------------------------
+ { "$" : { "$numberInt" : "1" }, "$flags" : { "$numberInt" : "133" } }
+(1 row)
+
+-- check btree comparisons
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 5 }') = bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 5 }') >= bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 5 }') > bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 5 }') < bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 5 }') <= bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+-- values being different
+SELECT bson_to_bsonindexterm('{ "$": 2, "$flags": 5 }') = bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 2, "$flags": 5 }') >= bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 2, "$flags": 5 }') > bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 2, "$flags": 5 }') < bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 2, "$flags": 5 }') <= bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+-- truncation flag being different
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 1 }') = bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 1 }') >= bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 1 }') > bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 1 }') < bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": 1, "$flags": 1 }') <= bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+-- undefined value is less than numbers.
+SELECT bson_to_bsonindexterm('{ "$": null, "$flags": 8 }') = bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": null, "$flags": 8 }') >= bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": null, "$flags": 8 }') > bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": null, "$flags": 8 }') < bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": null, "$flags": 8 }') <= bson_to_bsonindexterm('{ "$": 1, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+-- undefined value is greater than MinKey.
+SELECT bson_to_bsonindexterm('{ "$": null, "$flags": 8 }') = bson_to_bsonindexterm('{ "$": { "$minKey": 1 }, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": null, "$flags": 8 }') >= bson_to_bsonindexterm('{ "$": { "$minKey": 1 }, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": null, "$flags": 8 }') > bson_to_bsonindexterm('{ "$": { "$minKey": 1 }, "$flags": 0 }');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": null, "$flags": 8 }') < bson_to_bsonindexterm('{ "$": { "$minKey": 1 }, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT bson_to_bsonindexterm('{ "$": null, "$flags": 8 }') <= bson_to_bsonindexterm('{ "$": { "$minKey": 1 }, "$flags": 0 }');
+ ?column? 
+----------
+ f
+(1 row)
+
