@@ -1,4 +1,5 @@
 ### documentdb v1.110-0 (Unreleased) ###
+* Add support for keyword `description` in `$jsonSchema` *[Feature]*
 
 ### documentdb v0.109-0 (Unreleased) ###
 * Support collation with find positional queries *[Feature]*
