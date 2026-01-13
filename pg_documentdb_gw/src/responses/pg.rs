@@ -290,7 +290,7 @@ impl PgResponse {
                         "index creation requires resources too large to fit in the resource memory limit, please try creating index with less number of documents or creating index before inserting documents into collection"
                     ))
                 } else if msg.contains("index row size") && msg.contains("exceeds maximum") {
-                    let error_message = "Index key is too large";
+                    let error_message = "Index key is too large.";
                     tracing::error!(activity_id = activity_id, "{error_message}");
                     Some((
                         ErrorCode::CannotBuildIndexKeys as i32,
