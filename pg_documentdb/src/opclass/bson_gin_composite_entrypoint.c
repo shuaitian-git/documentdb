@@ -42,6 +42,7 @@
  #include "collation/collation.h"
  #include "opclass/bson_gin_composite_scan.h"
  #include "opclass/bson_gin_composite_private.h"
+ #include "opclass/bson_gin_composite.h"
 
 typedef enum RumIndexTransformOperation
 {
@@ -103,9 +104,10 @@ extern int MaxWildcardIndexKeySize;
 
 static void ValidateCompositePathSpec(const char *prefix);
 static Size FillCompositePathSpec(const char *prefix, void *buffer);
+static Size FillCompositePathSpecFromBson(pgbson *bson, void *buffer, bool isIndexSpec);
 static Datum * GenerateCompositeTermsCore(pgbson *doc,
 										  BsonGinCompositePathOptions *options,
-										  int32_t *nentries);
+										  int32_t *nentries, bool addMetadataTerms);
 static int32_t GetIndexPathsFromOptions(BsonGinCompositePathOptions *options,
 										const char **indexPaths,
 										int8_t *sortOrders);
@@ -181,7 +183,9 @@ gin_bson_composite_path_extract_value(PG_FUNCTION_ARGS)
 	BsonGinCompositePathOptions *options =
 		(BsonGinCompositePathOptions *) PG_GET_OPCLASS_OPTIONS();
 
-	Datum *indexEntries = GenerateCompositeTermsCore(bson, options, nentries);
+	bool addMetadataTerms = true;
+	Datum *indexEntries = GenerateCompositeTermsCore(bson, options, nentries,
+													 addMetadataTerms);
 	PG_RETURN_POINTER(indexEntries);
 }
 
@@ -1024,6 +1028,36 @@ gin_bson_composite_path_consistent(PG_FUNCTION_ARGS)
 }
 
 
+Datum *
+GenerateCompositeTermsFromIndexSpec(pgbson *document, pgbson *keySpec, uint32_t *numTerms)
+{
+	bool isIndexSpec = true;
+	Size fieldSize = FillCompositePathSpecFromBson(keySpec, NULL, isIndexSpec);
+	BsonGinCompositePathOptions *options = palloc0(
+		sizeof(BsonGinCompositePathOptions) + fieldSize);
+	options->base.indexTermTruncateLimit = INT32_MAX;
+	options->base.wildcardIndexTruncatedPathLimit = MaxWildcardIndexKeySize;
+	options->base.type = IndexOptionsType_Composite;
+	options->base.version = IndexOptionsVersion_V0;
+	options->compositePathSpec = sizeof(BsonGinCompositePathOptions);
+	options->wildcardPathIndex = -1;
+	options->enableCompositeReducedCorrelatedTerms = true;
+
+	FillCompositePathSpecFromBson(keySpec,
+								  ((char *) options) +
+								  sizeof(BsonGinCompositePathOptions), isIndexSpec);
+
+	GinEntryPathData pathData = { 0 };
+	bool addMetadataTerms = false;
+	pathData.terms.entries = GenerateCompositeTermsCore(document, options,
+														&pathData.terms.index,
+														addMetadataTerms);
+	*numTerms = pathData.terms.index;
+	pfree(options);
+	return pathData.terms.entries;
+}
+
+
 /*
  * gin_bson_get_composite_path_generated_terms is an internal utility function that allows to retrieve
  * the set of terms that *would* be inserted in the index for a given document for a single
@@ -1076,9 +1110,11 @@ gin_bson_get_composite_path_generated_terms(PG_FUNCTION_ARGS)
 			((char *) options) + sizeof(BsonGinCompositePathOptions));
 
 		pathData = palloc0(sizeof(GinEntryPathData));
+		bool addMetadataTerms = true;
 		pathData->terms.entries = GenerateCompositeTermsCore(document, options,
 															 &pathData->
-															 terms.index);
+															 terms.index,
+															 addMetadataTerms);
 		pathData->terms.entryCapacity = pathData->terms.index;
 		pathData->terms.index = 0;
 		MemoryContextSwitchTo(oldcontext);
@@ -2368,6 +2404,14 @@ FillCompositePathSpec(const char *prefix, void *buffer)
 	}
 
 	pgbson *bson = PgbsonInitFromJson(prefix);
+	bool isIndexSpec = false;
+	return FillCompositePathSpecFromBson(bson, buffer, isIndexSpec);
+}
+
+
+static Size
+FillCompositePathSpecFromBson(pgbson *bson, void *buffer, bool isIndexSpec)
+{
 	uint32_t pathCount = 0;
 	bson_iter_t bsonIterator;
 
@@ -2377,20 +2421,27 @@ FillCompositePathSpec(const char *prefix, void *buffer)
 	while (bson_iter_next(&bsonIterator))
 	{
 		uint32_t pathLength;
-		if (BSON_ITER_HOLDS_UTF8(&bsonIterator))
+		if (isIndexSpec)
 		{
-			bson_iter_utf8(&bsonIterator, &pathLength);
-		}
-		else if (BSON_ITER_HOLDS_DOCUMENT(&bsonIterator))
-		{
-			pgbsonelement pathElement;
-			BsonValueToPgbsonElement(bson_iter_value(&bsonIterator), &pathElement);
-			pathLength = pathElement.pathLength;
+			pathLength = bson_iter_key_len(&bsonIterator);
 		}
 		else
 		{
-			ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
-								"filter must have a valid string path")));
+			if (BSON_ITER_HOLDS_UTF8(&bsonIterator))
+			{
+				bson_iter_utf8(&bsonIterator, &pathLength);
+			}
+			else if (BSON_ITER_HOLDS_DOCUMENT(&bsonIterator))
+			{
+				pgbsonelement pathElement;
+				BsonValueToPgbsonElement(bson_iter_value(&bsonIterator), &pathElement);
+				pathLength = pathElement.pathLength;
+			}
+			else
+			{
+				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_BADVALUE), errmsg(
+									"index options must have a valid string path")));
+			}
 		}
 
 		pathCount++;
@@ -2429,24 +2480,34 @@ FillCompositePathSpec(const char *prefix, void *buffer)
 			uint32_t pathLength = 0;
 			const char *path;
 			int8_t sortOrder = 1;
-			if (BSON_ITER_HOLDS_UTF8(&bsonIterator))
+			if (isIndexSpec)
 			{
-				path = bson_iter_utf8(&bsonIterator, &pathLength);
-				sortOrder = 1;
-			}
-			else if (BSON_ITER_HOLDS_DOCUMENT(&bsonIterator))
-			{
-				pgbsonelement pathElement;
-				BsonValueToPgbsonElement(bson_iter_value(&bsonIterator), &pathElement);
-				pathLength = pathElement.pathLength;
-				path = pathElement.path;
-				sortOrder = (int8_t) BsonValueAsInt32(&pathElement.bsonValue);
+				path = bson_iter_key(&bsonIterator);
+				pathLength = bson_iter_key_len(&bsonIterator);
+				sortOrder = BsonValueAsInt32(bson_iter_value(&bsonIterator)) > 0 ? 1 : -1;
 			}
 			else
 			{
-				path = NULL;
-				ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR), errmsg(
-									"filter must have a valid string path")));
+				if (BSON_ITER_HOLDS_UTF8(&bsonIterator))
+				{
+					path = bson_iter_utf8(&bsonIterator, &pathLength);
+					sortOrder = 1;
+				}
+				else if (BSON_ITER_HOLDS_DOCUMENT(&bsonIterator))
+				{
+					pgbsonelement pathElement;
+					BsonValueToPgbsonElement(bson_iter_value(&bsonIterator),
+											 &pathElement);
+					pathLength = pathElement.pathLength;
+					path = pathElement.path;
+					sortOrder = (int8_t) BsonValueAsInt32(&pathElement.bsonValue);
+				}
+				else
+				{
+					path = NULL;
+					ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_INTERNALERROR), errmsg(
+										"index options must have a valid string path")));
+				}
 			}
 
 			/* add the prefixed path length */
@@ -2743,9 +2804,15 @@ static Datum *
 AddTruncationOrMultiKeyTerms(Datum *indexEntries, uint32_t totalTermCount,
 							 int32_t indexEntryCapacity, bool considerMultiTermAsMultiKey,
 							 bool entryHasMultiKey, bool hasTruncation,
-							 int32_t *nentries,
+							 int32_t *nentries, bool addMetadataTerms,
 							 IndexTermCreateMetadata *overallMetadata)
 {
+	if (!addMetadataTerms)
+	{
+		*nentries = totalTermCount;
+		return indexEntries;
+	}
+
 	bool hasExtra = (totalTermCount > 1 || entryHasMultiKey) || hasTruncation;
 
 	uint32_t requiredSize = hasExtra ? (totalTermCount + 2) : totalTermCount;
@@ -2843,8 +2910,7 @@ PreprocessMergedTermSet(MergedTermSet *mergedSet, GinEntrySet *entrySet,
 
 static uint32_t
 BuildCurrentEntrySetFromMergedSet(MergedTermSet *mergedSet, GinEntrySet *currentEntrySet,
-								  uint32_t pathCount,
-								  GinEntryPathData *pathData)
+								  uint32_t pathCount, GinEntryPathData *pathData)
 {
 	uint32_t currentTotalTermCount = 1;
 	for (int i = 0; i < (int) pathCount; i++)
@@ -2869,7 +2935,7 @@ BuildCurrentEntrySetFromMergedSet(MergedTermSet *mergedSet, GinEntrySet *current
 
 static Datum *
 GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
-						   int32_t *nentries)
+						   int32_t *nentries, bool addMetadataTerms)
 {
 	CompositeTermGenerateState termState = { 0 };
 	GinEntrySet entrySet[INDEX_MAX_KEYS] = { 0 };
@@ -2905,7 +2971,7 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 		return AddTruncationOrMultiKeyTerms(
 			entrySet[0].entries, totalTermCount, entrySet[0].entryCapacity,
 			considerMultiTermAsMultiKey, entryHasMultiKey,
-			entryHasTruncation, nentries, &overallMetadata);
+			entryHasTruncation, nentries, addMetadataTerms, &overallMetadata);
 	}
 
 	bool hasTruncation = false;
@@ -2974,7 +3040,7 @@ GenerateCompositeTermsCore(pgbson *bson, BsonGinCompositePathOptions *options,
 
 	return AddTruncationOrMultiKeyTerms(
 		indexEntries, totalTermCount, finalEntryCapacity, considerMultiTermAsMultiKey,
-		entryHasMultiKey, hasTruncation, nentries, &overallMetadata);
+		entryHasMultiKey, hasTruncation, nentries, addMetadataTerms, &overallMetadata);
 }
 
 
