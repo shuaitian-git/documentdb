@@ -46,3 +46,9 @@ CREATE OR REPLACE FUNCTION __API_SCHEMA_INTERNAL_V2__.bson_to_bsonindexterm(__CO
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS 'MODULE_PATHNAME', $function$gin_bson_to_bsonindexterm$function$;
+
+CREATE OR REPLACE FUNCTION __API_SCHEMA_INTERNAL_V2__.bsonindexterm_compare_btree(__API_SCHEMA_INTERNAL_V2__.bsonindexterm,__API_SCHEMA_INTERNAL_V2__.bsonindexterm)
+ RETURNS int4
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS 'MODULE_PATHNAME', $function$bsonindexterm_compare_btree$function$;
