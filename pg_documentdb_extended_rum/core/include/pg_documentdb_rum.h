@@ -1074,9 +1074,6 @@ extern RumItem * rumGetBAEntry(BuildAccumulator *accum,
 /* NProcs changes for documentdb from 10 to 12 */
 #define RUMNProcs 12
 
-#define RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT true
-#define RUM_DEFAULT_FIX_INCOMPLETE_SPLIT true
-
 /* GUC parameters */
 extern PGDLLIMPORT int RumFuzzySearchLimit;
 extern PGDLLIMPORT int RumDataPageIntermediateSplitSize;
@@ -1094,7 +1091,6 @@ extern PGDLLIMPORT bool RumPruneEmptyPages;
 extern PGDLLIMPORT bool RumTrackIncompleteSplit;
 extern PGDLLIMPORT bool RumFixIncompleteSplit;
 extern PGDLLIMPORT bool RumInjectPageSplitIncomplete;
-extern PGDLLIMPORT bool RumEnableParallelVacuumFlags;
 extern PGDLLIMPORT bool RumEnableCustomCostEstimate;
 extern PGDLLIMPORT bool RumEnableNewBulkDelete;
 extern PGDLLIMPORT bool RumNewBulkDeleteInlineDataPages;

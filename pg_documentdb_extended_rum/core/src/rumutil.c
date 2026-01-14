@@ -44,19 +44,19 @@ static char * rumbuildphasename(int64 phasenum);
 
 extern PGDLLIMPORT bool DocumentDBRumLoadCommonGUCs;
 
-extern PGDLLIMPORT bool RumThrowErrorOnInvalidDataPage;
-
-extern PGDLLIMPORT bool RumUseNewItemPtrDecoding;
-extern PGDLLIMPORT bool RumEnableParallelVacuumFlags;
-
 /*
  * Module load callback
  */
 PGDLLEXPORT void
 _PG_init(void)
 {
+#ifndef RUM_GUC_PREFIX
 #define RUM_GUC_PREFIX "documentdb_rum"
+#endif
+
+#ifndef DOCUMENTDB_RUM_GUC_PREFIX
 #define DOCUMENTDB_RUM_GUC_PREFIX "documentdb_rum"
+#endif
 
 	/* Assert things about the storage format */
 	StaticAssertExpr(offsetof(RumPageOpaqueData, dataPageMaxoff) == sizeof(uint64_t),
@@ -91,33 +91,16 @@ _PG_init(void)
 
 	InitializeRumVacuumState();
 
-	/* Define custom GUC variables. */
-	RumTrackIncompleteSplit = RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT;
-	DefineCustomBoolVariable(
-		DOCUMENTDB_RUM_GUC_PREFIX ".track_incomplete_split",
-		"Sets whether or not to track incomplete splits",
-		NULL,
-		&RumTrackIncompleteSplit,
-		RUM_DEFAULT_TRACK_INCOMPLETE_SPLIT,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
-	RumFixIncompleteSplit = RUM_DEFAULT_FIX_INCOMPLETE_SPLIT;
-	DefineCustomBoolVariable(
-		DOCUMENTDB_RUM_GUC_PREFIX ".fix_incomplete_split",
-		"Sets whether or not to fix incomplete splits",
-		NULL,
-		&RumFixIncompleteSplit,
-		RUM_DEFAULT_FIX_INCOMPLETE_SPLIT,
-		PGC_USERSET, 0,
-		NULL, NULL, NULL);
-
+	/* Define custom GUC variables. (if any) */
 	if (DocumentDBRumLoadCommonGUCs)
 	{
+		DocumentDBRumLoadCommonGUCs = false;
 		InitializeCommonDocumentDBGUCs(RUM_GUC_PREFIX, DOCUMENTDB_RUM_GUC_PREFIX);
 	}
 
+#ifndef SKIP_MARK_GUC_PREFIX_RESERVED
 	MarkGUCPrefixReserved(DOCUMENTDB_RUM_GUC_PREFIX);
+#endif
 }
 
 
@@ -156,14 +139,9 @@ documentdb_rumhandler(PG_FUNCTION_ARGS)
 	amroutine->amcanbuildparallel = RumEnableParallelIndexBuild;
 #endif
 	amroutine->amkeytype = InvalidOid;
-
-	if (RumEnableParallelVacuumFlags)
-	{
-		amroutine->amusemaintenanceworkmem = true;
-		amroutine->amparallelvacuumoptions =
-			VACUUM_OPTION_PARALLEL_BULKDEL | VACUUM_OPTION_PARALLEL_CLEANUP;
-	}
-
+	amroutine->amusemaintenanceworkmem = true;
+	amroutine->amparallelvacuumoptions =
+		VACUUM_OPTION_PARALLEL_BULKDEL | VACUUM_OPTION_PARALLEL_CLEANUP;
 	amroutine->ambuild = rumbuild;
 	amroutine->ambuildempty = rumbuildempty;
 	amroutine->aminsert = ruminsert;
