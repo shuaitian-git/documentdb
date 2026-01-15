@@ -20,47 +20,46 @@ SELECT documentdb_api.insert_one('comp_elmdb', 'cmp_elemmatch_ops', '{ "_id": 2,
 
 -- pushes to the price index
 set documentdb.enableExtendedExplainPlans to on;
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$gt": 120, "$lt": 150 } } } }');
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$gt": 120, "$lt": 150 } } } }') $cmd$);
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$in": [ 120, 140 ], "$gt": 121 } } } }');
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$in": [ 120, 140 ], "$gt": 121 } } } }') $cmd$);
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$type": "number" } } } }');
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$type": "number" } } } }') $cmd$);
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$ne": 160 } } } }');
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$ne": 160 } } } }') $cmd$);
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$nin": [ 160, 110, 140] } } } }');
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$nin": [ 160, 110, 140] } } } }') $cmd$);
 
 -- now test some with nested objects
 SELECT documentdb_api.insert_one('comp_elmdb', 'cmp_elemmatch_ops', '{ "_id": 3, "brands": [ { "name" : "alpha", "rating" : 5 }, { "name" : "beta", "rating" : 3 } ] }');
 SELECT documentdb_api.insert_one('comp_elmdb', 'cmp_elemmatch_ops', '{ "_id": 4, "brands": [ { "name" : "alpha", "rating" : 4 }, { "name" : "beta", "rating" : 2 } ] }');
 SELECT documentdb_api.insert_one('comp_elmdb', 'cmp_elemmatch_ops', '{ "_id": 5, "brands": [ { "name" : "alpha", "rating" : 2 }, { "name" : "beta", "rating" : 4 } ] }');
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": "alpha", "rating": 2 } } } }');
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": "alpha", "rating": 2 } } } }') $cmd$);
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": "alpha" } } } }');
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": "alpha" } } } }') $cmd$);
 
 -- test elemMatch behavior when confronted with multiple arrays
 SELECT documentdb_api.insert_one('comp_elmdb', 'cmp_elemmatch_ops', '{ "_id": 6, "brands": [ { "name": [ "gurci", "dolte" ], "rating": 5 } ]}');
 
 -- this technically matches the doc 6 above and the elemMatches don't get joined.
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": { "$gt": "gabba", "$lt": "ergo" } } } } }');
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": { "$gt": "gabba", "$lt": "ergo" } } } } }') $cmd$);
 
 -- this can now join the elemMatch filters
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "brands.name": { "$elemMatch": { "$gt": "gabba", "$lt": "ergo" } } } }');
-
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "brands.name": { "$elemMatch": { "$gt": "gabba", "$lt": "ergo" } } } }') $cmd$);
 
 -- disjoint filter handling for elemMatch and non elemMatch: this matches a document since these are matching different elements of the array.
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$eq": 110, "$elemMatch": { "$gt": 155, "$lt": 165 } } } }');
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$eq": 110, "$elemMatch": { "$gt": 155, "$lt": 165 } } } }') $cmd$);
 
 
 -- test scenarios with prefix index and suffix object filters
