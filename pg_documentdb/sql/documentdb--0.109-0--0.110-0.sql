@@ -2,4 +2,6 @@
 #include "udfs/index_mgmt/bson_index_term_functions--0.110-0.sql"
 #include "operators/bsonindexterm_btree_operators--0.110-0.sql"
 #include "operators/bsonindexterm_btree_operator_family--0.110-0.sql"
+#include "udfs/commands_crud/insert--0.110-0.sql"
+#include "udfs/commands_crud/update--0.110-0.sql"
 #include "udfs/query/bson_orderby--0.110-0.sql"
