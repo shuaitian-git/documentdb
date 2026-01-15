@@ -46,9 +46,9 @@ SELECT documentdb_api.insert_one('comp_elmdb', 'cmp_elemmatch_ops', '{ "_id": 2,
 
 -- pushes to the price index
 set documentdb.enableExtendedExplainPlans to on;
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$gt": 120, "$lt": 150 } } } }');
-                                                                                                                                     QUERY PLAN                                                                                                                                     
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$gt": 120, "$lt": 150 } } } }') $cmd$);
+                                                                                                                                run_explain_and_trim                                                                                                                                
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: price_1
@@ -65,9 +65,9 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
                Index Cond: (document @<> '{ "price" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "2" }, "value" : { "$numberInt" : "120" }, "isTopLevel" : true }, { "op" : { "$numberInt" : "4" }, "value" : { "$numberInt" : "150" }, "isTopLevel" : true } ] } }'::bson)
 (13 rows)
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$in": [ 120, 140 ], "$gt": 121 } } } }');
-                                                                                                                                                    QUERY PLAN                                                                                                                                                    
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$in": [ 120, 140 ], "$gt": 121 } } } }') $cmd$);
+                                                                                                                                               run_explain_and_trim                                                                                                                                               
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: price_1
@@ -84,9 +84,9 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
                Index Cond: (document @<> '{ "price" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "6" }, "value" : [ { "$numberInt" : "120" }, { "$numberInt" : "140" } ], "isTopLevel" : true }, { "op" : { "$numberInt" : "2" }, "value" : { "$numberInt" : "121" }, "isTopLevel" : true } ] } }'::bson)
 (13 rows)
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$type": "number" } } } }');
-                                                                               QUERY PLAN                                                                                
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$type": "number" } } } }') $cmd$);
+                                                                          run_explain_and_trim                                                                           
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=2 loops=1)
    indexName: price_1
@@ -103,9 +103,9 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
                Index Cond: (document @<> '{ "price" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "12" }, "value" : "number", "isTopLevel" : true } ] } }'::bson)
 (13 rows)
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$ne": 160 } } } }');
-                                     QUERY PLAN                                      
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$ne": 160 } } } }') $cmd$);
+                                run_explain_and_trim                                 
 ---------------------------------------------------------------------
  Bitmap Heap Scan on documents_10641_1064002 collection (actual rows=2 loops=1)
    Recheck Cond: (shard_key_value = '10641'::bigint)
@@ -115,9 +115,9 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
          Index Cond: (shard_key_value = '10641'::bigint)
 (6 rows)
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$nin": [ 160, 110, 140] } } } }');
-                                                                  QUERY PLAN                                                                  
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$elemMatch": { "$nin": [ 160, 110, 140] } } } }') $cmd$);
+                                                             run_explain_and_trim                                                             
 ---------------------------------------------------------------------
  Bitmap Heap Scan on documents_10641_1064002 collection (actual rows=1 loops=1)
    Recheck Cond: (shard_key_value = '10641'::bigint)
@@ -147,9 +147,9 @@ SELECT documentdb_api.insert_one('comp_elmdb', 'cmp_elemmatch_ops', '{ "_id": 5,
  { "n" : { "$numberInt" : "1" }, "ok" : { "$numberDouble" : "1.0" } }
 (1 row)
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": "alpha", "rating": 2 } } } }');
-                                                                                          QUERY PLAN                                                                                           
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": "alpha", "rating": 2 } } } }') $cmd$);
+                                                                                     run_explain_and_trim                                                                                      
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: brands.rating_1
@@ -167,9 +167,9 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
                Index Cond: (document @<> '{ "brands.rating" : { "elemMatchIndexOp" : [ { "op" : { "$numberInt" : "1" }, "value" : { "$numberInt" : "2" }, "isTopLevel" : false } ] } }'::bson)
 (14 rows)
 
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": "alpha" } } } }');
-                                                                                  QUERY PLAN                                                                                  
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": "alpha" } } } }') $cmd$);
+                                                                             run_explain_and_trim                                                                             
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=3 loops=1)
    indexName: brands.name_1
@@ -194,9 +194,9 @@ SELECT documentdb_api.insert_one('comp_elmdb', 'cmp_elemmatch_ops', '{ "_id": 6,
 (1 row)
 
 -- this technically matches the doc 6 above and the elemMatches don't get joined.
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": { "$gt": "gabba", "$lt": "ergo" } } } } }');
-                                                                                                                       QUERY PLAN                                                                                                                        
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "brands": { "$elemMatch": { "name": { "$gt": "gabba", "$lt": "ergo" } } } } }') $cmd$);
+                                                                                                                  run_explain_and_trim                                                                                                                   
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: brands.name_1
@@ -214,9 +214,9 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
 (13 rows)
 
 -- this can now join the elemMatch filters
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "brands.name": { "$elemMatch": { "$gt": "gabba", "$lt": "ergo" } } } }');
-                                                                                                                      QUERY PLAN                                                                                                                       
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "brands.name": { "$elemMatch": { "$gt": "gabba", "$lt": "ergo" } } } }') $cmd$);
+                                                                                                                 run_explain_and_trim                                                                                                                  
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=0 loops=1)
    indexName: brands.name_1
@@ -233,9 +233,9 @@ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bs
 (12 rows)
 
 -- disjoint filter handling for elemMatch and non elemMatch: this matches a document since these are matching different elements of the array.
-EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
-    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$eq": 110, "$elemMatch": { "$gt": 155, "$lt": 165 } } } }');
-                                                                                                                                                                      QUERY PLAN                                                                                                                                                                       
+SELECT documentdb_distributed_test_helpers.run_explain_and_trim($cmd$ EXPLAIN (COSTS OFF, ANALYZE ON, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT document FROM bson_aggregation_find('comp_elmdb',
+    '{ "find": "cmp_elemmatch_ops", "filter": { "price": { "$eq": 110, "$elemMatch": { "$gt": 155, "$lt": 165 } } } }') $cmd$);
+                                                                                                                                                                 run_explain_and_trim                                                                                                                                                                  
 ---------------------------------------------------------------------
  Custom Scan (DocumentDBApiExplainQueryScan) (actual rows=1 loops=1)
    indexName: price_1
