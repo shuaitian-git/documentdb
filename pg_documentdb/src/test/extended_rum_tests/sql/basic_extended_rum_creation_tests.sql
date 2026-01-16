@@ -15,6 +15,13 @@ SELECT documentdb_api_internal.create_indexes_non_concurrently('exrumdb', '{ "cr
 -- create a unique index
 SELECT documentdb_api_internal.create_indexes_non_concurrently('exrumdb', '{ "createIndexes": "index_creation_tests", "indexes": [ { "key": { "c": 1 }, "name": "c_1", "unique": true } ] }', TRUE);
 
+-- create a hashed index
+SELECT documentdb_api_internal.create_indexes_non_concurrently('exrumdb', '{ "createIndexes": "index_creation_tests", "indexes": [ { "key": { "e": "hashed" }, "name": "e_hashed" } ] }', TRUE);
+
+-- create a wildcard index
+set documentdb.enableCompositeWildcardIndex to on;
+SELECT documentdb_api_internal.create_indexes_non_concurrently('exrumdb', '{ "createIndexes": "index_creation_tests", "indexes": [ { "key": { "b.$**": -1 }, "name": "b_wildcard" } ] }', TRUE);
+
 -- validate they're all ordered indexes and using the appropriate index handler
 \d documentdb_data.documents_101
 
@@ -23,3 +30,6 @@ set enable_seqscan to off;
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('exrumdb', '{ "find": "index_creation_tests", "filter": { "a": "hello world" } }');
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('exrumdb', '{ "find": "index_creation_tests", "filter": { "c": "hello world" } }');
 EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('exrumdb', '{ "find": "index_creation_tests", "filter": { "a": "hello world", "b": "myfoo" } }');
+
+EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('exrumdb', '{ "find": "index_creation_tests", "filter": { "e": "hello world" } }');
+EXPLAIN (COSTS OFF) SELECT document FROM bson_aggregation_find('exrumdb', '{ "find": "index_creation_tests", "filter": { "b.c": "hello world" } }');

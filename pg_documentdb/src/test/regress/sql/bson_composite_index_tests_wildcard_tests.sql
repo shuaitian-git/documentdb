@@ -328,3 +328,10 @@ SELECT documentdb_test_helpers.run_explain_and_trim($cmd$
 
 SELECT documentdb_test_helpers.run_explain_and_trim($cmd$
    EXPLAIN (COSTS OFF, ANALYZE ON, SUMMARY OFF, BUFFERS OFF, TIMING OFF) SELECT document FROM bson_aggregation_find('compdb', '{ "find": "compwildcard2", "filter": { "a.b": { "$gte": 2, "$lt": 4 } }}') $cmd$);
+
+SELECT documentdb_api_internal.create_indexes_non_concurrently('compdb', '{ "createIndexes": "notfoundwildcard", "indexes": [ { "key": { "a.$**": 1 }, "name": "a_1", "enableOrderedIndex": true }]}', TRUE);
+
+SELECT documentdb_api.insert_one('compdb', 'notfoundwildcard', '{ "_id": 1, "a": 1, "b": 1 }');
+SELECT documentdb_api.insert_one('compdb', 'notfoundwildcard', '{ "_id": 3, "b": "foo" }');
+
+SELECT document FROM bson_aggregation_find('compdb', '{ "find": "notfoundwildcard", "filter": { "a": { "$exists": true } }, "hint": "a_1" }');
