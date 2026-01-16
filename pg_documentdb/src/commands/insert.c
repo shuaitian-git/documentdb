@@ -879,8 +879,8 @@ ProcessInsertion(MongoCollection *collection,
 				 text *transactionId, ExprEvalState *evalState)
 {
 	if (transactionId != NULL &&
-		!DocumentBsonValueHasDocumentId(documentValue) &&
 		collection->shardKey != NULL &&
+		!DocumentBsonValueHasDocumentId(documentValue) &&
 		PgbsonHasDocumentId(collection->shardKey))
 	{
 		RetryableWriteResult writeResult;
