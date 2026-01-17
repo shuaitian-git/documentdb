@@ -49,8 +49,8 @@ extern PGDLLIMPORT void try_explain_documentdb_rum_index(IndexScanDesc scan, str
 														 ExplainState *es);
 extern PGDLLIMPORT bool can_documentdb_rum_index_scan_ordered(IndexScanDesc scan);
 extern PGDLLIMPORT Datum documentdb_rumhandler(PG_FUNCTION_ARGS);
-extern PGDLLEXPORT bool documentdb_rum_get_multi_key_status(Relation indexRelation);
-extern PGDLLEXPORT void documentdb_rum_update_multi_key_status(Relation indexRelation);
+extern PGDLLIMPORT bool documentdb_rum_get_multi_key_status(Relation indexRelation);
+extern PGDLLIMPORT void documentdb_rum_update_multi_key_status(Relation indexRelation);
 
 /* Static Globals */
 static BsonIndexAmEntry DocumentDBIndexAmEntry = {
@@ -315,53 +315,4 @@ documentdb_extended_rumhandler(PG_FUNCTION_ARGS)
 	amroutine->aminsert = extension_documentdb_extended_ruminsert;
 	amroutine->amcostestimate = extension_documentdb_extended_rumcostestimate;
 	PG_RETURN_POINTER(amroutine);
-}
-
-
-PGDLLEXPORT bool
-documentdb_rum_get_multi_key_status(Relation indexRelation)
-{
-	Buffer metabuffer;
-	Page metapage;
-	RumMetaPageData *metadata;
-	bool hasMultiKeyPaths = false;
-
-	metabuffer = ReadBuffer(indexRelation, RUM_METAPAGE_BLKNO);
-	LockBuffer(metabuffer, RUM_SHARE);
-	metapage = BufferGetPage(metabuffer);
-	metadata = RumPageGetMeta(metapage);
-	hasMultiKeyPaths = metadata->nPendingHeapTuples > 0;
-	UnlockReleaseBuffer(metabuffer);
-
-	return hasMultiKeyPaths;
-}
-
-
-PGDLLEXPORT void
-documentdb_rum_update_multi_key_status(Relation index)
-{
-	/* First do a get to see if we even need to update */
-	bool isMultiKey = documentdb_rum_get_multi_key_status(index);
-	if (isMultiKey)
-	{
-		return;
-	}
-
-	Buffer metaBuffer;
-	Page metapage;
-	RumMetaPageData *metadata;
-	GenericXLogState *state;
-
-	metaBuffer = ReadBuffer(index, RUM_METAPAGE_BLKNO);
-	LockBuffer(metaBuffer, RUM_EXCLUSIVE);
-
-	state = GenericXLogStart(index);
-	metapage = GenericXLogRegisterBuffer(state, metaBuffer, 0);
-	metadata = RumPageGetMeta(metapage);
-
-	/* Set pending heap tuples to 1 to indicate this is a multi-key index */
-	metadata->nPendingHeapTuples = 1;
-
-	GenericXLogFinish(state);
-	UnlockReleaseBuffer(metaBuffer);
 }
