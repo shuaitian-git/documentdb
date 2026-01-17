@@ -32,76 +32,11 @@
 
 #include "pg_documentdb_rum.h"
 
-PG_MODULE_MAGIC;
-
-void _PG_init(void);
-
 PG_FUNCTION_INFO_V1(documentdb_rumhandler);
 extern PGDLLIMPORT void InitializeCommonDocumentDBGUCs(const char *rumGucPrefix, const
 													   char *documentDBRumGucPrefix);
 
 static char * rumbuildphasename(int64 phasenum);
-
-extern PGDLLIMPORT bool DocumentDBRumLoadCommonGUCs;
-
-/*
- * Module load callback
- */
-PGDLLEXPORT void
-_PG_init(void)
-{
-#ifndef RUM_GUC_PREFIX
-#define RUM_GUC_PREFIX "documentdb_rum"
-#endif
-
-#ifndef DOCUMENTDB_RUM_GUC_PREFIX
-#define DOCUMENTDB_RUM_GUC_PREFIX "documentdb_rum"
-#endif
-
-	/* Assert things about the storage format */
-	StaticAssertExpr(offsetof(RumPageOpaqueData, dataPageMaxoff) == sizeof(uint64_t),
-					 "maxoff must be the 3rd field with a specific offset");
-	StaticAssertExpr(offsetof(RumPageOpaqueData, entryPageUnused) == sizeof(uint64_t),
-					 "entryPageCycleId must be the 3rd field with a specific offset");
-	StaticAssertExpr(offsetof(RumPageOpaqueData, dataPageFreespace) == sizeof(uint64_t) +
-					 sizeof(uint16_t),
-					 "freespace must be the 3rd field with a specific offset");
-	StaticAssertExpr(offsetof(RumPageOpaqueData, flags) == sizeof(uint64_t) +
-					 sizeof(uint32_t),
-					 "flags must be the 3rd field with a specific offset");
-
-	StaticAssertExpr(offsetof(RumPageOpaqueData, cycleId) == sizeof(uint64_t) +
-					 sizeof(uint32_t) + sizeof(uint16_t),
-					 "cycleId must be the 4th field with a specific offset");
-	StaticAssertExpr(sizeof(RumPageOpaqueData) == sizeof(uint64_t) + sizeof(uint64_t),
-					 "RumPageOpaqueData must be the 2 bigint fields worth");
-
-	StaticAssertExpr(sizeof(RumItem) == 16 && MAXALIGN(sizeof(RumItem)) == 16,
-					 "rum item aligned should be 16 bytes");
-	StaticAssertExpr(sizeof(RumDataLeafItemIndex) == 24, "LeafItemIndex is 24 bytes");
-
-	if (!process_shared_preload_libraries_in_progress)
-	{
-		ereport(ERROR, (errmsg(
-							"pg_documentdb_extended_rum_core can only be loaded via shared_preload_libraries"),
-						errdetail_log(
-							"Add the caller library to shared_preload_libraries configuration "
-							"variable in postgresql.conf. ")));
-	}
-
-	InitializeRumVacuumState();
-
-	/* Define custom GUC variables. (if any) */
-	if (DocumentDBRumLoadCommonGUCs)
-	{
-		DocumentDBRumLoadCommonGUCs = false;
-		InitializeCommonDocumentDBGUCs(RUM_GUC_PREFIX, DOCUMENTDB_RUM_GUC_PREFIX);
-	}
-
-#ifndef SKIP_MARK_GUC_PREFIX_RESERVED
-	MarkGUCPrefixReserved(DOCUMENTDB_RUM_GUC_PREFIX);
-#endif
-}
 
 
 /*
