@@ -31,7 +31,8 @@ async fn test_index_key_too_large_error() -> Result<(), mongodb::error::Error> {
             {
                 "key": { "$**": 1 },
                 "name": "ikey_1",
-                "enableLargeIndexKeys": false
+                "enableLargeIndexKeys": false,
+                "enableOrderedIndex": false,
             }
         ]
     };

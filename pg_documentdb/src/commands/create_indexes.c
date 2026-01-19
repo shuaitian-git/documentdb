@@ -2158,6 +2158,15 @@ ParseIndexDefDocumentInternal(const bson_iter_t *indexesArrayIter,
 		}
 	}
 
+	if (indexDef->enableCompositeTerm != BoolIndexOption_True &&
+		indexDef->key->isWildcard && indexDef->key->hasDescendingIndex)
+	{
+		/* Non composite does not support descending indexes */
+		ereport(ERROR, (errcode(ERRCODE_DOCUMENTDB_CANNOTCREATEINDEX),
+						errmsg(
+							"A numeric value in a $** index key pattern must be positive.")));
+	}
+
 	if (indexDef->buildAsUnique == BoolIndexOption_True &&
 		indexDef->enableCompositeTerm != BoolIndexOption_True)
 	{

@@ -335,7 +335,6 @@ static const ForceIndexSupportFuncs ForceIndexOperatorSupport[] =
 
 extern bool EnableVectorForceIndexPushdown;
 extern bool EnableGeonearForceIndexPushdown;
-extern bool UseNewElemMatchIndexPushdown;
 extern bool EnableNewOperatorSelectivityMode;
 extern bool EnableCompositeIndexPlanner;
 extern bool LowSelectivityForLookup;
@@ -2717,8 +2716,7 @@ HandleSupportRequestCondition(SupportRequestIndexCondition *req)
 	}
 
 	if (operator->indexStrategy == BSON_INDEX_STRATEGY_DOLLAR_ELEMMATCH &&
-		(IsCompositeOpFamilyOid(req->index->relam, operatorFamily) ||
-		 UseNewElemMatchIndexPushdown))
+		IsCompositeOpFamilyOid(req->index->relam, operatorFamily))
 	{
 		Expr *elemMatchExpr = ProcessElemMatchOperator(options, queryValue, operator,
 													   args);
