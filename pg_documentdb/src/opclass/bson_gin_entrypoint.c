@@ -849,6 +849,10 @@ GetFirstPathFromIndexOptionsIfApplicable(bytea *indexOptions, bool *isWildcardIn
 
 		case IndexOptionsType_Composite:
 		{
+			BsonGinCompositePathOptions *compositeOptions =
+				(BsonGinCompositePathOptions *) options;
+
+			*isWildcardIndex = compositeOptions->wildcardPathIndex >= 0;
 			return GetCompositeFirstIndexPath(options);
 		}
 

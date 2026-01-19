@@ -83,6 +83,7 @@ bool DefaultUseCompositeOpClass = DEFAULT_USE_NEW_COMPOSITE_INDEX_OPCLASS;
 #define DEFAULT_ENABLE_COMPOSITE_INDEX_PLANNER false
 bool EnableCompositeIndexPlanner = DEFAULT_ENABLE_COMPOSITE_INDEX_PLANNER;
 
+/* Ready to remove */
 #define DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN true
 bool EnableIndexOrderbyPushdown = DEFAULT_ENABLE_INDEX_ORDERBY_PUSHDOWN;
 
@@ -106,16 +107,20 @@ bool EnableCompositeParallelIndexScan = DEFAULT_ENABLE_COMPOSITE_PARALLEL_INDEX_
 #define DEFAULT_ENABLE_VALUE_ONLY_INDEX_TERMS true
 bool EnableValueOnlyIndexTerms = DEFAULT_ENABLE_VALUE_ONLY_INDEX_TERMS;
 
+/* Remove after v111 */
 #define DEFAULT_USE_NEW_UNIQUE_HASH_EQUALITY_FUNCTION true
 bool UseNewUniqueHashEqualityFunction = DEFAULT_USE_NEW_UNIQUE_HASH_EQUALITY_FUNCTION;
 
+/* Remove after v111 */
 #define DEFAULT_ENABLE_COMPOSITE_UNIQUE_HASH true
 bool EnableCompositeUniqueHash = DEFAULT_ENABLE_COMPOSITE_UNIQUE_HASH;
 
+/* Remove after v111 */
 #define DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENERATION true
 bool RumUseNewCompositeTermGeneration = DEFAULT_RUM_USE_NEW_COMPOSITE_TERM_GENERATION;
 
-#define DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX false
+/* Remove after v111 */
+#define DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX true
 bool EnableCompositeWildcardIndex = DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX;
 
 #define DEFAULT_ENABLE_REDUCED_CORRELATED_TERMS false
@@ -125,6 +130,7 @@ bool EnableCompositeReducedCorrelatedTerms = DEFAULT_ENABLE_REDUCED_CORRELATED_T
 bool EnableUniqueCompositeReducedCorrelatedTerms =
 	DEFAULT_ENABLE_UNIQUE_REDUCED_CORRELATED_TERMS;
 
+/* Longer term feature flag to track older cluster data: Move to testing_configs when convenient */
 #define DEFAULT_ENABLE_COMPOSITE_SHARD_DOCUMENT_TERMS true
 bool EnableCompositeShardDocumentTerms = DEFAULT_ENABLE_COMPOSITE_SHARD_DOCUMENT_TERMS;
 
@@ -141,27 +147,27 @@ bool EnableLookupInnerJoin = DEFAULT_LOOKUP_ENABLE_INNER_JOIN;
 #define DEFAULT_FORCE_BITMAP_SCAN_FOR_LOOKUP false
 bool ForceBitmapScanForLookup = DEFAULT_FORCE_BITMAP_SCAN_FOR_LOOKUP;
 
+/* Remove after v110 */
 #define DEFAULT_LOW_SELECTIVITY_FOR_LOOKUP true
 bool LowSelectivityForLookup = DEFAULT_LOW_SELECTIVITY_FOR_LOOKUP;
 
-#define DEFAULT_USE_NEW_ELEMMATCH_INDEX_PUSHDOWN false
-bool UseNewElemMatchIndexPushdown = DEFAULT_USE_NEW_ELEMMATCH_INDEX_PUSHDOWN;
-
-#define DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING true
-bool EnableIndexPriorityOrdering = DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING;
-
+/* Remove after v111 */
 #define DEFAULT_ENABLE_EXPR_LOOKUP_INDEX_PUSHDOWN true
 bool EnableExprLookupIndexPushdown = DEFAULT_ENABLE_EXPR_LOOKUP_INDEX_PUSHDOWN;
 
+/* Remove after v111 */
 #define DEFAULT_ENABLE_UNIFY_PFE_ON_INDEXINFO true
 bool EnableUnifyPfeOnIndexInfo = DEFAULT_ENABLE_UNIFY_PFE_ON_INDEXINFO;
 
+/* Remove after v111 */
 #define DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT true
 bool EnableUpdateBsonDocument = DEFAULT_ENABLE_UPDATE_BSON_DOCUMENT;
 
+/* Remove after v111 */
 #define DEFAULT_ENABLE_NEW_COUNT_AGGREGATES true
 bool EnableNewCountAggregates = DEFAULT_ENABLE_NEW_COUNT_AGGREGATES;
 
+/* Remove after v111 */
 #define DEFAULT_ENABLE_EXTENDED_EXPLAIN_ON_ANALYZEOFF true
 bool EnableExtendedExplainOnAnalyzeOff = DEFAULT_ENABLE_EXTENDED_EXPLAIN_ON_ANALYZEOFF;
 
@@ -178,10 +184,12 @@ bool EnablePrimaryKeyCursorScan = DEFAULT_ENABLE_PRIMARY_KEY_CURSOR_SCAN;
 #define DEFAULT_USE_FILE_BASED_PERSISTED_CURSORS false
 bool UseFileBasedPersistedCursors = DEFAULT_USE_FILE_BASED_PERSISTED_CURSORS;
 
+/* Remove after v111 */
 #define DEFAULT_ENABLE_CONVERSION_STREAMABLE_SINGLE_BATCH true
 bool EnableConversionStreamableToSingleBatch =
 	DEFAULT_ENABLE_CONVERSION_STREAMABLE_SINGLE_BATCH;
 
+/* Remove after v111 */
 #define DEFAULT_ENABLE_FIND_PROJECTION_AFTER_OFFSET true
 bool EnableFindProjectionAfterOffset = DEFAULT_ENABLE_FIND_PROJECTION_AFTER_OFFSET;
 
@@ -459,14 +467,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		psprintf("%s.useNewElemMatchIndexPushdown", newGucPrefix),
-		gettext_noop(
-			"Whether or not to use the new elemMatch index pushdown logic."),
-		NULL, &UseNewElemMatchIndexPushdown,
-		DEFAULT_USE_NEW_ELEMMATCH_INDEX_PUSHDOWN,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		psprintf("%s.enableLookupInnerJoin", newGucPrefix),
 		gettext_noop(
 			"Whether or not to enable lookup inner join."),
@@ -532,13 +532,6 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Enables role crud through the data plane."),
 		NULL, &EnableRoleCrud, DEFAULT_ENABLE_ROLE_CRUD,
-		PGC_USERSET, 0, NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		psprintf("%s.enableIndexPriorityOrdering", newGucPrefix),
-		gettext_noop(
-			"Whether to reorder the indexlist at the planner level based on priority of indexes."),
-		NULL, &EnableIndexPriorityOrdering, DEFAULT_ENABLE_INDEX_PRIORITY_ORDERING,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -722,7 +715,7 @@ InitializeFeatureFlagConfigurations(const char *prefix, const char *newGucPrefix
 		gettext_noop(
 			"Whether to enable reduced term generation for correlated composite paths."),
 		NULL, &EnableCompositeReducedCorrelatedTerms,
-		DEFAULT_ENABLE_COMPOSITE_WILDCARD_INDEX,
+		DEFAULT_ENABLE_REDUCED_CORRELATED_TERMS,
 		PGC_USERSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
