@@ -1,0 +1,2 @@
+GRANT SELECT ON TABLE documentdb_api_distributed.documentdb_cluster_data TO documentdb_readwrite_role;
+GRANT USAGE ON SCHEMA documentdb_api_distributed TO documentdb_readwrite_role;

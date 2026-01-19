@@ -1,4 +1,4 @@
-
+GRANT USAGE ON SCHEMA documentdb_extended_rum_catalog TO documentdb_readwrite_role;
 -- add the operators for the single path ops that match the regular index.
 ALTER OPERATOR FAMILY documentdb_extended_rum_catalog.bson_extended_rum_single_path_ops USING documentdb_extended_rum
     ADD OPERATOR 25 documentdb_api_catalog.@<>(documentdb_core.bson, documentdb_core.bson),

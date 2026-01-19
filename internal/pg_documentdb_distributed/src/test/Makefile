@@ -12,4 +12,10 @@ installcheck:
 installcheck-minimal:
 	$(MAKE) -C regress $@
 
-all: check-regress
+check-rbac-minimal:
+	$(MAKE) -C regress $@
+
+check-rbac:
+	$(MAKE) -C regress check-rbac
+
+all: check-regress check-rbac
