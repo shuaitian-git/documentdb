@@ -31,6 +31,10 @@ define isolation_test
 	mkdir -p log && { $(top_builddir)/src/test/isolation/pg_isolation_regress --encoding=UTF8 --dlpath=$(BASEPATH) $(EXTENSIONLOAD) --temp-instance ./tmp --temp-config ./isolation_postgresql.conf --host localhost --port 58071 $(1) $(2) 2>&1; echo $$? > log/.exitcode; } | tee log/summary.out; test $$(cat log/.exitcode) -eq 0 || (cat regression.diffs && false)
 endef
 
+define rbac_test
+	$(top_builddir)/src/test/regress/pg_regress --encoding=UTF8 --dlpath=$(BASEPATH) $(EXTENSIONLOAD) --temp-instance ./tmp --temp-config=./postgresql.conf --temp-config=./rbac_postgresql.conf --host localhost --port 58080 $(1) $(2) || (cat regression.diffs && false)
+endef
+
 check-basic: generate_version_schedule
 	$(call common_test,--schedule=./basic_schedule --schedule=./log/basic_schedule_$(pg_major_version))
 
@@ -39,6 +43,12 @@ check-dist-minimal:
 
 check-test-output:
 	./validate_test_output.sh $(pg_major_version)
+
+check-rbac-minimal:
+	$(call rbac_test,--schedule=./rbac_minimal_schedule, $(EXTRA_TESTS),)
+
+check-rbac:
+	$(call rbac_test,--schedule=./rbac_minimal_schedule --schedule=./rbac_tests_schedule,,)
 
 generate_version_schedule:
 	@mkdir -p log
@@ -56,5 +66,4 @@ installcheck: generate_version_schedule
 
 installcheck-minimal:
 	$(call install_check_common,--schedule=./install_schedule, $(EXTRA_TESTS))
-
-all: check-basic check-test-output
+all: check-basic check-rbac check-test-output

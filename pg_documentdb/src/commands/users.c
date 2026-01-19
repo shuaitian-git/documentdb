@@ -1492,6 +1492,11 @@ ValidateAndObtainUserRole(const bson_value_t *rolesDocument)
 		return ApiAdminRoleV2;
 	}
 
+	if ((userRoles & DocumentDB_Role_ReadWrite_AnyDatabase) != 0)
+	{
+		return ApiReadWriteRole;
+	}
+
 	if ((userRoles & DocumentDB_Role_Read_AnyDatabase) != 0)
 	{
 		return ApiReadOnlyRole;

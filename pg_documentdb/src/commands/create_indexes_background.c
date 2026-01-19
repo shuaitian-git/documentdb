@@ -1126,6 +1126,21 @@ setup_index_queue_table(PG_FUNCTION_ARGS)
 		CreateIndexQueueIfNotExists(includeOptions, includeDropCommandType);
 	}
 
+	if (majorVersion == DocDB_V0 &&
+		minorVersion == 110 &&
+		patchVersion == 0)
+	{
+		/* Grant access to index_queue to ApiReadWriteRole */
+		StringInfo grantStr = makeStringInfo();
+		bool isNull = false;
+		appendStringInfo(grantStr,
+						 "GRANT ALL ON TABLE %s TO %s",
+						 GetIndexQueueName(),
+						 ApiReadWriteRole);
+		ExtensionExecuteQueryViaSPI(grantStr->data, false, SPI_OK_UTILITY,
+									&isNull);
+	}
+
 	PG_RETURN_VOID();
 }
 
